@@ -1,0 +1,56 @@
+import { NavLink, Outlet } from "react-router-dom";
+import { useAuth } from "../../features/auth/useAuth.jsx";
+import { BrandLogo } from "./BrandLogo.jsx";
+
+const navItems = [
+  { to: "/", label: "Dashboard", end: true },
+  { to: "/catalog/categories", label: "Categorias" },
+  { to: "/catalog/products", label: "Produtos" },
+  { to: "/catalog/variations", label: "Variacoes" },
+  { to: "/sales", label: "Vendas" },
+  { to: "/cash-register", label: "Caixa" }
+];
+
+export function AppShell() {
+  const { tenant, user, logout } = useAuth();
+
+  return (
+    <div className="min-h-screen bg-slate-100 text-slate-900">
+      <header className="border-b bg-white">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3">
+          <BrandLogo />
+          <div className="text-right">
+            <p className="text-sm font-semibold">{tenant?.name}</p>
+            <p className="text-xs text-slate-500">{user?.name}</p>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-4 px-4 py-4 md:grid-cols-[220px_1fr]">
+        <aside className="rounded-lg bg-white p-3 shadow-sm">
+          <nav className="space-y-1">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) =>
+                  `block rounded-md px-3 py-2 text-sm ${isActive ? "bg-slate-900 text-white" : "hover:bg-slate-100"}`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+          <button className="mt-4 w-full rounded-md border px-3 py-2 text-sm" onClick={logout}>
+            Sair
+          </button>
+        </aside>
+
+        <section>
+          <Outlet />
+        </section>
+      </div>
+    </div>
+  );
+}

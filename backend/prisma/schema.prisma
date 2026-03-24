@@ -1,0 +1,272 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Plan {
+  BASIC
+  PRO
+  ENTERPRISE
+}
+
+enum UserType {
+  ADMIN
+  ATTENDANT
+}
+
+enum StockMovementType {
+  ENTRY
+  EXIT
+}
+
+enum SaleStatus {
+  OPEN
+  PAID
+  CANCELED
+}
+
+enum PaymentMethod {
+  CASH
+  CREDIT_CARD
+  DEBIT_CARD
+  PIX
+  INSTALLMENT
+}
+
+enum CashRegisterStatus {
+  OPEN
+  CLOSED
+}
+
+enum CashMovementType {
+  ENTRY
+  WITHDRAWAL
+}
+
+enum InvoiceStatus {
+  PENDING
+  ISSUED
+  ERROR
+  CANCELED
+}
+
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  cnpj        String   @unique
+  email       String
+  phone       String?
+  plan        Plan     @default(BASIC)
+  createdAt   DateTime @default(now())
+
+  users       User[]
+  customers   Customer[]
+  categories  Category[]
+  products    Product[]
+  variations  ProductVariation[]
+  stockMoves  StockMovement[]
+  sales       Sale[]
+  saleItems   SaleItem[]
+  cashRegs    CashRegister[]
+  cashMoves   CashMovement[]
+  invoices    Invoice[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  email     String   @unique
+  password  String
+  type      UserType
+  createdAt DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  sales     Sale[]
+
+  @@index([tenantId])
+  @@index([tenantId, email])
+}
+
+model Customer {
+  id             String   @id @default(cuid())
+  tenantId       String
+  name           String
+  cpfCnpj        String
+  phone          String?
+  email          String?
+  address        String?
+  totalPurchases Decimal  @default(0) @db.Decimal(12, 2)
+  lastPurchaseAt DateTime?
+  createdAt      DateTime @default(now())
+
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+  sales          Sale[]
+
+  @@index([tenantId])
+  @@index([tenantId, cpfCnpj])
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  createdAt DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  products  Product[]
+
+  @@index([tenantId])
+  @@unique([tenantId, name])
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  tenantId      String
+  name          String
+  description   String?
+  price         Decimal  @db.Decimal(12, 2)
+  cost          Decimal  @db.Decimal(12, 2)
+  categoryId    String
+  sku           String
+  minStock      Int
+  createdAt     DateTime @default(now())
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  category      Category @relation(fields: [categoryId], references: [id])
+  variations    ProductVariation[]
+
+  @@index([tenantId])
+  @@index([tenantId, categoryId])
+  @@unique([tenantId, sku])
+}
+
+model ProductVariation {
+  id            String   @id @default(cuid())
+  tenantId      String
+  productId     String
+  size          String
+  color         String
+  stock         Int
+  createdAt     DateTime @default(now())
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  product       Product  @relation(fields: [productId], references: [id])
+  stockMoves    StockMovement[]
+  saleItems     SaleItem[]
+
+  @@index([tenantId])
+  @@index([tenantId, productId])
+  @@unique([tenantId, productId, size, color])
+}
+
+model StockMovement {
+  id                 String            @id @default(cuid())
+  tenantId           String
+  productVariationId String
+  type               StockMovementType
+  quantity           Int
+  occurredAt         DateTime          @default(now())
+
+  tenant             Tenant            @relation(fields: [tenantId], references: [id])
+  productVariation   ProductVariation  @relation(fields: [productVariationId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, productVariationId])
+}
+
+model Sale {
+  id                 String        @id @default(cuid())
+  tenantId           String
+  customerId         String?
+  userId             String
+  totalValue         Decimal       @db.Decimal(12, 2)
+  discountValue      Decimal       @default(0) @db.Decimal(12, 2)
+  discountPercent    Decimal       @default(0) @db.Decimal(5, 2)
+  paymentMethod      PaymentMethod
+  installments       Int           @default(1)
+  status             SaleStatus    @default(PAID)
+  occurredAt         DateTime      @default(now())
+
+  tenant             Tenant        @relation(fields: [tenantId], references: [id])
+  customer           Customer?     @relation(fields: [customerId], references: [id])
+  user               User          @relation(fields: [userId], references: [id])
+  items              SaleItem[]
+  invoice            Invoice?
+
+  @@index([tenantId])
+  @@index([tenantId, userId])
+  @@index([tenantId, occurredAt])
+}
+
+model SaleItem {
+  id                 String            @id @default(cuid())
+  tenantId           String
+  saleId             String
+  productVariationId String
+  quantity           Int
+  unitPrice          Decimal           @db.Decimal(12, 2)
+
+  tenant             Tenant            @relation(fields: [tenantId], references: [id])
+  sale               Sale              @relation(fields: [saleId], references: [id])
+  productVariation   ProductVariation  @relation(fields: [productVariationId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, saleId])
+}
+
+model CashRegister {
+  id              String             @id @default(cuid())
+  tenantId        String
+  openedByUserId  String
+  initialValue    Decimal            @db.Decimal(12, 2)
+  finalValue      Decimal?           @db.Decimal(12, 2)
+  expectedValue   Decimal?           @db.Decimal(12, 2)
+  openedAt        DateTime           @default(now())
+  closedAt        DateTime?
+  status          CashRegisterStatus @default(OPEN)
+
+  tenant          Tenant             @relation(fields: [tenantId], references: [id])
+  movements       CashMovement[]
+
+  @@index([tenantId])
+  @@index([tenantId, openedAt])
+}
+
+model CashMovement {
+  id              String           @id @default(cuid())
+  tenantId        String
+  cashRegisterId  String
+  type            CashMovementType
+  value           Decimal          @db.Decimal(12, 2)
+  description     String?
+  occurredAt      DateTime         @default(now())
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  cashRegister    CashRegister     @relation(fields: [cashRegisterId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, cashRegisterId])
+}
+
+model Invoice {
+  id              String        @id @default(cuid())
+  tenantId        String
+  saleId          String        @unique
+  number          String?
+  key             String?
+  status          InvoiceStatus @default(PENDING)
+  xmlUrl          String?
+  pdfUrl          String?
+  issuedAt        DateTime?
+
+  tenant          Tenant        @relation(fields: [tenantId], references: [id])
+  sale            Sale          @relation(fields: [saleId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+}
