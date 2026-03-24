@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
 import { apiClient } from "../../shared/apiClient.js";
 import { useAuth } from "../auth/useAuth.jsx";
+import { useToast } from "../../shared/components/ToastProvider.jsx";
+import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
+import { DataTable } from "../../shared/components/DataTable.jsx";
 
 export function CategoriesPage() {
   const { token } = useAuth();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const [items, setItems] = useState([]);
   const [name, setName] = useState("");
   const [editingId, setEditingId] = useState("");
+  const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -26,8 +32,10 @@ export function CategoriesPage() {
     try {
       if (editingId) {
         await apiClient(`/categories/${editingId}`, { method: "PUT", token, body: { name } });
+        showToast("Categoria atualizada.");
       } else {
         await apiClient("/categories", { method: "POST", token, body: { name } });
+        showToast("Categoria criada.");
       }
       setEditingId("");
       setName("");
@@ -41,10 +49,18 @@ export function CategoriesPage() {
 
   async function removeCategory(id) {
     try {
+      const confirmed = await confirm({
+        title: "Excluir categoria",
+        message: "Deseja excluir esta categoria?",
+        confirmText: "Excluir"
+      });
+      if (!confirmed) return;
       await apiClient(`/categories/${id}`, { method: "DELETE", token });
       await load();
+      showToast("Categoria excluida.");
     } catch (err) {
       setError(err.message);
+      showToast(err.message, "error");
     }
   }
 
@@ -52,7 +68,7 @@ export function CategoriesPage() {
     <div className="space-y-4">
       <div className="rounded-lg bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold">Categorias</h2>
-        <form className="mt-3 flex gap-2" onSubmit={createCategory}>
+        <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={createCategory}>
           <input
             className="w-full rounded-md border p-2"
             placeholder="Nome da categoria"
@@ -78,44 +94,41 @@ export function CategoriesPage() {
         {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
       </div>
 
-      <div className="rounded-lg bg-white p-4 shadow-sm">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b">
-              <th className="py-2">Nome</th>
-              <th className="py-2">Acoes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.id} className="border-b">
-                <td className="py-2">{item.name}</td>
-                <td className="py-2">
-                  <button
-                    className="mr-2 rounded border px-2 py-1 text-xs"
-                    onClick={() => {
-                      setEditingId(item.id);
-                      setName(item.name);
-                    }}
-                  >
-                    Editar
-                  </button>
-                  <button className="rounded border px-2 py-1 text-xs" onClick={() => removeCategory(item.id)}>
-                    Excluir
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!items.length ? (
-              <tr>
-                <td className="py-3 text-slate-500" colSpan={2}>
-                  Nenhuma categoria cadastrada.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        title="Lista de categorias"
+        data={items}
+        columns={[
+          { key: "name", label: "Nome" },
+          { key: "actions", label: "Acoes" }
+        ]}
+        getRowKey={(row) => row.id}
+        emptyMessage="Nenhuma categoria encontrada."
+        search={{
+          query,
+          onQueryChange: setQuery,
+          placeholder: "Buscar categoria...",
+          matcher: (row, q) => row.name.toLowerCase().includes(q.toLowerCase())
+        }}
+        renderCells={(item) => (
+          <>
+            <td className="py-2">{item.name}</td>
+            <td className="py-2">
+              <button
+                className="mr-2 rounded border px-2 py-1 text-xs"
+                onClick={() => {
+                  setEditingId(item.id);
+                  setName(item.name);
+                }}
+              >
+                Editar
+              </button>
+              <button className="rounded border px-2 py-1 text-xs" onClick={() => removeCategory(item.id)}>
+                Excluir
+              </button>
+            </td>
+          </>
+        )}
+      />
     </div>
   );
 }

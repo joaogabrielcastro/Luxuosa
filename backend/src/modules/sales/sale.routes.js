@@ -8,5 +8,7 @@ const router = Router();
 router.use(authMiddleware, tenantMiddleware);
 router.get("/", saleController.list);
 router.post("/", saleController.create);
+router.put("/:id", saleController.update);
+router.post("/:id/cancel", saleController.cancel);
 
 export { router as saleRoutes };

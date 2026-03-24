@@ -31,5 +31,36 @@ export const saleRepository = {
         items: true
       }
     });
+  },
+
+  findById(tx, tenantId, id) {
+    return tx.sale.findFirst({
+      where: { tenantId, id },
+      include: {
+        customer: true,
+        items: true
+      }
+    });
+  },
+
+  updateWithItems(tx, tenantId, saleId, data, items) {
+    return tx.sale.update({
+      where: { id: saleId },
+      data: {
+        ...data,
+        items: {
+          deleteMany: { tenantId, saleId },
+          create: items.map((item) => ({
+            tenantId,
+            productVariationId: item.productVariationId,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice
+          }))
+        }
+      },
+      include: {
+        items: true
+      }
+    });
   }
 };

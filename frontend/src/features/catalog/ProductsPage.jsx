@@ -1,12 +1,21 @@
 import { useEffect, useState } from "react";
 import { apiClient } from "../../shared/apiClient.js";
 import { useAuth } from "../auth/useAuth.jsx";
+import { useToast } from "../../shared/components/ToastProvider.jsx";
+import { formatCurrencyBRL, maskCurrencyInput, parseCurrencyInput } from "../../shared/formatters.js";
+import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
+import { DataTable } from "../../shared/components/DataTable.jsx";
 
 export function ProductsPage() {
   const { token } = useAuth();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [editingId, setEditingId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     name: "",
@@ -34,31 +43,44 @@ export function ProductsPage() {
   async function createProduct(event) {
     event.preventDefault();
     setError("");
+    setLoading(true);
     try {
       await apiClient(editingId ? `/products/${editingId}` : "/products", {
         method: editingId ? "PUT" : "POST",
         token,
         body: {
           ...form,
-          price: Number(form.price),
-          cost: Number(form.cost),
+          price: parseCurrencyInput(form.price),
+          cost: parseCurrencyInput(form.cost),
           minStock: Number(form.minStock)
         }
       });
+      showToast(editingId ? "Produto atualizado." : "Produto criado.");
       setEditingId("");
       setForm({ name: "", description: "", price: "", cost: "", categoryId: "", sku: "", minStock: 0 });
       await load();
     } catch (err) {
       setError(err.message);
+      showToast(err.message, "error");
+    } finally {
+      setLoading(false);
     }
   }
 
   async function removeProduct(id) {
     try {
+      const confirmed = await confirm({
+        title: "Excluir produto",
+        message: "Deseja excluir este produto?",
+        confirmText: "Excluir"
+      });
+      if (!confirmed) return;
       await apiClient(`/products/${id}`, { method: "DELETE", token });
       await load();
+      showToast("Produto excluido.");
     } catch (err) {
       setError(err.message);
+      showToast(err.message, "error");
     }
   }
 
@@ -67,8 +89,8 @@ export function ProductsPage() {
     setForm({
       name: item.name || "",
       description: item.description || "",
-      price: Number(item.price || 0),
-      cost: Number(item.cost || 0),
+      price: maskCurrencyInput(item.price),
+      cost: maskCurrencyInput(item.cost),
       categoryId: item.categoryId || "",
       sku: item.sku || "",
       minStock: Number(item.minStock || 0)
@@ -95,18 +117,14 @@ export function ProductsPage() {
           <input
             className="rounded-md border p-2"
             placeholder="Preco"
-            type="number"
-            step="0.01"
             value={form.price}
-            onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
+            onChange={(e) => setForm((prev) => ({ ...prev, price: maskCurrencyInput(e.target.value) }))}
           />
           <input
             className="rounded-md border p-2"
             placeholder="Custo"
-            type="number"
-            step="0.01"
             value={form.cost}
-            onChange={(e) => setForm((prev) => ({ ...prev, cost: e.target.value }))}
+            onChange={(e) => setForm((prev) => ({ ...prev, cost: maskCurrencyInput(e.target.value) }))}
           />
           <input
             className="rounded-md border p-2"
@@ -134,7 +152,7 @@ export function ProductsPage() {
             onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
           />
           <div className="flex gap-2 md:col-span-2">
-            <button className="rounded-md bg-slate-900 px-4 py-2 text-white">
+            <button className="rounded-md bg-slate-900 px-4 py-2 text-white disabled:opacity-50" disabled={loading}>
               {editingId ? "Atualizar produto" : "Salvar produto"}
             </button>
             {editingId ? (
@@ -155,44 +173,54 @@ export function ProductsPage() {
       </div>
 
       <div className="rounded-lg bg-white p-4 shadow-sm">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b">
-              <th className="py-2">Nome</th>
-              <th className="py-2">SKU</th>
-              <th className="py-2">Categoria</th>
-              <th className="py-2">Min</th>
-              <th className="py-2">Atual</th>
-              <th className="py-2">Acoes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((item) => (
-              <tr key={item.id} className="border-b">
-                <td className="py-2">{item.name}</td>
-                <td className="py-2">{item.sku}</td>
-                <td className="py-2">{item.category?.name}</td>
-                <td className="py-2">{item.minStock}</td>
-                <td className="py-2">{item.variations?.reduce((acc, v) => acc + v.stock, 0)}</td>
-                <td className="py-2">
-                  <button className="mr-2 rounded border px-2 py-1 text-xs" onClick={() => startEdit(item)}>
-                    Editar
-                  </button>
-                  <button className="rounded border px-2 py-1 text-xs" onClick={() => removeProduct(item.id)}>
-                    Excluir
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!products.length ? (
-              <tr>
-                <td className="py-3 text-slate-500" colSpan={6}>
-                  Nenhum produto cadastrado.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+        <DataTable
+          title="Lista de produtos"
+          data={products}
+          columns={[
+            { key: "name", label: "Nome" },
+            { key: "sku", label: "SKU" },
+            { key: "category", label: "Categoria" },
+            { key: "min", label: "Min" },
+            { key: "stock", label: "Atual" },
+            { key: "price", label: "Preco" },
+            { key: "actions", label: "Acoes" }
+          ]}
+          getRowKey={(row) => row.id}
+          emptyMessage="Nenhum produto encontrado."
+          search={{
+            query,
+            onQueryChange: setQuery,
+            placeholder: "Buscar por nome ou SKU...",
+            matcher: (row, q) => `${row.name} ${row.sku}`.toLowerCase().includes(q.toLowerCase())
+          }}
+          filters={[
+            {
+              id: "category",
+              value: categoryFilter,
+              onChange: setCategoryFilter,
+              options: [{ value: "", label: "Todas as categorias" }, ...categories.map((item) => ({ value: item.id, label: item.name }))],
+              matcher: (row, value) => row.categoryId === value
+            }
+          ]}
+          renderCells={(item) => (
+            <>
+              <td className="py-2">{item.name}</td>
+              <td className="py-2">{item.sku}</td>
+              <td className="py-2">{item.category?.name}</td>
+              <td className="py-2">{item.minStock}</td>
+              <td className="py-2">{item.variations?.reduce((acc, v) => acc + v.stock, 0)}</td>
+              <td className="py-2">{formatCurrencyBRL(item.price)}</td>
+              <td className="py-2">
+                <button className="mr-2 rounded border px-2 py-1 text-xs" onClick={() => startEdit(item)}>
+                  Editar
+                </button>
+                <button className="rounded border px-2 py-1 text-xs" onClick={() => removeProduct(item.id)}>
+                  Excluir
+                </button>
+              </td>
+            </>
+          )}
+        />
       </div>
     </div>
   );

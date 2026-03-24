@@ -31,8 +31,27 @@ export const saleController = {
   async create(req, res, next) {
     try {
       const payload = saleSchema.parse(req.body);
-      const sale = await saleService.create(req.tenantId, req.user.id, payload);
+      const sale = await saleService.create(req.tenantId, req.user.id, req.user.type, payload);
       return res.status(201).json(sale);
+    } catch (error) {
+      return next(error);
+    }
+  },
+
+  async update(req, res, next) {
+    try {
+      const payload = saleSchema.parse(req.body);
+      const sale = await saleService.update(req.tenantId, req.params.id, req.user.id, req.user.type, payload);
+      return res.json(sale);
+    } catch (error) {
+      return next(error);
+    }
+  },
+
+  async cancel(req, res, next) {
+    try {
+      const sale = await saleService.cancel(req.tenantId, req.params.id);
+      return res.json(sale);
     } catch (error) {
       return next(error);
     }

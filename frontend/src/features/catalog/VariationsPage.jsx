@@ -1,13 +1,21 @@
 import { useEffect, useState } from "react";
 import { apiClient } from "../../shared/apiClient.js";
 import { useAuth } from "../auth/useAuth.jsx";
+import { useToast } from "../../shared/components/ToastProvider.jsx";
+import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
+import { DataTable } from "../../shared/components/DataTable.jsx";
 
 export function VariationsPage() {
   const { token } = useAuth();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const [products, setProducts] = useState([]);
   const [variations, setVariations] = useState([]);
   const [editingId, setEditingId] = useState("");
+  const [query, setQuery] = useState("");
+  const [productFilter, setProductFilter] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     productId: "",
     size: "",
@@ -31,26 +39,39 @@ export function VariationsPage() {
   async function createVariation(event) {
     event.preventDefault();
     setError("");
+    setLoading(true);
     try {
       await apiClient(editingId ? `/product-variations/${editingId}` : "/product-variations", {
         method: editingId ? "PUT" : "POST",
         token,
         body: { ...form, stock: Number(form.stock) }
       });
+      showToast(editingId ? "Variacao atualizada." : "Variacao criada.");
       setEditingId("");
       setForm({ productId: "", size: "", color: "", stock: 0 });
       await load();
     } catch (err) {
       setError(err.message);
+      showToast(err.message, "error");
+    } finally {
+      setLoading(false);
     }
   }
 
   async function removeVariation(id) {
     try {
+      const confirmed = await confirm({
+        title: "Excluir variacao",
+        message: "Deseja excluir esta variacao?",
+        confirmText: "Excluir"
+      });
+      if (!confirmed) return;
       await apiClient(`/product-variations/${id}`, { method: "DELETE", token });
       await load();
+      showToast("Variacao excluida.");
     } catch (err) {
       setError(err.message);
+      showToast(err.message, "error");
     }
   }
 
@@ -101,7 +122,7 @@ export function VariationsPage() {
             onChange={(e) => setForm((prev) => ({ ...prev, stock: e.target.value }))}
           />
           <div className="flex gap-2 md:col-span-2">
-            <button className="rounded-md bg-slate-900 px-4 py-2 text-white">
+            <button className="rounded-md bg-slate-900 px-4 py-2 text-white disabled:opacity-50" disabled={loading}>
               {editingId ? "Atualizar variacao" : "Salvar variacao"}
             </button>
             {editingId ? (
@@ -121,44 +142,50 @@ export function VariationsPage() {
         {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
       </div>
 
-      <div className="rounded-lg bg-white p-4 shadow-sm">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b">
-              <th className="py-2">Produto</th>
-              <th className="py-2">Tamanho</th>
-              <th className="py-2">Cor</th>
-              <th className="py-2">Estoque</th>
-              <th className="py-2">Acoes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {variations.map((item) => (
-              <tr key={item.id} className="border-b">
-                <td className="py-2">{item.product?.name}</td>
-                <td className="py-2">{item.size}</td>
-                <td className="py-2">{item.color}</td>
-                <td className="py-2">{item.stock}</td>
-                <td className="py-2">
-                  <button className="mr-2 rounded border px-2 py-1 text-xs" onClick={() => startEdit(item)}>
-                    Editar
-                  </button>
-                  <button className="rounded border px-2 py-1 text-xs" onClick={() => removeVariation(item.id)}>
-                    Excluir
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {!variations.length ? (
-              <tr>
-                <td className="py-3 text-slate-500" colSpan={5}>
-                  Nenhuma variacao cadastrada.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        title="Lista de variacoes"
+        data={variations}
+        columns={[
+          { key: "product", label: "Produto" },
+          { key: "size", label: "Tamanho" },
+          { key: "color", label: "Cor" },
+          { key: "stock", label: "Estoque" },
+          { key: "actions", label: "Acoes" }
+        ]}
+        getRowKey={(row) => row.id}
+        emptyMessage="Nenhuma variacao encontrada."
+        search={{
+          query,
+          onQueryChange: setQuery,
+          placeholder: "Buscar por produto, tamanho ou cor...",
+          matcher: (row, q) => `${row.product?.name || ""} ${row.size || ""} ${row.color || ""}`.toLowerCase().includes(q.toLowerCase())
+        }}
+        filters={[
+          {
+            id: "product",
+            value: productFilter,
+            onChange: setProductFilter,
+            options: [{ value: "", label: "Todos os produtos" }, ...products.map((item) => ({ value: item.id, label: item.name }))],
+            matcher: (row, value) => row.productId === value
+          }
+        ]}
+        renderCells={(item) => (
+          <>
+            <td className="py-2">{item.product?.name}</td>
+            <td className="py-2">{item.size}</td>
+            <td className="py-2">{item.color}</td>
+            <td className="py-2">{item.stock}</td>
+            <td className="py-2">
+              <button className="mr-2 rounded border px-2 py-1 text-xs" onClick={() => startEdit(item)}>
+                Editar
+              </button>
+              <button className="rounded border px-2 py-1 text-xs" onClick={() => removeVariation(item.id)}>
+                Excluir
+              </button>
+            </td>
+          </>
+        )}
+      />
     </div>
   );
 }

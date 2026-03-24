@@ -17,7 +17,7 @@ export function AppShell() {
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
       <header className="border-b bg-white">
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <BrandLogo />
           <div className="text-right">
             <p className="text-sm font-semibold">{tenant?.name}</p>
@@ -26,16 +26,16 @@ export function AppShell() {
         </div>
       </header>
 
-      <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-4 px-4 py-4 md:grid-cols-[220px_1fr]">
+      <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-4 px-3 py-3 sm:px-4 sm:py-4 md:grid-cols-[220px_1fr]">
         <aside className="rounded-lg bg-white p-3 shadow-sm">
-          <nav className="space-y-1">
+          <nav className="grid grid-cols-2 gap-1 md:grid-cols-1 md:space-y-1">
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.end}
                 className={({ isActive }) =>
-                  `block rounded-md px-3 py-2 text-sm ${isActive ? "bg-slate-900 text-white" : "hover:bg-slate-100"}`
+                  `block rounded-md px-3 py-2 text-center text-sm md:text-left ${isActive ? "bg-slate-900 text-white" : "hover:bg-slate-100"}`
                 }
               >
                 {item.label}

@@ -8,6 +8,8 @@ import { VariationsPage } from "../features/catalog/VariationsPage.jsx";
 import { SalesPage } from "../features/sales/SalesPage.jsx";
 import { CashRegisterPage } from "../features/cash/CashRegisterPage.jsx";
 import { AppShell } from "../shared/components/AppShell.jsx";
+import { ToastProvider } from "../shared/components/ToastProvider.jsx";
+import { ConfirmProvider } from "../shared/components/ConfirmProvider.jsx";
 
 function PrivateRoute({ children }) {
   const { token } = useAuth();
@@ -39,7 +41,11 @@ function AppRoutes() {
 export function App() {
   return (
     <AuthProvider>
-      <AppRoutes />
+      <ToastProvider>
+        <ConfirmProvider>
+          <AppRoutes />
+        </ConfirmProvider>
+      </ToastProvider>
     </AuthProvider>
   );
 }
