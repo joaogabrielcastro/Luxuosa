@@ -8,7 +8,11 @@ const productSchema = z.object({
   cost: z.coerce.number().nonnegative(),
   categoryId: z.string().min(1),
   sku: z.string().min(2),
-  minStock: z.coerce.number().int().nonnegative()
+  minStock: z.coerce.number().int().nonnegative(),
+  ncm: z.string().regex(/^\d{8}$/).optional(),
+  cfop: z.string().regex(/^\d{4}$/).optional(),
+  icmsOrig: z.coerce.number().int().min(0).max(8).optional(),
+  icmsCsosn: z.string().min(3).max(4).optional()
 });
 
 export const productController = {

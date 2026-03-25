@@ -7,6 +7,7 @@ export const saleRepository = {
       include: {
         customer: true,
         user: true,
+        invoice: true,
         items: { include: { productVariation: { include: { product: true } } } }
       },
       orderBy: { occurredAt: "desc" }
@@ -39,6 +40,17 @@ export const saleRepository = {
       include: {
         customer: true,
         items: true
+      }
+    });
+  },
+
+  findForNfe(tenantId, saleId) {
+    return prisma.sale.findFirst({
+      where: { tenantId, id: saleId },
+      include: {
+        customer: true,
+        invoice: true,
+        items: { include: { productVariation: { include: { product: true } } } }
       }
     });
   },

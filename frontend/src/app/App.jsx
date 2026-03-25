@@ -5,8 +5,9 @@ import { AdminDashboardPage } from "../features/dashboard/AdminDashboardPage.jsx
 import { CategoriesPage } from "../features/catalog/CategoriesPage.jsx";
 import { ProductsPage } from "../features/catalog/ProductsPage.jsx";
 import { VariationsPage } from "../features/catalog/VariationsPage.jsx";
-import { SalesPage } from "../features/sales/SalesPage.jsx";
-import { CashRegisterPage } from "../features/cash/CashRegisterPage.jsx";
+import { SalesPage } from "../features/sales/NfceSalesPage.jsx";
+import { StockMovementsPage } from "../features/stock/StockMovementsPage.jsx";
+import { ReportsPage } from "../features/reports/ReportsPage.jsx";
 import { AppShell } from "../shared/components/AppShell.jsx";
 import { ToastProvider } from "../shared/components/ToastProvider.jsx";
 import { ConfirmProvider } from "../shared/components/ConfirmProvider.jsx";
@@ -16,24 +17,29 @@ function PrivateRoute({ children }) {
   return token ? children : <Navigate to="/login" replace />;
 }
 
+/** Layout + página numa única árvore — evita Outlet aninhado (tela branca em /vendas). */
+function PrivateShell({ children }) {
+  return (
+    <PrivateRoute>
+      <AppShell>{children}</AppShell>
+    </PrivateRoute>
+  );
+}
+
 function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route
-        element={
-          <PrivateRoute>
-            <AppShell />
-          </PrivateRoute>
-        }
-      >
-        <Route path="/" element={<AdminDashboardPage />} />
-        <Route path="/catalog/categories" element={<CategoriesPage />} />
-        <Route path="/catalog/products" element={<ProductsPage />} />
-        <Route path="/catalog/variations" element={<VariationsPage />} />
-        <Route path="/sales" element={<SalesPage />} />
-        <Route path="/cash-register" element={<CashRegisterPage />} />
-      </Route>
+      <Route path="/" element={<PrivateShell><AdminDashboardPage /></PrivateShell>} />
+      <Route path="/catalog/categories" element={<PrivateShell><CategoriesPage /></PrivateShell>} />
+      <Route path="/catalog/products" element={<PrivateShell><ProductsPage /></PrivateShell>} />
+      <Route path="/catalog/variations" element={<PrivateShell><VariationsPage /></PrivateShell>} />
+      <Route path="/sales" element={<Navigate to="/vendas" replace />} />
+      <Route path="/stock" element={<Navigate to="/estoque/movimentos" replace />} />
+      <Route path="/reports" element={<Navigate to="/relatorios" replace />} />
+      <Route path="/vendas" element={<PrivateShell><SalesPage /></PrivateShell>} />
+      <Route path="/estoque/movimentos" element={<PrivateShell><StockMovementsPage /></PrivateShell>} />
+      <Route path="/relatorios" element={<PrivateShell><ReportsPage /></PrivateShell>} />
     </Routes>
   );
 }

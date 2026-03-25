@@ -7,18 +7,21 @@ const navItems = [
   { to: "/catalog/categories", label: "Categorias" },
   { to: "/catalog/products", label: "Produtos" },
   { to: "/catalog/variations", label: "Variacoes" },
-  { to: "/sales", label: "Vendas" },
-  { to: "/cash-register", label: "Caixa" }
+  { to: "/vendas", label: "Vendas" },
+  { to: "/estoque/movimentos", label: "Estoque" },
+  { to: "/relatorios", label: "Relatorios" }
 ];
 
-export function AppShell() {
+export function AppShell({ children }) {
   const { tenant, user, logout } = useAuth();
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
       <header className="border-b bg-white">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <BrandLogo />
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+            <BrandLogo />
+          </div>
           <div className="text-right">
             <p className="text-sm font-semibold">{tenant?.name}</p>
             <p className="text-xs text-slate-500">{user?.name}</p>
@@ -48,7 +51,7 @@ export function AppShell() {
         </aside>
 
         <section>
-          <Outlet />
+          {children ?? <Outlet />}
         </section>
       </div>
     </div>

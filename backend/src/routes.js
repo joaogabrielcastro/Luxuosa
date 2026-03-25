@@ -6,8 +6,9 @@ import { productRoutes } from "./modules/products/product.routes.js";
 import { productVariationRoutes } from "./modules/productVariations/productVariation.routes.js";
 import { dashboardRoutes } from "./modules/dashboard/dashboard.routes.js";
 import { saleRoutes } from "./modules/sales/sale.routes.js";
-import { cashRegisterRoutes } from "./modules/cashRegister/cashRegister.routes.js";
-import { modulePlaceholdersRoutes } from "./modules/modulePlaceholders.routes.js";
+import { invoiceRoutes } from "./modules/invoices/invoice.routes.js";
+import { stockMovementRoutes } from "./modules/stockMovements/stockMovement.routes.js";
+import { reportsRoutes } from "./modules/reports/reports.routes.js";
 
 const router = Router();
 
@@ -19,7 +20,8 @@ router.use("/products", productRoutes);
 router.use("/product-variations", productVariationRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/sales", saleRoutes);
-router.use("/cash-register", cashRegisterRoutes);
-router.use("/", modulePlaceholdersRoutes);
+router.use("/invoices", invoiceRoutes);
+router.use("/stock-movements", stockMovementRoutes);
+router.use("/reports", reportsRoutes);
 
 export { router };

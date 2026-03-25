@@ -3,14 +3,15 @@ import { authService } from "./auth.service.js";
 
 const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(6)
+  password: z.string().min(6),
+  tenantCnpj: z.string().optional()
 });
 
 export const authController = {
   async login(req, res, next) {
     try {
       const data = loginSchema.parse(req.body);
-      const result = await authService.login(data.email, data.password);
+      const result = await authService.login(data.email, data.password, data.tenantCnpj);
       return res.json(result);
     } catch (error) {
       return next(error);

@@ -1,5 +1,6 @@
-import { PaymentMethod, SaleStatus, StockMovementType, CashMovementType, CashRegisterStatus } from "@prisma/client";
+import { PaymentMethod, SaleStatus, StockMovementType } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
+import { enqueueNfceIssue } from "../../jobs/enqueueNfceIssue.js";
 import { saleRepository } from "./sale.repository.js";
 
 function normalizePaymentMethod(method) {
@@ -55,21 +56,6 @@ function assertInstallmentPolicy(paymentMethod, installments) {
   }
 }
 
-async function requireOpenCashRegister(tx, tenantId) {
-  const openCash = await tx.cashRegister.findFirst({
-    where: { tenantId, status: CashRegisterStatus.OPEN },
-    orderBy: { openedAt: "desc" }
-  });
-
-  if (!openCash) {
-    const err = new Error("E necessario ter um caixa aberto para registrar vendas.");
-    err.statusCode = 409;
-    throw err;
-  }
-
-  return openCash;
-}
-
 async function restoreSaleEffects(tx, tenantId, sale) {
   for (const item of sale.items) {
     await tx.productVariation.updateMany({
@@ -104,7 +90,6 @@ export const saleService = {
 
   async create(tenantId, userId, userType, payload) {
     return prisma.$transaction(async (tx) => {
-      const openCash = await requireOpenCashRegister(tx, tenantId);
       const variationIds = payload.items.map((item) => item.productVariationId);
       const variations = await tx.productVariation.findMany({
         where: { tenantId, id: { in: variationIds } },
@@ -183,23 +168,15 @@ export const saleService = {
         });
       }
 
-      await tx.cashMovement.create({
-        data: {
-          tenantId,
-          cashRegisterId: openCash.id,
-          type: CashMovementType.ENTRY,
-          value: totalValue,
-          description: `Venda ${sale.id}`
-        }
-      });
-
+      return sale;
+    }).then((sale) => {
+      enqueueNfceIssue(tenantId, sale.id);
       return sale;
     });
   },
 
   async update(tenantId, saleId, userId, userType, payload) {
     return prisma.$transaction(async (tx) => {
-      const openCash = await requireOpenCashRegister(tx, tenantId);
       const currentSale = await saleRepository.findById(tx, tenantId, saleId);
       if (!currentSale) {
         const err = new Error("Venda nao encontrada.");
@@ -213,15 +190,6 @@ export const saleService = {
       }
 
       await restoreSaleEffects(tx, tenantId, currentSale);
-      await tx.cashMovement.create({
-        data: {
-          tenantId,
-          cashRegisterId: openCash.id,
-          type: CashMovementType.WITHDRAWAL,
-          value: currentSale.totalValue,
-          description: `Estorno por edicao da venda ${currentSale.id}`
-        }
-      });
 
       const variationIds = payload.items.map((item) => item.productVariationId);
       const variations = await tx.productVariation.findMany({
@@ -301,23 +269,12 @@ export const saleService = {
         });
       }
 
-      await tx.cashMovement.create({
-        data: {
-          tenantId,
-          cashRegisterId: openCash.id,
-          type: CashMovementType.ENTRY,
-          value: totalValue,
-          description: `Venda editada ${saleId}`
-        }
-      });
-
       return updatedSale;
     });
   },
 
   async cancel(tenantId, saleId) {
     return prisma.$transaction(async (tx) => {
-      const openCash = await requireOpenCashRegister(tx, tenantId);
       const currentSale = await saleRepository.findById(tx, tenantId, saleId);
       if (!currentSale) {
         const err = new Error("Venda nao encontrada.");
@@ -329,15 +286,6 @@ export const saleService = {
       }
 
       await restoreSaleEffects(tx, tenantId, currentSale);
-      await tx.cashMovement.create({
-        data: {
-          tenantId,
-          cashRegisterId: openCash.id,
-          type: CashMovementType.WITHDRAWAL,
-          value: currentSale.totalValue,
-          description: `Estorno da venda ${currentSale.id}`
-        }
-      });
 
       return tx.sale.update({
         where: { id: currentSale.id },

@@ -3,10 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Luxuosa SaaS</title>
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Luxuosa · NFC-e</title>
+    <!-- /sales era rota antiga: sempre ir para /vendas (antes de carregar o bundle) -->
+    <script>
+      (function () {
+        var path = (location.pathname || "/").replace(/\/+$/, "") || "/";
+        if (path === "/sales" || path.indexOf("/sales/") === 0) {
+          location.replace(location.origin + "/vendas" + location.search + location.hash);
+        }
+      })();
+    </script>
   </head>
   <body class="bg-slate-50">
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <!-- ?v= força o browser a pedir de novo o entry (cache bust) -->
+    <script type="module" src="/src/main.jsx?v=nfce-8-spa-fallback"></script>
   </body>
 </html>

@@ -1,141 +1,155 @@
-# Luxuosa SaaS - Arquitetura Multi-tenant
+# Luxuosa
 
-Arquitetura base de um SaaS para gerenciamento de loja de roupas com:
+SaaS multi-tenant para gestão de loja de roupa: catálogo, vendas, estoque, relatórios e dashboard. Uma única base PostgreSQL com isolamento lógico por `tenant_id`; autenticação via JWT.
 
-- Backend: Node.js + Express
-- Frontend: React + TailwindCSS
-- Banco: PostgreSQL
-- ORM: Prisma
-- Auth: JWT
-- Modelo SaaS: multi-tenant com `tenant_id`
+## Stack
 
-## Estrutura
+| Camada | Tecnologia |
+|--------|------------|
+| Backend | Node.js 20, Express, Prisma, Zod |
+| Frontend | React 18, Vite, TailwindCSS, React Router |
+| Banco | PostgreSQL 16 |
+| Fiscal (integração) | [Nuvem Fiscal](https://www.nuvemfiscal.com.br/) (OAuth2 + API REST) |
+
+## O que já existe no produto
+
+- **Autenticação:** login (`POST /auth/logout` e `GET /auth/me` requerem JWT). Email é único **por loja**: `@@unique([tenantId, email])` no Prisma. Se o mesmo email existir em mais de um tenant, o login exige **`tenantCnpj`** (14 dígitos) no body para escolher a loja.
+- **Catálogo:** categorias, produtos, variações (tamanho/cor/estoque), alerta de estoque baixo (produto vs soma das variações).
+- **Vendas:** criar, listar, editar, cancelar; baixa de estoque e movimentação `EXIT`; desconto com política por tipo de usuário (admin vs atendente); UI por categoria e produto; **sem cadastro de cliente na interface** — a NFC-e sai como **consumidor final**.
+- **Movimentações de estoque manuais:** entrada e saída sem venda (`POST /stock-movements`), com histórico (`GET /stock-movements`). Saída não pode ultrapassar o estoque da variação.
+- **Relatórios (API):** vendas pagas por intervalo de datas (`GET /reports/sales?from=&to=`) e lista de produtos abaixo do mínimo (`GET /reports/low-stock`). O **dashboard admin** continua com visão mais rica (só admin).
+- **Clientes (API):** `GET|POST|PUT|DELETE /customers` para integrações ou dados legados; não há tela dedicada no app.
+- **Dashboard (admin):** métricas agregadas (receita, ticket, vendas por período/atendente, lucro por produto, estoque consolidado, produtos sem venda recente, etc.).
+- **NFC-e (Nuvem Fiscal):** após registrar a venda, o backend enfileira emissão **modelo 65** (fila leve em memória, serializada por `tenantId`); consulta SEFAZ e grava `Invoice`. **PDF (DANFE):** `GET /invoices/sale/:saleId/pdf`. Reemissão/forçar emissão: `POST /invoices/issue/:saleId` (qualquer usuário autenticado da loja). Teste de conexão OAuth: `GET /invoices/connection-test` (só admin). OAuth com scope `empresa nfe nfce`. Simples Nacional (CSOSN 102).
+
+## O que ainda é esboço ou não existe
+
+- **NF-e na UI** e refinamentos fiscais avançados (outros CST/CFOP, download automático de XML em massa).
+- **Gestão de usuários** do tenant (criar atendentes), **onboarding** de novos tenants.
+- **Fila persistente** (Redis/Bull) para NFC-e — hoje a fila é em processo; reinício do servidor pode interromper jobs pendentes.
+- **Testes automatizados** em volume.
+
+## Estrutura do repositório
 
 ```txt
 Luxuosa/
+  package.json      # scripts prisma:* delegam para backend/
   backend/
     prisma/
       schema.prisma
+      seed.js
+      migrations/
+    scripts/
+      test-nuvemfiscal.mjs
     src/
       app.js
       server.js
+      jobs/
+        enqueueNfceIssue.js   # fila in-memory por tenant para NFC-e pós-venda
       config/
       middlewares/
-      modules/
+      modules/          # auth, customers, categories, products, productVariations,
+      #                 # dashboard, sales, invoices, stockMovements, reports
       shared/
+        nuvemFiscal/    # OAuth e API Nuvem Fiscal
       utils/
+    .env.example
   frontend/
     src/
       app/
-      features/
+      features/         # auth, dashboard, catalog, sales, stock, reports
       shared/
+  docker-compose.yml
+  ARCHITECTURE.md
 ```
 
-## Princípios SaaS multi-tenant
+## Variáveis de ambiente (backend)
 
-- Base de dados única para todas as empresas.
-- Todas as tabelas de domínio possuem `tenant_id`.
-- JWT inclui `tenant_id` e `user_type`.
-- Middleware injeta contexto do tenant em cada requisição.
-- Repositórios aplicam filtro por `tenant_id` em toda consulta.
+Copie `backend/.env.example` para `backend/.env`. Principais chaves:
 
-## Fluxo de autenticação
+| Variável | Descrição |
+|----------|-----------|
+| `DATABASE_URL` | Connection string PostgreSQL |
+| `JWT_SECRET` | Obrigatório; segredo de assinatura do JWT |
+| `JWT_EXPIRES_IN` | Ex.: `1d` |
+| `NUVEM_FISCAL_CLIENT_ID` | Credencial OAuth (Console Nuvem Fiscal) |
+| `NUVEM_FISCAL_CLIENT_SECRET` | Não versionar |
+| `NUVEM_FISCAL_API_BASE` | Sandbox: `https://api.sandbox.nuvemfiscal.com.br` |
+| `NUVEM_FISCAL_OAUTH_SCOPE` | Padrão: `empresa nfe nfce` |
+| `NUVEM_FISCAL_AMBIENTE` | `homologacao` ou `producao` (igual à empresa no console Nuvem) |
+| `NUVEM_FISCAL_EMITENTE_CNPJ` | Opcional; 14 dígitos. Se vazio, usa `Tenant.cnpj` |
 
-1. Usuário envia `email` e `senha`.
-2. Backend valida credenciais e identifica o tenant do usuário.
-3. Backend gera JWT com payload:
-   - `sub`: id do usuário
-   - `tenant_id`
-   - `user_type` (`admin` ou `atendente`)
-4. Frontend envia token no header `Authorization: Bearer <token>`.
-5. Middlewares validam token e tenant antes de acessar serviços.
+O `docker-compose.yml` repassa as variáveis `NUVEM_FISCAL_*` para o serviço `backend`.
 
-## Regras de isolamento de dados
+## API REST
 
-- Nenhuma query de leitura/escrita ocorre sem `tenant_id`.
-- IDs de recursos são sempre combinados com `tenant_id`.
-- Rotas de administração respeitam `user_type = admin`.
-- Logs possuem `tenant_id` para rastreabilidade.
+Prefixo global: **`/api/v1`**.
 
-## Domínios principais
+### Implementado
 
-- Autenticação e usuários
-- Clientes
-- Categorias e produtos
-- Variações e estoque
-- Vendas e itens de venda
-- Caixa e movimentações
-- Notas fiscais (integração externa)
-- Relatórios e dashboard
+| Método e caminho | Notas |
+|------------------|--------|
+| `GET /health` | Saúde da API |
+| `POST /auth/login` | Body: `email`, `password`, opcional `tenantCnpj` (14 dígitos se vários tenants com o mesmo email) |
+| `POST /auth/logout` | Requer JWT |
+| `GET /auth/me` | Requer JWT |
+| `GET\|POST /customers` | |
+| `GET\|PUT\|DELETE /customers/:id` | |
+| `GET\|POST /categories` | |
+| `GET\|PUT\|DELETE /categories/:id` | |
+| `GET\|POST /products` | |
+| `GET /products/low-stock` | |
+| `GET\|PUT\|DELETE /products/:id` | |
+| `GET\|POST /product-variations` | |
+| `GET\|PUT\|DELETE /product-variations/:id` | |
+| `GET /dashboard/admin` | Só admin |
+| `GET\|POST /sales` | |
+| `PUT /sales/:id` | |
+| `POST /sales/:id/cancel` | |
+| `GET /stock-movements` | Lista movimentações manuais e herdadas de vendas/cancelamentos |
+| `POST /stock-movements` | Body: `productVariationId`, `type` (`ENTRY` \| `EXIT`), `quantity` |
+| `GET /reports/sales?from=YYYY-MM-DD&to=YYYY-MM-DD` | Vendas pagas no intervalo (totais e por dia) |
+| `GET /reports/low-stock` | Produtos com estoque total ≤ mínimo cadastrado |
+| `GET /invoices/connection-test` | Só admin; testa OAuth + `GET /empresas` na Nuvem Fiscal |
+| `POST /invoices/issue/:saleId` | Reemite/força NFC-e (venda paga); JWT da loja |
+| `GET /invoices/sale/:saleId/pdf` | PDF (DANFE) da NFC-e autorizada |
 
-## API REST (exemplo base)
+## Frontend (rotas)
 
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/logout`
-- `GET /api/v1/me`
-- `CRUD /api/v1/customers`
-- `CRUD /api/v1/categories`
-- `CRUD /api/v1/products`
-- `CRUD /api/v1/product-variations`
-- `POST /api/v1/sales`
-- `GET /api/v1/sales`
-- `POST /api/v1/cash-register/open`
-- `POST /api/v1/cash-register/:id/close`
-- `POST /api/v1/invoices/issue/:saleId`
-- `GET /api/v1/reports/*`
-- `GET /api/v1/dashboard/admin`
+| Rota | Página |
+|------|--------|
+| `/login` | Login (campo opcional CNPJ da loja se necessário) |
+| `/` | Dashboard admin |
+| `/catalog/categories` | Categorias |
+| `/catalog/products` | Produtos |
+| `/catalog/variations` | Variações |
+| `/vendas` | Vendas + NFC-e (lista com atualização automática enquanto pendente, filtros, PDF, reemissão) |
+| `/sales` | Redireciona para `/vendas` |
+| `/estoque/movimentos` | Movimentações de estoque manuais |
+| `/stock` | Redireciona para `/estoque/movimentos` |
+| `/relatorios` | Relatórios mínimos (vendas por período, estoque baixo) |
+| `/reports` | Redireciona para `/relatorios` |
 
-## Catalogo implementado (multi-tenant)
+## NFC-e e Nuvem Fiscal
 
-Endpoints prontos:
+1. Crie credenciais no [Console](https://console.nuvemfiscal.com.br/) (recomenda-se **Sandbox** primeiro).
+2. Preencha `NUVEM_FISCAL_*` no `.env` conforme `backend/.env.example` (**scope** `empresa nfe nfce`).
+3. Teste sem subir o servidor: na pasta `backend`, `npm run test:nuvemfiscal` (OAuth + `GET /empresas`).
+4. Com API rodando e JWT de **admin**: `GET /api/v1/invoices/connection-test`.
+5. **Venda de teste:** no frontend (**Vendas**), finalize uma venda; a NFC-e é processada na fila interna. A lista pode atualizar sozinha enquanto a nota estiver pendente; use **Baixar PDF** se autorizada, **Tentar novamente** / **Emitir agora** se necessário.
 
-- `GET|POST /api/v1/categories`
-- `GET|PUT|DELETE /api/v1/categories/:id`
-- `GET|POST /api/v1/products`
-- `GET /api/v1/products/low-stock`
-- `GET|PUT|DELETE /api/v1/products/:id`
-- `GET|POST /api/v1/product-variations`
-- `GET|PUT|DELETE /api/v1/product-variations/:id`
-- `GET /api/v1/dashboard/admin`
+Documentação oficial: [Autenticação](https://dev.nuvemfiscal.com.br/docs/autenticacao).
 
-Fluxo validado:
+**NFC-e automática:** ao criar uma venda (`POST /sales`), o backend enfileira emissão na Nuvem Fiscal. No fluxo atual do app, a venda **não** vincula cliente (`customerId` nulo), então a nota é **CONSUMIDOR FINAL**. Se `customerId` for enviado pela API e o cliente tiver dados fiscais completos, o destinatário pode usar CPF/CNPJ do cadastro. **PDF:** `GET /api/v1/invoices/sale/:saleId/pdf` (JWT). Produtos: `ncm`, `cfop`, `icmsOrig`, `icmsCsosn` (padrões: `61091000`, `5102`, `0`, `102`). CNPJ emitente: `Tenant.cnpj` ou `NUVEM_FISCAL_EMITENTE_CNPJ`; certificado e ambiente na Nuvem alinhados a `NUVEM_FISCAL_AMBIENTE`. OAuth **scope** `empresa nfe nfce`.
 
-1. Criar categoria
-2. Criar produto com `sku` e `minStock`
-3. Criar variacao com estoque
-4. Consultar `products/low-stock`
-5. Ver card/lista de estoque baixo no dashboard
+Nunca commite `Client Secret`. Se exposto, revogue e gere novas credenciais.
 
-Credenciais demo (seed):
+## Credenciais demo (seed)
+
+Após `npm run prisma:seed` no backend (com banco aplicado):
 
 - Email: `admin@luxuosa.com`
 - Senha: `123456`
-
-## Vendas e caixa implementados
-
-Endpoints prontos:
-
-- `GET|POST /api/v1/sales`
-- `GET /api/v1/cash-register/current`
-- `POST /api/v1/cash-register/open`
-- `POST /api/v1/cash-register/:id/movements`
-- `POST /api/v1/cash-register/:id/close`
-
-Regras implementadas:
-
-- Venda baixa estoque automaticamente por variacao.
-- Venda registra movimentacao de estoque (`EXIT`).
-- Venda atualiza historico do cliente (`totalPurchases`, `lastPurchaseAt`) quando houver cliente.
-- Se existir caixa aberto, venda registra entrada automatica no caixa.
-- Fechamento calcula `expectedValue` com base no valor inicial + entradas - retiradas.
-
-## Como evoluir para produção
-
-- Ativar migrations Prisma e seeds.
-- Adicionar filas para NF-e e tarefas pesadas.
-- Adicionar cache para relatórios e dashboard.
-- Configurar observabilidade (logs estruturados + métricas).
-- Habilitar rate limit, CORS e hardening de segurança.
 
 ## Rodar com Docker
 
@@ -145,20 +159,44 @@ Na raiz do projeto:
 docker compose up --build
 ```
 
-Acessos:
+| Serviço | URL / porta |
+|---------|-------------|
+| Frontend | http://localhost:5180 |
+| Backend | http://localhost:3001/api/v1/health |
+| PostgreSQL | localhost:5432 (usuário/senha/db conforme `docker-compose.yml`) |
 
-- Frontend: `http://localhost:5180`
-- Backend: `http://localhost:3001/api/v1/health`
-- PostgreSQL: `localhost:5432`
-
-Para parar:
+Parar:
 
 ```bash
 docker compose down
 ```
 
-Para remover volume do banco e resetar dados:
+Resetar volume do banco:
 
 ```bash
 docker compose down -v
 ```
+
+O backend executa `prisma generate`, `prisma db push` e `npm run dev` ao iniciar o container.
+
+## Desenvolvimento local (sem Docker)
+
+1. Suba um PostgreSQL e defina `DATABASE_URL` e `JWT_SECRET` em `backend/.env`.
+2. Backend: `cd backend && npm install && npx prisma generate && npx prisma migrate deploy && npm run prisma:seed && npm run dev` (porta padrão 3001). Se o banco foi criado só com `db push` e aparecer erro P3005, veja baseline em `ARCHITECTURE.md` ou use `npx prisma db push` uma vez para alinhar o schema.
+
+### Prisma (pastas e comandos)
+
+- O arquivo do schema é **`backend/prisma/schema.prisma`**. Comandos como `npx prisma migrate deploy` precisam ser executados **de dentro de `backend/`**, ou use na **raiz do repositório**: `npm run prisma:deploy`, `npm run prisma:push`, `npm run prisma:status`, etc. (veja `package.json` na raiz).
+- O CLI do Prisma não fica no PATH global: use **`npx prisma db push`** (e outros subcomandos), ou **`npm run prisma:push`** em `backend/` ou na raiz. **`db push` sozinho não existe** no PowerShell — isso não é um comando.
+- Em **`backend/`** também funcionam: `npm run prisma:push`, `npm run prisma:deploy`, `npm run prisma:status` (definidos no `package.json` do backend).
+- **P1001 (Can't reach database server):** o PostgreSQL não está rodando ou a `DATABASE_URL` está errada. Com Docker: `docker compose up -d` (serviço `db`). Confira porta **5432** e usuário/senha no `.env`.
+3. Frontend: `cd frontend && npm install`; defina `VITE_API_URL` apontando para a API (ex.: `http://localhost:3001/api/v1`); `npm run dev` (porta **5180** neste repo, para não conflitar com outro app na 5173).
+
+## Evolução recomendada para produção
+
+- Usar **`prisma migrate deploy`** no pipeline (há migrações versionadas no repositório).
+- **Rate limit**, CORS restritivo, rotação de segredos e observabilidade (logs estruturados, métricas).
+- **Fila persistente** (Redis/Bull ou similar) para NFC-e se houver múltiplos workers ou exigência de não perder jobs ao reiniciar.
+- Testes de integração com isolamento por tenant.
+
+Documentação técnica detalhada: **`ARCHITECTURE.md`**.

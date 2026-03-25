@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiClient } from "../../shared/apiClient.js";
+import { formatDateBR } from "../../shared/formatters.js";
 import { useAuth } from "../auth/useAuth.jsx";
 
 export function AdminDashboardPage() {
@@ -71,7 +72,7 @@ export function AdminDashboardPage() {
           <ul className="space-y-2 text-sm">
             {data.productsWithoutSales.slice(0, 8).map((row) => (
               <li key={row.productId} className="rounded border p-2">
-                {row.name} - ultima venda: {row.lastSaleAt ? new Date(row.lastSaleAt).toLocaleDateString() : "Nunca"}
+                {row.name} - ultima venda: {row.lastSaleAt ? formatDateBR(row.lastSaleAt) : "Nunca"}
               </li>
             ))}
           </ul>
@@ -101,7 +102,7 @@ export function AdminDashboardPage() {
           <ul className="space-y-2 text-sm">
             {data.salesByPeriod.map((row) => (
               <li key={row.date} className="rounded border p-2">
-                {row.date} - vendas: {row.count} - total: R$ {Number(row.amount).toFixed(2)}
+                {formatDateBR(row.date)} - vendas: {row.count} - total: R$ {Number(row.amount).toFixed(2)}
               </li>
             ))}
           </ul>

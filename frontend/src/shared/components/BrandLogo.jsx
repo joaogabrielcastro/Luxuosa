@@ -9,7 +9,12 @@ export function BrandLogo({ compact = false }) {
         }}
         className={compact ? "h-8 w-8 rounded-md object-cover" : "h-10 w-10 rounded-md object-cover"}
       />
-      {!compact ? <span className="text-lg font-semibold text-slate-900">Luxuosa SaaS</span> : null}
+      {!compact ? (
+        <div className="flex flex-col leading-tight sm:flex-row sm:items-baseline sm:gap-2">
+          <span className="text-lg font-semibold text-slate-900">Luxuosa SaaS</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700">NFC-e</span>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -8,12 +8,13 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [tenantCnpj, setTenantCnpj] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (token) {
-      navigate("/", { replace: true });
+      navigate("/vendas", { replace: true });
     }
   }, [token, navigate]);
 
@@ -22,8 +23,8 @@ export function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      await login(email, password);
-      navigate("/", { replace: true });
+      await login(email, password, tenantCnpj);
+      navigate("/vendas", { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -50,6 +51,14 @@ export function LoginPage() {
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+        />
+        <input
+          className="w-full rounded border p-2"
+          placeholder="CNPJ da loja (se varias lojas usam o mesmo email)"
+          inputMode="numeric"
+          autoComplete="off"
+          value={tenantCnpj}
+          onChange={(e) => setTenantCnpj(e.target.value)}
         />
         <button
           className="w-full rounded bg-slate-900 p-2 text-white disabled:opacity-50"

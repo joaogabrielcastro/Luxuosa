@@ -9,10 +9,14 @@ export function AuthProvider({ children }) {
     return raw ? JSON.parse(raw) : null;
   });
 
-  async function login(email, password) {
+  async function login(email, password, tenantCnpj) {
+    const body = { email, password };
+    if (tenantCnpj && String(tenantCnpj).trim()) {
+      body.tenantCnpj = String(tenantCnpj).trim();
+    }
     const data = await apiClient("/auth/login", {
       method: "POST",
-      body: { email, password }
+      body
     });
     setSession(data);
     localStorage.setItem("luxuosa_session", JSON.stringify(data));

@@ -37,16 +37,6 @@ enum PaymentMethod {
   INSTALLMENT
 }
 
-enum CashRegisterStatus {
-  OPEN
-  CLOSED
-}
-
-enum CashMovementType {
-  ENTRY
-  WITHDRAWAL
-}
-
 enum InvoiceStatus {
   PENDING
   ISSUED
@@ -71,8 +61,6 @@ model Tenant {
   stockMoves  StockMovement[]
   sales       Sale[]
   saleItems   SaleItem[]
-  cashRegs    CashRegister[]
-  cashMoves   CashMovement[]
   invoices    Invoice[]
 }
 
@@ -80,7 +68,7 @@ model User {
   id        String   @id @default(cuid())
   tenantId  String
   name      String
-  email     String   @unique
+  email     String
   password  String
   type      UserType
   createdAt DateTime @default(now())
@@ -88,21 +76,25 @@ model User {
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
   sales     Sale[]
 
+  @@unique([tenantId, email])
   @@index([tenantId])
-  @@index([tenantId, email])
 }
 
 model Customer {
-  id             String   @id @default(cuid())
-  tenantId       String
-  name           String
-  cpfCnpj        String
-  phone          String?
-  email          String?
-  address        String?
-  totalPurchases Decimal  @default(0) @db.Decimal(12, 2)
-  lastPurchaseAt DateTime?
-  createdAt      DateTime @default(now())
+  id              String   @id @default(cuid())
+  tenantId        String
+  name            String
+  cpfCnpj         String
+  phone           String?
+  email           String?
+  address         String?
+  uf              String?
+  cep             String?
+  ibgeMunicipio   String?
+  municipioNome   String?
+  totalPurchases  Decimal  @default(0) @db.Decimal(12, 2)
+  lastPurchaseAt  DateTime?
+  createdAt       DateTime @default(now())
 
   tenant         Tenant   @relation(fields: [tenantId], references: [id])
   sales          Sale[]
@@ -134,6 +126,10 @@ model Product {
   categoryId    String
   sku           String
   minStock      Int
+  ncm           String   @default("61091000")
+  cfop          String   @default("5102")
+  icmsOrig      Int      @default(0)
+  icmsCsosn     String   @default("102")
   createdAt     DateTime @default(now())
 
   tenant        Tenant   @relation(fields: [tenantId], references: [id])
@@ -219,49 +215,17 @@ model SaleItem {
   @@index([tenantId, saleId])
 }
 
-model CashRegister {
-  id              String             @id @default(cuid())
-  tenantId        String
-  openedByUserId  String
-  initialValue    Decimal            @db.Decimal(12, 2)
-  finalValue      Decimal?           @db.Decimal(12, 2)
-  expectedValue   Decimal?           @db.Decimal(12, 2)
-  openedAt        DateTime           @default(now())
-  closedAt        DateTime?
-  status          CashRegisterStatus @default(OPEN)
-
-  tenant          Tenant             @relation(fields: [tenantId], references: [id])
-  movements       CashMovement[]
-
-  @@index([tenantId])
-  @@index([tenantId, openedAt])
-}
-
-model CashMovement {
-  id              String           @id @default(cuid())
-  tenantId        String
-  cashRegisterId  String
-  type            CashMovementType
-  value           Decimal          @db.Decimal(12, 2)
-  description     String?
-  occurredAt      DateTime         @default(now())
-
-  tenant          Tenant           @relation(fields: [tenantId], references: [id])
-  cashRegister    CashRegister     @relation(fields: [cashRegisterId], references: [id])
-
-  @@index([tenantId])
-  @@index([tenantId, cashRegisterId])
-}
-
 model Invoice {
   id              String        @id @default(cuid())
   tenantId        String
   saleId          String        @unique
+  externalId      String?       @unique
   number          String?
   key             String?
   status          InvoiceStatus @default(PENDING)
   xmlUrl          String?
   pdfUrl          String?
+  lastError       String?       @db.Text
   issuedAt        DateTime?
 
   tenant          Tenant        @relation(fields: [tenantId], references: [id])

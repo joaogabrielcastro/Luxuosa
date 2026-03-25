@@ -29,9 +29,11 @@ export function DataTable({
     return rows;
   }, [data, search, filters]);
 
+  const filterValuesKey = filters.map((f) => f.value).join("|");
+
   useEffect(() => {
     setPage(1);
-  }, [search?.query, ...filters.map((item) => item.value)]);
+  }, [search?.query, filterValuesKey]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -42,7 +44,11 @@ export function DataTable({
       {title ? <h3 className="mb-2 font-semibold">{title}</h3> : null}
 
       {search || filters.length ? (
-        <div className={`mb-3 grid gap-2 ${filters.length ? "md:grid-cols-2" : ""}`}>
+        <div
+          className={`mb-3 grid gap-2 grid-cols-1 ${
+            search && filters.length >= 2 ? "md:grid-cols-2 xl:grid-cols-3" : filters.length ? "md:grid-cols-2" : ""
+          }`}
+        >
           {search ? (
             <input
               className="rounded border p-2 text-sm"

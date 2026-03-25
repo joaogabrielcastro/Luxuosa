@@ -1,0 +1,169 @@
+import { useEffect, useMemo, useState } from "react";
+import { apiClient } from "../../shared/apiClient.js";
+import { useAuth } from "../auth/useAuth.jsx";
+import { useToast } from "../../shared/components/ToastProvider.jsx";
+import { formatDateTimeBR } from "../../shared/formatters.js";
+
+export function StockMovementsPage() {
+  const { token } = useAuth();
+  const { showToast } = useToast();
+  const [movements, setMovements] = useState([]);
+  const [variations, setVariations] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState({
+    productVariationId: "",
+    type: "ENTRY",
+    quantity: "1"
+  });
+
+  const sortedVariations = useMemo(
+    () =>
+      [...variations].sort((a, b) => {
+        const an = `${a.product?.name || ""} ${a.size} ${a.color}`;
+        const bn = `${b.product?.name || ""} ${b.size} ${b.color}`;
+        return an.localeCompare(bn, "pt-BR");
+      }),
+    [variations]
+  );
+
+  async function load() {
+    const [m, v] = await Promise.all([
+      apiClient("/stock-movements", { token }),
+      apiClient("/product-variations", { token })
+    ]);
+    setMovements(m);
+    setVariations(v);
+  }
+
+  useEffect(() => {
+    load().catch((err) => showToast(err.message, "error"));
+  }, [token]);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!form.productVariationId) {
+      showToast("Selecione uma variacao.", "error");
+      return;
+    }
+    const qty = Math.floor(Number(form.quantity));
+    if (!Number.isInteger(qty) || qty < 1) {
+      showToast("Informe uma quantidade inteira maior ou igual a 1.", "error");
+      return;
+    }
+    setLoading(true);
+    try {
+      await apiClient("/stock-movements", {
+        method: "POST",
+        token,
+        body: {
+          productVariationId: form.productVariationId,
+          type: form.type,
+          quantity: qty
+        }
+      });
+      showToast(form.type === "ENTRY" ? "Entrada registrada." : "Saida registrada.");
+      setForm((prev) => ({ ...prev, quantity: "1" }));
+      await load();
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <section className="rounded-lg bg-white p-4 shadow-sm">
+        <h2 className="text-lg font-semibold">Nova movimentacao</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Ajuste manual de estoque (entrada de mercadoria ou saida para uso interno). Vendas continuam baixando
+          estoque automaticamente.
+        </p>
+        <form className="mt-4 grid max-w-xl gap-3" onSubmit={handleSubmit}>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-slate-600">Produto / variacao</span>
+            <select
+              className="rounded border p-2"
+              value={form.productVariationId}
+              onChange={(e) => setForm((p) => ({ ...p, productVariationId: e.target.value }))}
+            >
+              <option value="">Selecione</option>
+              {sortedVariations.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.product?.name} — {v.size}/{v.color} (atual: {v.stock})
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-slate-600">Tipo</span>
+              <select
+                className="rounded border p-2"
+                value={form.type}
+                onChange={(e) => setForm((p) => ({ ...p, type: e.target.value }))}
+              >
+                <option value="ENTRY">Entrada</option>
+                <option value="EXIT">Saida</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-slate-600">Quantidade</span>
+              <input
+                className="rounded border p-2"
+                type="number"
+                min={1}
+                step={1}
+                value={form.quantity}
+                onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))}
+              />
+            </label>
+          </div>
+          <button
+            type="submit"
+            className="max-w-xs rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+            disabled={loading}
+          >
+            {loading ? "Salvando..." : "Registrar"}
+          </button>
+        </form>
+      </section>
+
+      <section className="rounded-lg bg-white p-4 shadow-sm">
+        <h3 className="mb-3 text-base font-semibold">Historico recente</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead>
+              <tr className="border-b text-slate-500">
+                <th className="py-2 pr-2">Data</th>
+                <th className="py-2 pr-2">Tipo</th>
+                <th className="py-2 pr-2">Qtd</th>
+                <th className="py-2">Produto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {movements.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-4 text-slate-500">
+                    Nenhuma movimentacao manual ainda.
+                  </td>
+                </tr>
+              ) : (
+                movements.map((m) => (
+                  <tr key={m.id} className="border-b border-slate-100">
+                    <td className="py-2 pr-2 whitespace-nowrap">{formatDateTimeBR(m.occurredAt)}</td>
+                    <td className="py-2 pr-2">{m.type === "ENTRY" ? "Entrada" : "Saida"}</td>
+                    <td className="py-2 pr-2">{m.quantity}</td>
+                    <td className="py-2">
+                      {m.productVariation?.product?.name} — {m.productVariation?.size}/{m.productVariation?.color}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}

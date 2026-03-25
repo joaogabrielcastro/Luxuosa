@@ -4,9 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node scripts/clear-vite-cache.mjs",
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:sales-ui": "node scripts/check-sales-ui.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

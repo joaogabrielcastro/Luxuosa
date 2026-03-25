@@ -6,7 +6,11 @@ const customerSchema = z.object({
   cpfCnpj: z.string().min(11),
   phone: z.string().min(8).optional(),
   email: z.string().email().optional(),
-  address: z.string().optional()
+  address: z.string().optional(),
+  uf: z.string().length(2).optional(),
+  cep: z.string().min(8).optional(),
+  ibgeMunicipio: z.string().length(7).optional(),
+  municipioNome: z.string().min(2).optional()
 });
 
 export const customerController = {

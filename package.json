@@ -1,0 +1,13 @@
+{
+  "name": "luxuosa",
+  "private": true,
+  "description": "Monorepo: use npm run na raiz para Prisma (delega para backend/).",
+  "scripts": {
+    "prisma:generate": "cd backend && npx prisma generate",
+    "prisma:migrate": "cd backend && npx prisma migrate dev",
+    "prisma:deploy": "cd backend && npx prisma migrate deploy",
+    "prisma:push": "cd backend && npx prisma db push",
+    "prisma:status": "cd backend && npx prisma migrate status",
+    "prisma:studio": "cd backend && npx prisma studio"
+  }
+}

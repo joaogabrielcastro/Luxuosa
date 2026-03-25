@@ -31,6 +31,13 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/luxuosa
       JWT_SECRET: change-me-in-production
       JWT_EXPIRES_IN: 1d
+      NUVEM_FISCAL_CLIENT_ID: ${NUVEM_FISCAL_CLIENT_ID:-}
+      NUVEM_FISCAL_CLIENT_SECRET: ${NUVEM_FISCAL_CLIENT_SECRET:-}
+      NUVEM_FISCAL_API_BASE: ${NUVEM_FISCAL_API_BASE:-https://api.sandbox.nuvemfiscal.com.br}
+      # Alinhar a backend/.env.example e env.js (NFC-e exige scope nfce)
+      NUVEM_FISCAL_OAUTH_SCOPE: ${NUVEM_FISCAL_OAUTH_SCOPE:-empresa nfe nfce}
+      NUVEM_FISCAL_AMBIENTE: ${NUVEM_FISCAL_AMBIENTE:-homologacao}
+      NUVEM_FISCAL_EMITENTE_CNPJ: ${NUVEM_FISCAL_EMITENTE_CNPJ:-}
     ports:
       - "3001:3001"
     volumes:
