@@ -19,7 +19,12 @@ export const env = {
     /** homologacao | producao — deve coincidir com a configuração da empresa na Nuvem Fiscal */
     ambiente: trimEnv(process.env.NUVEM_FISCAL_AMBIENTE || "homologacao"),
     /** CNPJ só dígitos; se vazio, usa Tenant.cnpj na emissão */
-    emitenteCnpj: trimEnv(process.env.NUVEM_FISCAL_EMITENTE_CNPJ || "")
+    emitenteCnpj: trimEnv(process.env.NUVEM_FISCAL_EMITENTE_CNPJ || ""),
+    /** Responsavel tecnico (infRespTec) — alguns estados exigem este grupo em NFC-e. */
+    respTecCnpj: trimEnv(process.env.NUVEM_FISCAL_RESP_TEC_CNPJ || ""),
+    respTecContato: trimEnv(process.env.NUVEM_FISCAL_RESP_TEC_CONTATO || ""),
+    respTecEmail: trimEnv(process.env.NUVEM_FISCAL_RESP_TEC_EMAIL || ""),
+    respTecFone: trimEnv(process.env.NUVEM_FISCAL_RESP_TEC_FONE || "")
   }
 };
 

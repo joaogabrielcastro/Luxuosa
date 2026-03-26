@@ -130,9 +130,45 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
   }
 
   if (sale.invoice?.status === InvoiceStatus.ISSUED) {
-    const err = new Error("Ja existe NFC-e emitida para esta venda.");
-    err.statusCode = 409;
-    throw err;
+    const invoiceRef = sale.invoice.externalId || sale.invoice.key;
+    if (!invoiceRef) {
+      const err = new Error("Ja existe NFC-e emitida para esta venda.");
+      err.statusCode = 409;
+      throw err;
+    }
+
+    const remote = await getNfceById(nf, invoiceRef);
+    if (!remote.ok) {
+      const err = new Error("Ja existe NFC-e emitida para esta venda.");
+      err.statusCode = 409;
+      throw err;
+    }
+
+    const codigo = remote.body?.autorizacao?.codigo_status;
+    const autorizada = codigo === 100 || codigo === 150;
+    if (autorizada) {
+      const err = new Error("Ja existe NFC-e emitida para esta venda.");
+      err.statusCode = 409;
+      throw err;
+    }
+
+    // Estado local ficou ISSUED, mas na Nuvem a nota nao esta autorizada (rejeitada/cancelada).
+    // Reabre a invoice para permitir nova emissao.
+    const motivo =
+      remote.body?.autorizacao?.motivo_status ||
+      "NFC-e nao autorizada na Nuvem Fiscal. Reemissao liberada.";
+    await prisma.invoice.update({
+      where: { saleId },
+      data: {
+        status: InvoiceStatus.ERROR,
+        lastError: String(motivo).slice(0, 65000),
+        externalId: null,
+        key: null,
+        number: null,
+        pdfUrl: null,
+        issuedAt: null
+      }
+    });
   }
 
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
@@ -171,10 +207,24 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
     throw err;
   }
 
+  const respTecCnpj = digitsOnly(nf.respTecCnpj);
+  const respTecFone = digitsOnly(nf.respTecFone);
+  const respTecEmail = String(nf.respTecEmail || "").trim();
+  const respTecContato = String(nf.respTecContato || "").trim();
+  const infRespTec =
+    respTecCnpj.length === 14 && respTecEmail
+      ? {
+          CNPJ: respTecCnpj,
+          xContato: respTecContato || "Suporte Luxuosa",
+          email: respTecEmail,
+          ...(respTecFone ? { fone: respTecFone } : {})
+        }
+      : null;
+
   const payload = buildNfceRequestBody({
     sale,
     empresa,
-    empresaNfce,
+    empresaNfce: { ...(empresaNfce || {}), ...(infRespTec ? { respTec: infRespTec } : {}) },
     ambiente,
     referencia: sale.id
   });
@@ -224,7 +274,7 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
   const numero = final?.numero != null ? String(final.numero) : null;
   const codigo = final?.autorizacao?.codigo_status;
 
-  const autorizada = Boolean(chave) || codigo === 100 || codigo === 150;
+  const autorizada = codigo === 100 || codigo === 150;
 
   if (!autorizada) {
     const motivo = final?.autorizacao?.motivo_status || JSON.stringify(final).slice(0, 2000);
@@ -277,14 +327,46 @@ async function fetchNfcePdfBuffer(tenantId, saleId) {
   }
 
   const token = await getNuvemFiscalAccessToken(nf);
-  const url = `${nf.apiBase}/nfce/${encodeURIComponent(invoice.externalId)}/pdf`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/pdf" }
-  });
+  const docStatus = await getNfceById(nf, invoice.externalId);
+  if (docStatus.ok) {
+    const codigo = docStatus.body?.autorizacao?.codigo_status;
+    const autorizado = codigo === 100 || codigo === 150;
+    if (!autorizado) {
+      const motivo =
+        docStatus.body?.autorizacao?.motivo_status ||
+        "NFC-e ainda nao autorizada para disponibilizar PDF.";
+      const err = new Error(motivo);
+      err.statusCode = 409;
+      throw err;
+    }
+  }
 
-  if (!res.ok) {
-    const err = new Error(`Nuvem Fiscal retornou ${res.status} ao baixar PDF.`);
+  const candidates = [invoice.externalId, invoice.key].filter(Boolean);
+  let res;
+  let lastStatus = 404;
+  let lastBody = null;
+
+  // O PDF (DANFE) pode demorar alguns segundos para ficar disponivel apos autorizacao.
+  for (const docRef of candidates) {
+    const url = `${nf.apiBase}/nfce/${encodeURIComponent(docRef)}/pdf`;
+    for (let attempt = 1; attempt <= 6; attempt += 1) {
+      res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/pdf" }
+      });
+      if (res.ok) break;
+      lastStatus = res.status;
+      const maybeText = await res.text().catch(() => "");
+      lastBody = maybeText || lastBody;
+      if (res.status !== 404 || attempt === 6) break;
+      await sleep(1500);
+    }
+    if (res?.ok) break;
+  }
+
+  if (!res?.ok) {
+    const err = new Error(`Nuvem Fiscal retornou ${lastStatus} ao baixar PDF.`);
     err.statusCode = 502;
+    if (lastBody) err.details = lastBody.slice(0, 1000);
     throw err;
   }
 

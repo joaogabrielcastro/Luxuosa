@@ -78,8 +78,12 @@ Copie `backend/.env.example` para `backend/.env`. Principais chaves:
 | `NUVEM_FISCAL_OAUTH_SCOPE` | Padrão: `empresa nfe nfce` |
 | `NUVEM_FISCAL_AMBIENTE` | `homologacao` ou `producao` (igual à empresa no console Nuvem) |
 | `NUVEM_FISCAL_EMITENTE_CNPJ` | Opcional; 14 dígitos. Se vazio, usa `Tenant.cnpj` |
+| `NUVEM_FISCAL_RESP_TEC_CNPJ` | CNPJ do responsável técnico (infRespTec), quando exigido pela SEFAZ |
+| `NUVEM_FISCAL_RESP_TEC_CONTATO` | Nome do contato técnico |
+| `NUVEM_FISCAL_RESP_TEC_EMAIL` | Email do responsável técnico |
+| `NUVEM_FISCAL_RESP_TEC_FONE` | Telefone (somente dígitos) do responsável técnico |
 
-O `docker-compose.yml` repassa as variáveis `NUVEM_FISCAL_*` para o serviço `backend`.
+No fluxo com Docker deste repositório, o `backend` lê essas variáveis via `env_file` em `docker-compose.yml` (arquivo `/.env.compose`).
 
 ## API REST
 
@@ -137,6 +141,13 @@ Prefixo global: **`/api/v1`**.
 3. Teste sem subir o servidor: na pasta `backend`, `npm run test:nuvemfiscal` (OAuth + `GET /empresas`).
 4. Com API rodando e JWT de **admin**: `GET /api/v1/invoices/connection-test`.
 5. **Venda de teste:** no frontend (**Vendas**), finalize uma venda; a NFC-e é processada na fila interna. A lista pode atualizar sozinha enquanto a nota estiver pendente; use **Baixar PDF** se autorizada, **Tentar novamente** / **Emitir agora** se necessário.
+
+### Troubleshooting rápido (NFC-e)
+
+- **`Nao informado o grupo de informacoes do responsavel tecnico`**: preencha `NUVEM_FISCAL_RESP_TEC_*`.
+- **`IE do emitente nao vinculada ao CNPJ`**: confira IE/CNPJ da empresa no Console Nuvem/SEFAZ.
+- **`Ja existe NFC-e emitida` + sem PDF**: o backend já reconcilia estado local vs Nuvem e libera reemissão quando a autorização remota não for 100/150.
+- **`Nuvem Fiscal retornou 404 ao baixar PDF`**: pode ser atraso de disponibilização; o backend já faz retry e valida autorização antes de baixar.
 
 Documentação oficial: [Autenticação](https://dev.nuvemfiscal.com.br/docs/autenticacao).
 

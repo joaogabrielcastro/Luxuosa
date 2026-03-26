@@ -47,19 +47,51 @@ function round2(n) {
 }
 
 function randomCNF() {
-  return Array.from({ length: 8 }, () => Math.floor(Math.random() * 16).toString(16))
-    .join("")
-    .toUpperCase();
+  return Array.from({ length: 8 }, () => Math.floor(Math.random() * 10)).join("");
+}
+
+function modulo11Cdv(chave43) {
+  let sum = 0;
+  let weight = 2;
+  for (let i = chave43.length - 1; i >= 0; i -= 1) {
+    sum += Number(chave43[i]) * weight;
+    weight = weight === 9 ? 2 : weight + 1;
+  }
+  const mod = sum % 11;
+  return mod === 0 || mod === 1 ? 0 : 11 - mod;
+}
+
+function buildInfNfeId({ cUF, dhEmi, cnpjEmit, mod, serie, nNF, tpEmis, cNF }) {
+  const d = new Date(dhEmi);
+  const ano = String(d.getUTCFullYear()).slice(-2);
+  const mes = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const aamm = `${ano}${mes}`;
+
+  const chave43 = [
+    String(cUF).padStart(2, "0"),
+    aamm,
+    digitsOnly(cnpjEmit).slice(0, 14).padStart(14, "0"),
+    String(mod).padStart(2, "0"),
+    String(serie).padStart(3, "0"),
+    String(nNF).padStart(9, "0"),
+    String(tpEmis),
+    String(cNF).padStart(8, "0")
+  ].join("");
+
+  const cDV = modulo11Cdv(chave43);
+  return { Id: `NFe${chave43}${cDV}`, cDV };
 }
 
 function buildEmit(empresa, crt) {
   const e = empresa.endereco;
-  const ie = empresa.inscricao_estadual?.trim();
+  const ieRaw = String(empresa.inscricao_estadual || "").trim();
+  const ieDigits = digitsOnly(ieRaw);
+  const ie = ieDigits.length >= 2 && ieDigits.length <= 14 ? ieDigits : "ISENTO";
   return {
     CNPJ: digitsOnly(empresa.cpf_cnpj),
     xNome: empresa.nome_razao_social,
     xFant: empresa.nome_fantasia || empresa.nome_razao_social,
-    IE: ie && ie.length > 0 ? ie : "ISENTO",
+    IE: ie,
     CRT: crt ?? 1,
     enderEmit: {
       xLgr: e.logradouro,
@@ -179,7 +211,7 @@ export function buildNfceRequestBody({ sale, empresa, empresaNfce, ambiente, ref
   const emit = buildEmit(empresa, empresaNfce?.CRT);
   const useCustomer =
     sale.customer && customerFiscalComplete(sale.customer) && digitsOnly(sale.customer.cpfCnpj).length >= 11;
-  const dest = useCustomer ? buildDest(sale.customer) : buildDestConsumidorFinal(empresa);
+  const dest = useCustomer ? buildDest(sale.customer) : null;
 
   const emitUF = empresa.endereco.uf;
   const destUF = useCustomer ? sale.customer.uf : emitUF;
@@ -187,6 +219,17 @@ export function buildNfceRequestBody({ sale, empresa, empresaNfce, ambiente, ref
   const cUF = UF_CUF[emitUF] ?? 41;
   const dhEmi = new Date(sale.occurredAt).toISOString();
   const cNF = randomCNF();
+  const nNF = Number(String(Date.now()).slice(-9));
+  const idData = buildInfNfeId({
+    cUF,
+    dhEmi,
+    cnpjEmit: emit.CNPJ,
+    mod: 65,
+    serie: 1,
+    nNF,
+    tpEmis: 1,
+    cNF
+  });
 
   const ide = {
     cUF,
@@ -194,14 +237,14 @@ export function buildNfceRequestBody({ sale, empresa, empresaNfce, ambiente, ref
     natOp: "VENDA DE MERCADORIA",
     mod: 65,
     serie: 1,
-    nNF: 1,
+    nNF,
     dhEmi,
     tpNF: 1,
     idDest,
     cMunFG: digitsOnly(empresa.endereco.codigo_municipio),
     tpImp: 4,
     tpEmis: 1,
-    cDV: 0,
+    cDV: idData.cDV,
     tpAmb: ambiente === "producao" ? 1 : 2,
     finNFe: 1,
     indFinal: 1,
@@ -241,32 +284,40 @@ export function buildNfceRequestBody({ sale, empresa, empresaNfce, ambiente, ref
   };
 
   const tPag = PAYMENT_TO_TPAG[sale.paymentMethod] || "01";
+  // Alguns estados/SEFAZ exigem grupo "card" tambem em meios eletronicos (ex.: PIX).
+  const needsCardGroup = tPag === "03" || tPag === "04" || tPag === "17";
 
   const pag = {
     detPag: [
       {
         indPag: 0,
         tPag,
-        vPag: vNF
+        vPag: vNF,
+        ...(needsCardGroup
+          ? {
+              // Sem TEF integrado no momento: informar operacao nao integrada
+              card: { tpIntegra: 2 }
+            }
+          : {})
       }
     ],
     vTroco: 0
   };
 
+  const respTec = empresaNfce?.respTec || null;
+
   return {
     infNFe: {
       versao: "4.00",
-      Id: "",
+      Id: idData.Id,
       ide,
       emit,
-      dest,
+      ...(dest ? { dest } : {}),
       det,
       total,
       transp: { modFrete: 9 },
       pag,
-      infAdic: {
-        infCpl: `NFC-e venda ${sale.id} — ref ${referencia}`
-      }
+      ...(respTec ? { infRespTec: respTec } : {})
     },
     ambiente,
     referencia
