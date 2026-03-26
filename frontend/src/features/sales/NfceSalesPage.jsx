@@ -168,6 +168,12 @@ export function SalesPage() {
         const next = { ...item, [key]: value };
         if (key === "categoryId") {
           next.productVariationId = "";
+          next.unitPrice = "";
+        }
+        if (key === "productVariationId") {
+          const selectedVariation = variations.find((variation) => variation.id === value);
+          const productPrice = Number(selectedVariation?.product?.price || 0);
+          next.unitPrice = productPrice > 0 ? maskCurrencyInput(String(Math.round(productPrice * 100))) : "";
         }
         return next;
       })

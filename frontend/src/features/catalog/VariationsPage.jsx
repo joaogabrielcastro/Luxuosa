@@ -9,13 +9,16 @@ export function VariationsPage() {
   const { token } = useAuth();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
+  const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [variations, setVariations] = useState([]);
   const [editingId, setEditingId] = useState("");
   const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [productFilter, setProductFilter] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [formCategoryId, setFormCategoryId] = useState("");
   const [form, setForm] = useState({
     productId: "",
     size: "",
@@ -24,10 +27,12 @@ export function VariationsPage() {
   });
 
   async function load() {
-    const [productsData, variationsData] = await Promise.all([
+    const [categoriesData, productsData, variationsData] = await Promise.all([
+      apiClient("/categories", { token }),
       apiClient("/products", { token }),
       apiClient("/product-variations", { token })
     ]);
+    setCategories(categoriesData);
     setProducts(productsData);
     setVariations(variationsData);
   }
@@ -48,6 +53,7 @@ export function VariationsPage() {
       });
       showToast(editingId ? "Variacao atualizada." : "Variacao criada.");
       setEditingId("");
+      setFormCategoryId("");
       setForm({ productId: "", size: "", color: "", stock: 0 });
       await load();
     } catch (err) {
@@ -77,6 +83,7 @@ export function VariationsPage() {
 
   function startEdit(item) {
     setEditingId(item.id);
+    setFormCategoryId(item.product?.categoryId || "");
     setForm({
       productId: item.productId || "",
       size: item.size || "",
@@ -85,18 +92,38 @@ export function VariationsPage() {
     });
   }
 
+  const productsBySelectedCategory = products.filter((item) => !formCategoryId || item.categoryId === formCategoryId);
+  const productsForListFilter = products.filter((item) => !categoryFilter || item.categoryId === categoryFilter);
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold">Variacoes</h2>
         <form className="mt-3 grid gap-2 md:grid-cols-2" onSubmit={createVariation}>
           <select
-            className="rounded-md border p-2 md:col-span-2"
+            className="rounded-md border p-2"
+            value={formCategoryId}
+            onChange={(e) => {
+              const nextCategoryId = e.target.value;
+              setFormCategoryId(nextCategoryId);
+              setForm((prev) => ({ ...prev, productId: "" }));
+            }}
+          >
+            <option value="">Selecione categoria</option>
+            {categories.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+          <select
+            className="rounded-md border p-2"
             value={form.productId}
+            disabled={!formCategoryId}
             onChange={(e) => setForm((prev) => ({ ...prev, productId: e.target.value }))}
           >
-            <option value="">Selecione produto</option>
-            {products.map((item) => (
+            <option value="">{formCategoryId ? "Selecione produto" : "Primeiro selecione a categoria"}</option>
+            {productsBySelectedCategory.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name} ({item.sku})
               </option>
@@ -131,6 +158,7 @@ export function VariationsPage() {
                 className="rounded-md border px-4 py-2"
                 onClick={() => {
                   setEditingId("");
+                  setFormCategoryId("");
                   setForm({ productId: "", size: "", color: "", stock: 0 });
                 }}
               >
@@ -162,10 +190,20 @@ export function VariationsPage() {
         }}
         filters={[
           {
+            id: "category",
+            value: categoryFilter,
+            onChange: (value) => {
+              setCategoryFilter(value);
+              setProductFilter("");
+            },
+            options: [{ value: "", label: "Todas as categorias" }, ...categories.map((item) => ({ value: item.id, label: item.name }))],
+            matcher: (row, value) => row.product?.categoryId === value
+          },
+          {
             id: "product",
             value: productFilter,
             onChange: setProductFilter,
-            options: [{ value: "", label: "Todos os produtos" }, ...products.map((item) => ({ value: item.id, label: item.name }))],
+            options: [{ value: "", label: "Todos os produtos" }, ...productsForListFilter.map((item) => ({ value: item.id, label: item.name }))],
             matcher: (row, value) => row.productId === value
           }
         ]}

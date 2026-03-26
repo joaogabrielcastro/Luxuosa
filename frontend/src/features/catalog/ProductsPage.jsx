@@ -6,6 +6,9 @@ import { formatCurrencyBRL, maskCurrencyInput, parseCurrencyInput } from "../../
 import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
 import { DataTable } from "../../shared/components/DataTable.jsx";
 
+const AUTO_VARIATION_SIZE = "AUTO";
+const AUTO_VARIATION_COLOR = "ESTOQUE";
+
 export function ProductsPage() {
   const { token } = useAuth();
   const { showToast } = useToast();
@@ -24,8 +27,9 @@ export function ProductsPage() {
     cost: "",
     categoryId: "",
     sku: "",
-    minStock: 0
+    minStock: ""
   });
+  const [currentStockPreview, setCurrentStockPreview] = useState(0);
 
   async function load() {
     const [productsData, categoriesData] = await Promise.all([
@@ -40,24 +44,74 @@ export function ProductsPage() {
     load().catch((err) => setError(err.message));
   }, []);
 
+  async function syncProductStock(productId, desiredStock) {
+    const product = await apiClient(`/products/${productId}`, { token });
+    const desired = Number(desiredStock || 0);
+    const current = (product.variations || []).reduce((acc, variation) => acc + Number(variation.stock || 0), 0);
+    const autoVariation = (product.variations || []).find(
+      (variation) => variation.size === AUTO_VARIATION_SIZE && variation.color === AUTO_VARIATION_COLOR
+    );
+
+    if (desired === current) return;
+
+    if (desired > current) {
+      const increment = desired - current;
+      if (autoVariation) {
+        await apiClient(`/product-variations/${autoVariation.id}`, {
+          method: "PUT",
+          token,
+          body: { stock: Number(autoVariation.stock) + increment }
+        });
+      } else {
+        await apiClient("/product-variations", {
+          method: "POST",
+          token,
+          body: {
+            productId,
+            size: AUTO_VARIATION_SIZE,
+            color: AUTO_VARIATION_COLOR,
+            stock: increment
+          }
+        });
+      }
+      return;
+    }
+
+    const decrement = current - desired;
+    if (!autoVariation || Number(autoVariation.stock) < decrement) {
+      throw new Error("Nao foi possivel reduzir o estoque atual por aqui. Ajuste as variacoes em 'Variacoes'.");
+    }
+
+    await apiClient(`/product-variations/${autoVariation.id}`, {
+      method: "PUT",
+      token,
+      body: { stock: Number(autoVariation.stock) - decrement }
+    });
+  }
+
   async function createProduct(event) {
     event.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await apiClient(editingId ? `/products/${editingId}` : "/products", {
+      const response = await apiClient(editingId ? `/products/${editingId}` : "/products", {
         method: editingId ? "PUT" : "POST",
         token,
         body: {
           ...form,
           price: parseCurrencyInput(form.price),
           cost: parseCurrencyInput(form.cost),
-          minStock: Number(form.minStock)
+          minStock: Number(form.minStock || 0)
         }
       });
+      const productId = editingId || response?.id;
+      if (productId) {
+        await syncProductStock(productId, currentStockPreview);
+      }
       showToast(editingId ? "Produto atualizado." : "Produto criado.");
       setEditingId("");
-      setForm({ name: "", description: "", price: "", cost: "", categoryId: "", sku: "", minStock: 0 });
+      setForm({ name: "", description: "", price: "", cost: "", categoryId: "", sku: "", minStock: "" });
+      setCurrentStockPreview(0);
       await load();
     } catch (err) {
       setError(err.message);
@@ -95,6 +149,7 @@ export function ProductsPage() {
       sku: item.sku || "",
       minStock: Number(item.minStock || 0)
     });
+    setCurrentStockPreview(item.variations?.reduce((acc, v) => acc + v.stock, 0) || 0);
   }
 
   return (
@@ -126,13 +181,26 @@ export function ProductsPage() {
             value={form.cost}
             onChange={(e) => setForm((prev) => ({ ...prev, cost: maskCurrencyInput(e.target.value) }))}
           />
-          <input
-            className="rounded-md border p-2"
-            placeholder="Estoque minimo"
-            type="number"
-            value={form.minStock}
-            onChange={(e) => setForm((prev) => ({ ...prev, minStock: e.target.value }))}
-          />
+          <div>
+            <input
+              className="w-full rounded-md border p-2"
+              placeholder="Quantidade minima"
+              type="number"
+              min="0"
+              value={form.minStock}
+              onChange={(e) => setForm((prev) => ({ ...prev, minStock: e.target.value }))}
+            />
+          </div>
+          <div>
+            <input
+              className="w-full rounded-md border p-2"
+              placeholder="Quantidade atual"
+              type="number"
+              value={currentStockPreview}
+              min="0"
+              onChange={(e) => setCurrentStockPreview(e.target.value)}
+            />
+          </div>
           <select
             className="rounded-md border p-2"
             value={form.categoryId}
@@ -161,7 +229,8 @@ export function ProductsPage() {
                 className="rounded-md border px-4 py-2"
                 onClick={() => {
                   setEditingId("");
-                  setForm({ name: "", description: "", price: "", cost: "", categoryId: "", sku: "", minStock: 0 });
+                  setForm({ name: "", description: "", price: "", cost: "", categoryId: "", sku: "", minStock: "" });
+                  setCurrentStockPreview(0);
                 }}
               >
                 Cancelar
