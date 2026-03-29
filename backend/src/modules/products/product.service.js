@@ -19,6 +19,14 @@ export const productService = {
       err.statusCode = 400;
       throw err;
     }
+    const brand = await prisma.brand.findFirst({
+      where: { id: payload.brandId, tenantId }
+    });
+    if (!brand) {
+      const err = new Error("Marca invalida para este tenant.");
+      err.statusCode = 400;
+      throw err;
+    }
     return productRepository.create(tenantId, payload);
   },
 
@@ -29,6 +37,16 @@ export const productService = {
       });
       if (!category) {
         const err = new Error("Categoria invalida para este tenant.");
+        err.statusCode = 400;
+        throw err;
+      }
+    }
+    if (payload.brandId) {
+      const brand = await prisma.brand.findFirst({
+        where: { id: payload.brandId, tenantId }
+      });
+      if (!brand) {
+        const err = new Error("Marca invalida para este tenant.");
         err.statusCode = 400;
         throw err;
       }
@@ -51,6 +69,7 @@ export const productService = {
           name: product.name,
           sku: product.sku,
           category: product.category?.name || null,
+          brand: product.brand?.name || null,
           minStock: product.minStock,
           currentStock
         };

@@ -11,13 +11,24 @@ import {
 import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
 import { DataTable } from "../../shared/components/DataTable.jsx";
 
-function variationsForCategory(variations, categoryId) {
-  if (!categoryId) return [];
-  return variations.filter((v) => v.product?.categoryId === categoryId);
+function variationsForCategoryAndBrand(variations, categoryId, brandId) {
+  if (!categoryId || !brandId) return [];
+  return variations.filter(
+    (v) => v.product?.categoryId === categoryId && v.product?.brandId === brandId
+  );
+}
+
+function brandIdsForCategory(variations, categoryId) {
+  const ids = new Set();
+  for (const v of variations) {
+    if (v.product?.categoryId === categoryId && v.product?.brandId) ids.add(v.product.brandId);
+  }
+  return ids;
 }
 
 const emptyLineItem = () => ({
   categoryId: "",
+  brandId: "",
   productVariationId: "",
   quantity: "",
   unitPrice: ""
@@ -53,6 +64,7 @@ export function SalesPage() {
   const [sales, setSales] = useState([]);
   const [variations, setVariations] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [brands, setBrands] = useState([]);
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     paymentMethod: "PIX",
@@ -81,15 +93,22 @@ export function SalesPage() {
     [categories]
   );
 
+  const sortedBrands = useMemo(
+    () => [...brands].sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
+    [brands]
+  );
+
   const load = useCallback(async () => {
-    const [salesData, variationsData, categoriesData] = await Promise.all([
+    const [salesData, variationsData, categoriesData, brandsData] = await Promise.all([
       apiClient("/sales", { token }),
       apiClient("/product-variations", { token }),
-      apiClient("/categories", { token })
+      apiClient("/categories", { token }),
+      apiClient("/brands", { token })
     ]);
     setSales(salesData);
     setVariations(variationsData);
     setCategories(categoriesData);
+    setBrands(brandsData);
   }, [token]);
 
   const refreshSales = useCallback(async () => {
@@ -167,6 +186,11 @@ export function SalesPage() {
         if (i !== index) return item;
         const next = { ...item, [key]: value };
         if (key === "categoryId") {
+          next.brandId = "";
+          next.productVariationId = "";
+          next.unitPrice = "";
+        }
+        if (key === "brandId") {
           next.productVariationId = "";
           next.unitPrice = "";
         }
@@ -193,6 +217,12 @@ export function SalesPage() {
       const row = items[i];
       if (!row.categoryId) {
         const msg = `Item ${i + 1}: selecione a categoria.`;
+        setError(msg);
+        showToast(msg, "error");
+        return;
+      }
+      if (!row.brandId) {
+        const msg = `Item ${i + 1}: selecione a marca.`;
         setError(msg);
         showToast(msg, "error");
         return;
@@ -274,8 +304,10 @@ export function SalesPage() {
         const fromList = variations.find((v) => v.id === item.productVariationId);
         const categoryId =
           fromApi?.product?.categoryId || fromList?.product?.categoryId || "";
+        const brandId = fromApi?.product?.brandId || fromList?.product?.brandId || "";
         return {
           categoryId,
+          brandId,
           productVariationId: item.productVariationId,
           quantity: String(item.quantity),
           unitPrice: maskCurrencyInput(String(Math.round(Number(item.unitPrice) * 100)))
@@ -405,18 +437,20 @@ export function SalesPage() {
           <div className="space-y-3">
             <p className="text-sm font-medium text-slate-700">Itens da venda</p>
             <p className="text-xs text-slate-500">
-              Primeiro escolha a <strong>categoria</strong>, depois o <strong>produto</strong> (tamanho/cor). Informe
-              quantidade e preco unitario.
+              Escolha <strong>categoria</strong>, depois <strong>marca</strong>, depois o <strong>produto</strong>{" "}
+              (tamanho/cor). Informe quantidade e preco unitario.
             </p>
             {items.map((item, index) => {
-              const filtered = variationsForCategory(variations, item.categoryId);
+              const brandsInCat = brandIdsForCategory(variations, item.categoryId);
+              const brandOptions = sortedBrands.filter((b) => brandsInCat.has(b.id));
+              const filtered = variationsForCategoryAndBrand(variations, item.categoryId, item.brandId);
               return (
                 <div
                   key={index}
                   className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/80 p-3 md:p-4"
                 >
                   <p className="text-sm font-semibold text-slate-800">Item {index + 1}</p>
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-3 md:grid-cols-3">
                     <label className="flex flex-col gap-1">
                       <span className="text-xs font-medium text-slate-600">Categoria</span>
                       <select
@@ -433,15 +467,37 @@ export function SalesPage() {
                       </select>
                     </label>
                     <label className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-slate-600">Produto e variacao</span>
+                      <span className="text-xs font-medium text-slate-600">Marca</span>
                       <select
                         className="rounded border border-slate-300 bg-white p-2"
                         disabled={!item.categoryId}
+                        value={item.brandId}
+                        onChange={(e) => updateItem(index, "brandId", e.target.value)}
+                      >
+                        <option value="">
+                          {!item.categoryId ? "Escolha uma categoria" : "Selecione a marca"}
+                        </option>
+                        {brandOptions.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-slate-600">Produto e variacao</span>
+                      <select
+                        className="rounded border border-slate-300 bg-white p-2"
+                        disabled={!item.categoryId || !item.brandId}
                         value={item.productVariationId}
                         onChange={(e) => updateItem(index, "productVariationId", e.target.value)}
                       >
                         <option value="">
-                          {!item.categoryId ? "Escolha uma categoria acima" : "Selecione o produto"}
+                          {!item.categoryId
+                            ? "Escolha categoria e marca"
+                            : !item.brandId
+                              ? "Selecione a marca"
+                              : "Selecione o produto"}
                         </option>
                         {filtered.map((variation) => (
                           <option key={variation.id} value={variation.id}>

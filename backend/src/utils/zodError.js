@@ -15,6 +15,7 @@ const FIELD_PT = {
   discountPercent: "Desconto (%)",
   items: "Itens",
   categoryId: "Categoria",
+  brandId: "Marca",
   sku: "SKU",
   price: "Preco",
   cost: "Custo",

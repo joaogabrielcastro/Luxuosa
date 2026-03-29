@@ -7,6 +7,7 @@ const productSchema = z.object({
   price: z.coerce.number().nonnegative(),
   cost: z.coerce.number().nonnegative(),
   categoryId: z.string().min(1),
+  brandId: z.string().min(1),
   sku: z.string().min(2),
   minStock: z.coerce.number().int().nonnegative(),
   ncm: z.string().regex(/^\d{8}$/).optional(),

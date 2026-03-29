@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from "../features/auth/useAuth.jsx";
 import { LoginPage } from "../features/auth/LoginPage.jsx";
 import { AdminDashboardPage } from "../features/dashboard/AdminDashboardPage.jsx";
 import { CategoriesPage } from "../features/catalog/CategoriesPage.jsx";
+import { BrandsPage } from "../features/catalog/BrandsPage.jsx";
 import { ProductsPage } from "../features/catalog/ProductsPage.jsx";
 import { VariationsPage } from "../features/catalog/VariationsPage.jsx";
 import { SalesPage } from "../features/sales/NfceSalesPage.jsx";
@@ -32,6 +33,7 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<PrivateShell><AdminDashboardPage /></PrivateShell>} />
       <Route path="/catalog/categories" element={<PrivateShell><CategoriesPage /></PrivateShell>} />
+      <Route path="/catalog/brands" element={<PrivateShell><BrandsPage /></PrivateShell>} />
       <Route path="/catalog/products" element={<PrivateShell><ProductsPage /></PrivateShell>} />
       <Route path="/catalog/variations" element={<PrivateShell><VariationsPage /></PrivateShell>} />
       <Route path="/sales" element={<Navigate to="/vendas" replace />} />

@@ -10,7 +10,7 @@ export const stockMovementService = {
       take: limit,
       include: {
         productVariation: {
-          include: { product: { include: { category: true } } }
+          include: { product: { include: { category: true, brand: true } } }
         }
       }
     });
@@ -56,7 +56,7 @@ export const stockMovementService = {
           quantity: qty
         },
         include: {
-          productVariation: { include: { product: { include: { category: true } } } }
+          productVariation: { include: { product: { include: { category: true, brand: true } } } }
         }
       });
     });

@@ -109,6 +109,7 @@ export function ReportsPage() {
               <li key={item.id} className="rounded border border-amber-200 bg-amber-50 px-3 py-2">
                 <strong>{item.name}</strong> ({item.sku})
                 {item.category ? <span className="text-slate-600"> — {item.category}</span> : null}
+                {item.brand ? <span className="text-slate-600"> · {item.brand}</span> : null}
                 <div className="text-xs text-amber-900">
                   Atual: {item.currentStock} / minimo: {item.minStock}
                 </div>

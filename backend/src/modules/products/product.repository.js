@@ -4,7 +4,7 @@ export const productRepository = {
   list(tenantId) {
     return prisma.product.findMany({
       where: { tenantId },
-      include: { category: true, variations: true },
+      include: { category: true, brand: true, variations: true },
       orderBy: { createdAt: "desc" }
     });
   },
@@ -38,7 +38,7 @@ export const productRepository = {
   findLowStock(tenantId) {
     return prisma.product.findMany({
       where: { tenantId },
-      include: { category: true, variations: true },
+      include: { category: true, brand: true, variations: true },
       orderBy: { createdAt: "desc" }
     });
   }

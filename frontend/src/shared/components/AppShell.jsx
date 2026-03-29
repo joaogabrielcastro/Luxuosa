@@ -5,6 +5,7 @@ import { BrandLogo } from "./BrandLogo.jsx";
 const navItems = [
   { to: "/", label: "Dashboard", end: true },
   { to: "/catalog/categories", label: "Categorias" },
+  { to: "/catalog/brands", label: "Marcas" },
   { to: "/catalog/products", label: "Produtos" },
   { to: "/catalog/variations", label: "Variacoes" },
   { to: "/vendas", label: "Vendas" },

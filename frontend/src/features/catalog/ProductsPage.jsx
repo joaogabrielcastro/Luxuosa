@@ -15,10 +15,12 @@ export function ProductsPage() {
   const { confirm } = useConfirm();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [brands, setBrands] = useState([]);
   const [editingId, setEditingId] = useState("");
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [brandFilter, setBrandFilter] = useState("");
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     name: "",
@@ -26,18 +28,21 @@ export function ProductsPage() {
     price: "",
     cost: "",
     categoryId: "",
+    brandId: "",
     sku: "",
     minStock: ""
   });
   const [currentStockPreview, setCurrentStockPreview] = useState(0);
 
   async function load() {
-    const [productsData, categoriesData] = await Promise.all([
+    const [productsData, categoriesData, brandsData] = await Promise.all([
       apiClient("/products", { token }),
-      apiClient("/categories", { token })
+      apiClient("/categories", { token }),
+      apiClient("/brands", { token })
     ]);
     setProducts(productsData);
     setCategories(categoriesData);
+    setBrands(brandsData);
   }
 
   useEffect(() => {
@@ -110,7 +115,7 @@ export function ProductsPage() {
       }
       showToast(editingId ? "Produto atualizado." : "Produto criado.");
       setEditingId("");
-      setForm({ name: "", description: "", price: "", cost: "", categoryId: "", sku: "", minStock: "" });
+      setForm({ name: "", description: "", price: "", cost: "", categoryId: "", brandId: "", sku: "", minStock: "" });
       setCurrentStockPreview(0);
       await load();
     } catch (err) {
@@ -146,6 +151,7 @@ export function ProductsPage() {
       price: maskCurrencyInput(item.price),
       cost: maskCurrencyInput(item.cost),
       categoryId: item.categoryId || "",
+      brandId: item.brandId || "",
       sku: item.sku || "",
       minStock: Number(item.minStock || 0)
     });
@@ -213,6 +219,18 @@ export function ProductsPage() {
               </option>
             ))}
           </select>
+          <select
+            className="rounded-md border p-2"
+            value={form.brandId}
+            onChange={(e) => setForm((prev) => ({ ...prev, brandId: e.target.value }))}
+          >
+            <option value="">Selecione marca</option>
+            {brands.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
           <textarea
             className="rounded-md border p-2 md:col-span-2"
             placeholder="Descricao"
@@ -229,7 +247,7 @@ export function ProductsPage() {
                 className="rounded-md border px-4 py-2"
                 onClick={() => {
                   setEditingId("");
-                  setForm({ name: "", description: "", price: "", cost: "", categoryId: "", sku: "", minStock: "" });
+                  setForm({ name: "", description: "", price: "", cost: "", categoryId: "", brandId: "", sku: "", minStock: "" });
                   setCurrentStockPreview(0);
                 }}
               >
@@ -249,6 +267,7 @@ export function ProductsPage() {
             { key: "name", label: "Nome" },
             { key: "sku", label: "SKU" },
             { key: "category", label: "Categoria" },
+            { key: "brand", label: "Marca" },
             { key: "min", label: "Min" },
             { key: "stock", label: "Atual" },
             { key: "price", label: "Preco" },
@@ -266,9 +285,19 @@ export function ProductsPage() {
             {
               id: "category",
               value: categoryFilter,
-              onChange: setCategoryFilter,
+              onChange: (v) => {
+                setCategoryFilter(v);
+                setBrandFilter("");
+              },
               options: [{ value: "", label: "Todas as categorias" }, ...categories.map((item) => ({ value: item.id, label: item.name }))],
               matcher: (row, value) => row.categoryId === value
+            },
+            {
+              id: "brand",
+              value: brandFilter,
+              onChange: setBrandFilter,
+              options: [{ value: "", label: "Todas as marcas" }, ...brands.map((item) => ({ value: item.id, label: item.name }))],
+              matcher: (row, value) => row.brandId === value
             }
           ]}
           renderCells={(item) => (
@@ -276,6 +305,7 @@ export function ProductsPage() {
               <td className="py-2">{item.name}</td>
               <td className="py-2">{item.sku}</td>
               <td className="py-2">{item.category?.name}</td>
+              <td className="py-2">{item.brand?.name}</td>
               <td className="py-2">{item.minStock}</td>
               <td className="py-2">{item.variations?.reduce((acc, v) => acc + v.stock, 0)}</td>
               <td className="py-2">{formatCurrencyBRL(item.price)}</td>
