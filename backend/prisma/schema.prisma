@@ -44,6 +44,13 @@ enum InvoiceStatus {
   CANCELED
 }
 
+enum NfceIssueJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 model Tenant {
   id          String   @id @default(cuid())
   name        String
@@ -63,6 +70,7 @@ model Tenant {
   sales       Sale[]
   saleItems   SaleItem[]
   invoices    Invoice[]
+  nfceJobs    NfceIssueJob[]
 }
 
 model User {
@@ -233,21 +241,42 @@ model SaleItem {
 }
 
 model Invoice {
-  id              String        @id @default(cuid())
-  tenantId        String
-  saleId          String        @unique
-  externalId      String?       @unique
-  number          String?
-  key             String?
-  status          InvoiceStatus @default(PENDING)
-  xmlUrl          String?
-  pdfUrl          String?
-  lastError       String?       @db.Text
-  issuedAt        DateTime?
+  id                  String        @id @default(cuid())
+  tenantId            String
+  saleId              String        @unique
+  externalId          String?       @unique
+  number              String?
+  key                 String?
+  status              InvoiceStatus @default(PENDING)
+  xmlUrl              String?
+  pdfUrl              String?
+  lastError           String?       @db.Text
+  issuedAt            DateTime?
+  /** Evita emissao concorrente (HTTP + worker / duplo clique). TTL em codigo (lease). */
+  emissionStartedAt   DateTime?
 
-  tenant          Tenant        @relation(fields: [tenantId], references: [id])
-  sale            Sale          @relation(fields: [saleId], references: [id])
+  tenant              Tenant        @relation(fields: [tenantId], references: [id])
+  sale                Sale          @relation(fields: [saleId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, status])
+}
+
+model NfceIssueJob {
+  id        String             @id @default(cuid())
+  tenantId  String
+  saleId    String             @unique
+  status    NfceIssueJobStatus @default(PENDING)
+  attempts  Int                @default(0)
+  /** Quando definido, o worker so processa apos esta data (backoff). */
+  runAt     DateTime?
+  lastError String?            @db.Text
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  tenant    Tenant             @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, runAt])
 }

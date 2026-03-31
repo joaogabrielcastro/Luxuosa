@@ -84,8 +84,21 @@ async function restoreSaleEffects(tx, tenantId, sale) {
 }
 
 export const saleService = {
-  list(tenantId) {
-    return saleRepository.list(tenantId);
+  async list(tenantId) {
+    const sales = await saleRepository.list(tenantId);
+    if (!sales.length) return sales;
+
+    const saleIds = sales.map((s) => s.id);
+    const jobs = await prisma.nfceIssueJob.findMany({
+      where: { tenantId, saleId: { in: saleIds } },
+      select: { saleId: true, status: true, attempts: true, runAt: true, updatedAt: true, lastError: true }
+    });
+    const jobsBySale = new Map(jobs.map((j) => [j.saleId, j]));
+
+    return sales.map((sale) => ({
+      ...sale,
+      nfceJob: jobsBySale.get(sale.id) || null
+    }));
   },
 
   async create(tenantId, userId, userType, payload) {
@@ -170,7 +183,9 @@ export const saleService = {
 
       return sale;
     }).then((sale) => {
-      enqueueNfceIssue(tenantId, sale.id);
+      void enqueueNfceIssue(tenantId, sale.id).catch((err) =>
+        console.error("[NFC-e] enqueue:", err?.message || err)
+      );
       return sale;
     });
   },

@@ -48,12 +48,23 @@ const SALE_STATUS_LABELS = {
   CANCELED: "Cancelada"
 };
 
+const JOB_STATUS_LABELS = {
+  PENDING: "Na fila",
+  PROCESSING: "Processando",
+  COMPLETED: "Concluido",
+  FAILED: "Falhou"
+};
+
 function paymentLabel(method) {
   return PAYMENT_LABELS[method] || method;
 }
 
 function saleStatusLabel(status) {
   return SALE_STATUS_LABELS[status] || status;
+}
+
+function nfceJobStatusLabel(status) {
+  return JOB_STATUS_LABELS[status] || status || "";
 }
 
 /** Página de vendas (NFC-e consumidor final, sem seleção de cliente na UI). */
@@ -79,6 +90,7 @@ export function SalesPage() {
   const [nfceFilter, setNfceFilter] = useState("");
   const [search, setSearch] = useState("");
   const [nfceErrorDetail, setNfceErrorDetail] = useState(null);
+  const [barcodeInput, setBarcodeInput] = useState("");
 
   const needsNfcePoll = useMemo(
     () =>
@@ -208,6 +220,46 @@ export function SalesPage() {
     if (raw === "" || raw === undefined) return 1;
     const n = Number(raw);
     return Number.isFinite(n) ? n : NaN;
+  }
+
+  function addItemByBarcode() {
+    const code = String(barcodeInput || "").trim();
+    if (!code) return;
+
+    const candidates = variations.filter((v) => String(v.product?.sku || "").trim() === code);
+    if (!candidates.length) {
+      showToast("Codigo nao encontrado nos produtos.", "error");
+      return;
+    }
+
+    const selected = candidates.find((v) => Number(v.stock) > 0) || candidates[0];
+    const existingIdx = items.findIndex((it) => it.productVariationId === selected.id);
+    const productPrice = Number(selected.product?.price || 0);
+    const maskedUnitPrice = productPrice > 0 ? maskCurrencyInput(String(Math.round(productPrice * 100))) : "";
+
+    if (existingIdx >= 0) {
+      setItems((prev) =>
+        prev.map((it, idx) => {
+          if (idx !== existingIdx) return it;
+          const current = Number(it.quantity || 0);
+          return { ...it, quantity: String(Math.max(1, current) + 1) };
+        })
+      );
+    } else {
+      setItems((prev) => [
+        ...prev,
+        {
+          categoryId: selected.product?.categoryId || "",
+          brandId: selected.product?.brandId || "",
+          productVariationId: selected.id,
+          quantity: "1",
+          unitPrice: maskedUnitPrice
+        }
+      ]);
+    }
+
+    setBarcodeInput("");
+    showToast(`Item adicionado: ${selected.product?.name || "Produto"}.`);
   }
 
   async function createSale(event) {
@@ -436,6 +488,28 @@ export function SalesPage() {
 
           <div className="space-y-3">
             <p className="text-sm font-medium text-slate-700">Itens da venda</p>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs text-slate-600">
+                Leitura rapida por codigo: bip no scanner e Enter para adicionar automaticamente.
+              </p>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                <input
+                  className="w-full rounded border border-slate-300 bg-white p-2"
+                  placeholder="Codigo de barras / SKU"
+                  value={barcodeInput}
+                  onChange={(e) => setBarcodeInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addItemByBarcode();
+                    }
+                  }}
+                />
+                <button type="button" className="rounded border px-3 py-2 text-sm" onClick={addItemByBarcode}>
+                  Adicionar por codigo
+                </button>
+              </div>
+            </div>
             <p className="text-xs text-slate-500">
               Escolha <strong>categoria</strong>, depois <strong>marca</strong>, depois o <strong>produto</strong>{" "}
               (tamanho/cor). Informe quantidade e preco unitario.
@@ -591,7 +665,8 @@ export function SalesPage() {
             const pay = paymentLabel(row.paymentMethod);
             const st = saleStatusLabel(row.status);
             const key = row.invoice?.key ? String(row.invoice.key) : "";
-            const hay = `${row.id} ${row.paymentMethod} ${pay} ${row.status} ${st} ${key}`.toLowerCase();
+            const job = nfceJobStatusLabel(row.nfceJob?.status);
+            const hay = `${row.id} ${row.paymentMethod} ${pay} ${row.status} ${st} ${key} ${job}`.toLowerCase();
             return hay.includes(needle);
           }
         }}
@@ -635,6 +710,12 @@ export function SalesPage() {
             <td className="py-2">{paymentLabel(sale.paymentMethod)}</td>
             <td className="py-2">{saleStatusLabel(sale.status)}</td>
             <td className="max-w-[220px] py-2 align-top text-xs">
+              {sale.nfceJob?.status && sale.nfceJob.status !== "COMPLETED" ? (
+                <div className="mb-1 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700">
+                  Fila: <strong>{nfceJobStatusLabel(sale.nfceJob.status)}</strong>
+                  {sale.nfceJob.attempts ? ` · tentativas: ${sale.nfceJob.attempts}` : ""}
+                </div>
+              ) : null}
               {!sale.invoice ? (
                 <div className="space-y-1">
                   <span className="text-slate-500">Aguardando NFC-e...</span>
@@ -673,6 +754,11 @@ export function SalesPage() {
                     Erro na NFC-e
                     {sale.invoice.lastError ? `: ${String(sale.invoice.lastError).slice(0, 72)}…` : ""}
                   </div>
+                  {sale.nfceJob?.status === "FAILED" && sale.nfceJob?.lastError ? (
+                    <div className="text-[11px] text-slate-600" title={sale.nfceJob.lastError}>
+                      Fila pausada: {String(sale.nfceJob.lastError).slice(0, 80)}…
+                    </div>
+                  ) : null}
                   {sale.invoice.lastError && String(sale.invoice.lastError).length > 72 ? (
                     <button
                       type="button"

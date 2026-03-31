@@ -28,5 +28,15 @@ export const invoiceController = {
     } catch (error) {
       return next(error);
     }
+  },
+
+  async issueJobStatus(req, res, next) {
+    try {
+      const data = await invoiceService.getIssueJobStatus(req.tenantId, req.params.saleId);
+      if (!data) return res.status(404).json({ error: "Job de emissao nao encontrado para esta venda." });
+      return res.json(data);
+    } catch (error) {
+      return next(error);
+    }
   }
 };

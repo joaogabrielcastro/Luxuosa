@@ -22,6 +22,7 @@ export function ProductsPage() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [brandFilter, setBrandFilter] = useState("");
   const [error, setError] = useState("");
+  const [scannerSku, setScannerSku] = useState("");
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -158,10 +159,40 @@ export function ProductsPage() {
     setCurrentStockPreview(item.variations?.reduce((acc, v) => acc + v.stock, 0) || 0);
   }
 
+  function applyScannedSku() {
+    const normalized = String(scannerSku || "").trim();
+    if (!normalized) return;
+    setForm((prev) => ({ ...prev, sku: normalized }));
+    setScannerSku("");
+    showToast("Codigo lido e aplicado no SKU.");
+  }
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg bg-white p-4 shadow-sm">
         <h2 className="text-lg font-semibold">Produtos</h2>
+        <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs text-slate-600">
+            Leitor de codigo de barras: clique no campo, bip no scanner e pressione Enter.
+          </p>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+            <input
+              className="w-full rounded-md border p-2"
+              placeholder="Aguardando leitura do scanner..."
+              value={scannerSku}
+              onChange={(e) => setScannerSku(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  applyScannedSku();
+                }
+              }}
+            />
+            <button type="button" className="rounded-md border px-4 py-2" onClick={applyScannedSku}>
+              Aplicar codigo
+            </button>
+          </div>
+        </div>
         <form className="mt-3 grid gap-2 md:grid-cols-2" onSubmit={createProduct}>
           <input
             className="rounded-md border p-2"

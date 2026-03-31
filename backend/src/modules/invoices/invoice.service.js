@@ -1,4 +1,4 @@
-import { InvoiceStatus } from "@prisma/client";
+import { InvoiceStatus, NfceIssueJobStatus } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
 import { env } from "../../config/env.js";
 import { getNuvemFiscalAccessToken } from "../../shared/nuvemFiscal/nuvemFiscalAuth.js";
@@ -26,6 +26,39 @@ function normalizeEmpresaResponse(body) {
   if (body.nome_razao_social) return body;
   if (Array.isArray(body.data) && body.data[0]) return body.data[0];
   return body;
+}
+
+const EMISSION_LEASE_MS = 120000;
+
+async function acquireEmissionLease(saleId, { silent }) {
+  const cutoff = new Date(Date.now() - EMISSION_LEASE_MS);
+  const r = await prisma.invoice.updateMany({
+    where: {
+      saleId,
+      OR: [{ emissionStartedAt: null }, { emissionStartedAt: { lt: cutoff } }]
+    },
+    data: { emissionStartedAt: new Date() }
+  });
+  if (r.count > 0) return true;
+
+  const inv = await prisma.invoice.findUnique({ where: { saleId } });
+  if (inv?.status === InvoiceStatus.ISSUED) {
+    const err = new Error("Ja existe NFC-e emitida para esta venda.");
+    err.statusCode = 409;
+    throw err;
+  }
+  if (silent) return false;
+  const err = new Error("Emissao de NFC-e em andamento. Aguarde ou tente novamente em instantes.");
+  err.statusCode = 409;
+  err.code = "NFCE_EMISSION_IN_PROGRESS";
+  throw err;
+}
+
+async function releaseEmissionLease(saleId) {
+  await prisma.invoice.updateMany({
+    where: { saleId },
+    data: { emissionStartedAt: null }
+  });
 }
 
 async function ensureInvoiceRow(tenantId, saleId) {
@@ -132,6 +165,7 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
   if (sale.invoice?.status === InvoiceStatus.ISSUED) {
     const invoiceRef = sale.invoice.externalId || sale.invoice.key;
     if (!invoiceRef) {
+      if (silent) return prisma.invoice.findUnique({ where: { saleId } });
       const err = new Error("Ja existe NFC-e emitida para esta venda.");
       err.statusCode = 409;
       throw err;
@@ -139,6 +173,7 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
 
     const remote = await getNfceById(nf, invoiceRef);
     if (!remote.ok) {
+      if (silent) return null;
       const err = new Error("Ja existe NFC-e emitida para esta venda.");
       err.statusCode = 409;
       throw err;
@@ -147,6 +182,7 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
     const codigo = remote.body?.autorizacao?.codigo_status;
     const autorizada = codigo === 100 || codigo === 150;
     if (autorizada) {
+      if (silent) return prisma.invoice.findUnique({ where: { saleId } });
       const err = new Error("Ja existe NFC-e emitida para esta venda.");
       err.statusCode = 409;
       throw err;
@@ -231,79 +267,98 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
 
   await ensureInvoiceRow(tenantId, saleId);
 
-  const postRes = await postNfce(nf, payload);
-  if (!postRes.ok) {
-    const msg = JSON.stringify(postRes.body);
-    await prisma.invoice.update({
-      where: { saleId },
-      data: { status: InvoiceStatus.ERROR, lastError: msg.slice(0, 65000) }
-    });
-    const err = new Error("Nuvem Fiscal rejeitou a emissao da NFC-e.");
-    err.statusCode = 502;
-    err.details = postRes.body;
-    if (silent) return null;
-    throw err;
+  const gotLease = await acquireEmissionLease(saleId, { silent });
+  if (!gotLease) {
+    return null;
   }
 
-  const docId = postRes.body?.id;
-  if (!docId) {
-    const err = new Error("Resposta Nuvem Fiscal sem id do documento.");
-    err.statusCode = 502;
-    throw err;
-  }
-
-  await prisma.invoice.update({
-    where: { saleId },
-    data: { externalId: docId }
-  });
-
-  const polled = await pollNfceStatus(nf, docId);
-  if (polled.error) {
-    await prisma.invoice.update({
-      where: { saleId },
-      data: { status: InvoiceStatus.ERROR, lastError: polled.error }
-    });
-    const err = new Error(polled.error);
-    err.statusCode = 504;
-    if (silent) return null;
-    throw err;
-  }
-
-  const final = polled.body;
-  const chave = final?.chave || final?.autorizacao?.chave_acesso;
-  const numero = final?.numero != null ? String(final.numero) : null;
-  const codigo = final?.autorizacao?.codigo_status;
-
-  const autorizada = codigo === 100 || codigo === 150;
-
-  if (!autorizada) {
-    const motivo = final?.autorizacao?.motivo_status || JSON.stringify(final).slice(0, 2000);
-    await prisma.invoice.update({
-      where: { saleId },
-      data: { status: InvoiceStatus.ERROR, lastError: motivo.slice(0, 65000) }
-    });
-    const err = new Error(motivo);
-    err.statusCode = 502;
-    err.details = final;
-    if (silent) return null;
-    throw err;
-  }
-
-  const pdfPath = `/nfce/${encodeURIComponent(docId)}/pdf`;
-
-  await prisma.invoice.update({
-    where: { saleId },
-    data: {
-      status: InvoiceStatus.ISSUED,
-      key: chave || null,
-      number: numero,
-      issuedAt: new Date(),
-      lastError: null,
-      pdfUrl: pdfPath
+  try {
+    const postRes = await postNfce(nf, payload);
+    if (!postRes.ok) {
+      const msg = JSON.stringify(postRes.body);
+      await prisma.invoice.update({
+        where: { saleId },
+        data: { status: InvoiceStatus.ERROR, lastError: msg.slice(0, 65000) }
+      });
+      const err = new Error("Nuvem Fiscal rejeitou a emissao da NFC-e.");
+      err.statusCode = 502;
+      err.details = postRes.body;
+      if (silent) return null;
+      throw err;
     }
-  });
 
-  return prisma.invoice.findUnique({ where: { saleId } });
+    const docId = postRes.body?.id;
+    if (!docId) {
+      const err = new Error("Resposta Nuvem Fiscal sem id do documento.");
+      err.statusCode = 502;
+      throw err;
+    }
+
+    await prisma.invoice.update({
+      where: { saleId },
+      data: { externalId: docId }
+    });
+
+    const polled = await pollNfceStatus(nf, docId);
+    if (polled.error) {
+      await prisma.invoice.update({
+        where: { saleId },
+        data: { status: InvoiceStatus.ERROR, lastError: polled.error }
+      });
+      const err = new Error(polled.error);
+      err.statusCode = 504;
+      if (silent) return null;
+      throw err;
+    }
+
+    const final = polled.body;
+    const chave = final?.chave || final?.autorizacao?.chave_acesso;
+    const numero = final?.numero != null ? String(final.numero) : null;
+    const codigo = final?.autorizacao?.codigo_status;
+
+    const autorizada = codigo === 100 || codigo === 150;
+
+    if (!autorizada) {
+      const motivo = final?.autorizacao?.motivo_status || JSON.stringify(final).slice(0, 2000);
+      await prisma.invoice.update({
+        where: { saleId },
+        data: { status: InvoiceStatus.ERROR, lastError: motivo.slice(0, 65000) }
+      });
+      const err = new Error(motivo);
+      err.statusCode = 502;
+      err.details = final;
+      if (silent) return null;
+      throw err;
+    }
+
+    const pdfPath = `/nfce/${encodeURIComponent(docId)}/pdf`;
+
+    await prisma.invoice.update({
+      where: { saleId },
+      data: {
+        status: InvoiceStatus.ISSUED,
+        key: chave || null,
+        number: numero,
+        issuedAt: new Date(),
+        lastError: null,
+        pdfUrl: pdfPath,
+        emissionStartedAt: null
+      }
+    });
+
+    await prisma.nfceIssueJob.updateMany({
+      where: { saleId },
+      data: {
+        status: NfceIssueJobStatus.COMPLETED,
+        lastError: null,
+        runAt: null
+      }
+    });
+
+    return prisma.invoice.findUnique({ where: { saleId } });
+  } finally {
+    await releaseEmissionLease(saleId);
+  }
 }
 
 /**
@@ -377,5 +432,18 @@ async function fetchNfcePdfBuffer(tenantId, saleId) {
 export const invoiceService = {
   connectionTest,
   issueFromSale,
-  fetchNfcePdfBuffer
+  fetchNfcePdfBuffer,
+  async getIssueJobStatus(tenantId, saleId) {
+    return prisma.nfceIssueJob.findFirst({
+      where: { tenantId, saleId },
+      select: {
+        saleId: true,
+        status: true,
+        attempts: true,
+        runAt: true,
+        updatedAt: true,
+        lastError: true
+      }
+    });
+  }
 };
