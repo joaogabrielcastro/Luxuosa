@@ -1,10 +1,10 @@
+import { useMemo, useState } from "react";
 import { brandIdsForCategory, variationsForCategoryAndBrand } from "../sales.utils.js";
 import { SectionCard } from "../../../shared/components/ui/SectionCard.jsx";
 import { Alert } from "../../../shared/components/ui/Alert.jsx";
 import { Input } from "../../../shared/components/ui/Input.jsx";
 import { Select } from "../../../shared/components/ui/Select.jsx";
 import { Button } from "../../../shared/components/ui/Button.jsx";
-import { formatCurrencyBRL, parseCurrencyInput } from "../../../shared/formatters.js";
 
 export function SalesFormCard({
   editingSaleId,
@@ -20,32 +20,31 @@ export function SalesFormCard({
   barcodeInput,
   setBarcodeInput,
   addItemByBarcode,
+  addItemByVariationId,
   addItem,
   loading,
   cancelEdit
 }) {
-  const subtotal = items.reduce((acc, item) => {
-    const qty = Number(item.quantity || 0);
-    const unit = parseCurrencyInput(item.unitPrice);
-    if (!Number.isFinite(qty) || qty <= 0) return acc;
-    return acc + qty * unit;
-  }, 0);
-  const discountValue = Number(form.discountValue || 0);
-  const discountPercentValue = Number(form.discountPercent || 0);
-  const discountFromPercent = subtotal * (discountPercentValue / 100);
-  const totalDiscount = Math.max(0, discountValue + discountFromPercent);
-  const total = Math.max(0, subtotal - totalDiscount);
+  const [productSearch, setProductSearch] = useState("");
+  const quickOptions = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    if (!q) return [];
+    return variations
+      .filter((v) => {
+        const name = String(v.product?.name || "").toLowerCase();
+        const sku = String(v.product?.sku || "").toLowerCase();
+        const size = String(v.size || "").toLowerCase();
+        const color = String(v.color || "").toLowerCase();
+        return `${name} ${sku} ${size} ${color}`.includes(q);
+      })
+      .slice(0, 6);
+  }, [productSearch, variations]);
 
   return (
     <SectionCard title={editingSaleId ? "Editar venda" : "Nova venda"}>
 
       <form className="mt-4 space-y-6" onSubmit={createSale}>
         <div className="space-y-3">
-          <p className="text-sm font-medium text-slate-700">Pagamento</p>
-          <p className="text-xs text-slate-500">
-            A NFC-e e emitida automaticamente apos finalizar a venda (Nuvem Fiscal / SEFAZ) como{" "}
-            <strong>consumidor final</strong>, sem identificacao do comprador na nota.
-          </p>
           <div className="grid gap-3 md:grid-cols-2">
             <label className="flex flex-col gap-1 md:max-w-xs">
               <span className="text-xs font-medium text-slate-600">Forma de pagamento</span>
@@ -114,6 +113,36 @@ export function SalesFormCard({
 
         <div className="space-y-3">
           <p className="text-sm font-medium text-slate-700">Itens da venda</p>
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs text-slate-600">Busca rapida de produto (autocomplete)</p>
+            <div className="mt-2">
+              <Input
+                placeholder="Buscar produto, SKU, tamanho ou cor..."
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+              />
+              {quickOptions.length ? (
+                <div className="mt-2 max-h-44 overflow-auto rounded-lg border border-slate-200 bg-white p-1">
+                  {quickOptions.map((variation) => (
+                    <button
+                      key={variation.id}
+                      type="button"
+                      className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-xs hover:bg-slate-50"
+                      onClick={() => {
+                        addItemByVariationId(variation.id);
+                        setProductSearch("");
+                      }}
+                    >
+                      <span>
+                        {variation.product?.name} - {variation.size}/{variation.color}
+                      </span>
+                      <span className="text-slate-500">SKU {variation.product?.sku}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
             <p className="text-xs text-slate-600">
               Leitura rapida por codigo: bip no scanner e Enter para adicionar automaticamente.
@@ -242,20 +271,6 @@ export function SalesFormCard({
               Cancelar edicao
             </Button>
           ) : null}
-        </div>
-        <div className="grid gap-2 rounded-lg border border-indigo-100 bg-indigo-50/70 p-3 text-sm sm:grid-cols-3">
-          <div>
-            <p className="text-xs font-medium text-indigo-700">Subtotal</p>
-            <p className="text-base font-semibold text-indigo-900">{formatCurrencyBRL(subtotal)}</p>
-          </div>
-          <div>
-            <p className="text-xs font-medium text-indigo-700">Descontos</p>
-            <p className="text-base font-semibold text-indigo-900">- {formatCurrencyBRL(totalDiscount)}</p>
-          </div>
-          <div>
-            <p className="text-xs font-medium text-indigo-700">Total da compra</p>
-            <p className="text-lg font-bold text-indigo-900">{formatCurrencyBRL(total)}</p>
-          </div>
         </div>
       </form>
       {error ? <Alert className="mt-3" variant="danger">{error}</Alert> : null}

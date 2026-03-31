@@ -88,6 +88,36 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
     showToast(`Item adicionado: ${selected.product?.name || "Produto"}.`);
   }
 
+  function addItemByVariationId(variationId) {
+    const selected = variations.find((v) => v.id === variationId);
+    if (!selected) return;
+    const existingIdx = items.findIndex((it) => it.productVariationId === selected.id);
+    const productPrice = Number(selected.product?.price || 0);
+    const maskedUnitPrice = productPrice > 0 ? maskCurrencyInput(String(Math.round(productPrice * 100))) : "";
+
+    if (existingIdx >= 0) {
+      setItems((prev) =>
+        prev.map((it, idx) => {
+          if (idx !== existingIdx) return it;
+          const current = Number(it.quantity || 0);
+          return { ...it, quantity: String(Math.max(1, current) + 1) };
+        })
+      );
+    } else {
+      setItems((prev) => [
+        ...prev,
+        {
+          categoryId: selected.product?.categoryId || "",
+          brandId: selected.product?.brandId || "",
+          productVariationId: selected.id,
+          quantity: "1",
+          unitPrice: maskedUnitPrice
+        }
+      ]);
+    }
+    showToast(`Item adicionado: ${selected.product?.name || "Produto"}.`);
+  }
+
   async function retryNfce(saleId) {
     setLoading(true);
     try {
@@ -279,6 +309,7 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
     addItem,
     updateItem,
     addItemByBarcode,
+    addItemByVariationId,
     createSale,
     editSale,
     cancelSale,

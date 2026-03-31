@@ -3,16 +3,26 @@ import { useState } from "react";
 import { useAuth } from "../../features/auth/useAuth.jsx";
 import { BrandLogo } from "./BrandLogo.jsx";
 import { Button } from "./ui/Button.jsx";
+import {
+  BarChart3,
+  Boxes,
+  ClipboardList,
+  LayoutGrid,
+  PackageSearch,
+  ReceiptText,
+  ShoppingCart,
+  Tags
+} from "lucide-react";
 
 const navItems = [
-  { to: "/", label: "Dashboard", end: true },
-  { to: "/catalog/categories", label: "Categorias" },
-  { to: "/catalog/brands", label: "Marcas" },
-  { to: "/catalog/products", label: "Produtos" },
-  { to: "/catalog/variations", label: "Variacoes" },
-  { to: "/vendas", label: "Vendas" },
-  { to: "/estoque/movimentos", label: "Estoque" },
-  { to: "/relatorios", label: "Relatorios" }
+  { to: "/", label: "Dashboard", end: true, icon: LayoutGrid },
+  { to: "/catalog/categories", label: "Categorias", icon: Tags },
+  { to: "/catalog/brands", label: "Marcas", icon: Boxes },
+  { to: "/catalog/products", label: "Produtos", icon: PackageSearch },
+  { to: "/catalog/variations", label: "Variacoes", icon: ClipboardList },
+  { to: "/vendas", label: "Vendas", icon: ShoppingCart },
+  { to: "/estoque/movimentos", label: "Estoque", icon: BarChart3 },
+  { to: "/relatorios", label: "Relatorios", icon: ReceiptText }
 ];
 
 export function AppShell({ children }) {
@@ -73,7 +83,10 @@ export function AppShell({ children }) {
                   }`
                 }
               >
-                {item.label}
+                <span className="inline-flex items-center gap-2">
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </span>
               </NavLink>
             ))}
           </nav>

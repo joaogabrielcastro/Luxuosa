@@ -28,6 +28,11 @@ export function SalesTableCard({
 }) {
   const canPrev = salesSkip > 0;
   const canNext = salesSkip + salesTake < totalSales;
+  const saleStatusVariant = (status) => {
+    if (status === "PAID") return "success";
+    if (status === "CANCELED") return "danger";
+    return "warning";
+  };
 
   return (
     <>
@@ -130,7 +135,9 @@ export function SalesTableCard({
           <td className="py-2 whitespace-nowrap">{formatDateTimeBR(sale.occurredAt)}</td>
           <td className="py-2">{formatCurrencyBRL(sale.totalValue)}</td>
           <td className="py-2">{paymentLabel(sale.paymentMethod)}</td>
-          <td className="py-2">{saleStatusLabel(sale.status)}</td>
+          <td className="py-2">
+            <Badge variant={saleStatusVariant(sale.status)}>{saleStatusLabel(sale.status)}</Badge>
+          </td>
           <td className="max-w-[220px] py-2 align-top text-xs">
             {sale.nfceJob?.status && sale.nfceJob.status !== "COMPLETED" ? (
               <div className="mb-1">
@@ -223,10 +230,10 @@ export function SalesTableCard({
           <td className="py-2">
             {sale.status !== "CANCELED" ? (
               <div className="inline-flex gap-2">
-                <Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => editSale(sale)}>
+                <Button variant="secondary" className="px-1.5 py-1 text-[11px]" onClick={() => editSale(sale)}>
                   Editar
                 </Button>
-                <Button variant="danger" className="px-2 py-1 text-xs" onClick={() => cancelSale(sale.id)}>
+                <Button variant="danger" className="px-1.5 py-1 text-[11px]" onClick={() => cancelSale(sale.id)}>
                   Cancelar
                 </Button>
               </div>

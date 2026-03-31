@@ -9,6 +9,8 @@ import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
 import { Input } from "../../shared/components/ui/Input.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
 import { Alert } from "../../shared/components/ui/Alert.jsx";
+import { StatCard } from "../../shared/components/ui/StatCard.jsx";
+import { Shapes } from "lucide-react";
 
 export function CategoriesPage() {
   const { token } = useAuth();
@@ -72,6 +74,10 @@ export function CategoriesPage() {
   return (
     <div className="ui-page">
       <PageHeader title="Categorias" description="Organize o catalogo por grupos principais." />
+      <section className="grid gap-3 sm:grid-cols-2">
+        <StatCard label="Categorias cadastradas" value={items.length} icon={<Shapes className="h-4 w-4 text-violet-600" />} />
+        <StatCard label="Categorias encontradas" value={query ? items.filter((c) => c.name.toLowerCase().includes(query.toLowerCase())).length : items.length} />
+      </section>
       <SectionCard title={editingId ? "Editar categoria" : "Nova categoria"}>
         <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={createCategory}>
           <Input
@@ -117,18 +123,19 @@ export function CategoriesPage() {
           <>
             <td className="py-2">{item.name}</td>
             <td className="py-2">
-              <button
-                className="mr-2 rounded border px-2 py-1 text-xs"
+              <Button
+                variant="secondary"
+                className="mr-2 px-2 py-1 text-xs"
                 onClick={() => {
                   setEditingId(item.id);
                   setName(item.name);
                 }}
               >
                 Editar
-              </button>
-              <button className="rounded border px-2 py-1 text-xs" onClick={() => removeCategory(item.id)}>
+              </Button>
+              <Button variant="danger" className="px-2 py-1 text-xs" onClick={() => removeCategory(item.id)}>
                 Excluir
-              </button>
+              </Button>
             </td>
           </>
         )}

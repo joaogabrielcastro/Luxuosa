@@ -254,7 +254,7 @@ export function ProductsPage() {
             <Input
               placeholder="Quantidade atual"
               type="number"
-              value={currentStockPreview}
+              value={form.stock}
               min="0"
               onChange={(e) => setCurrentStockPreview(e.target.value)}
             />

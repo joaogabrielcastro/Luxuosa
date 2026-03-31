@@ -9,6 +9,7 @@ import { Button } from "../../shared/components/ui/Button.jsx";
 import { StatCard } from "../../shared/components/ui/StatCard.jsx";
 import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
 import { Alert } from "../../shared/components/ui/Alert.jsx";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 function defaultFromTo() {
   const d = new Date();
@@ -79,7 +80,23 @@ export function ReportsPage() {
           </div>
         ) : null}
         {salesReport?.byDay?.length ? (
-          <div className="mt-4">
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <div className="h-64 rounded-lg border border-slate-200 bg-white p-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={salesReport.byDay.map((row) => ({
+                    date: formatDateBR(row.date).slice(0, 5),
+                    total: Number(row.amount || 0)
+                  }))}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip formatter={(v) => formatCurrencyBRL(v)} />
+                  <Line type="monotone" dataKey="total" stroke="#7C3AED" strokeWidth={2.5} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
             <h3 className="mb-2 text-sm font-medium text-slate-700">Por dia</h3>
             <ul className="max-h-56 space-y-1 overflow-y-auto text-sm">
               {salesReport.byDay.map((row) => (

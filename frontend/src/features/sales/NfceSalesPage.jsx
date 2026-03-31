@@ -43,6 +43,7 @@ export function SalesPage() {
     addItem,
     updateItem,
     addItemByBarcode,
+    addItemByVariationId,
     createSale,
     editSale,
     cancelSale,
@@ -72,6 +73,7 @@ export function SalesPage() {
         barcodeInput={barcodeInput}
         setBarcodeInput={setBarcodeInput}
         addItemByBarcode={addItemByBarcode}
+        addItemByVariationId={addItemByVariationId}
         addItem={addItem}
         loading={loading}
         cancelEdit={cancelEdit}

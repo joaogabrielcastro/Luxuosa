@@ -9,6 +9,8 @@ import { Input } from "../../shared/components/ui/Input.jsx";
 import { Select } from "../../shared/components/ui/Select.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
 import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
+import { Badge } from "../../shared/components/ui/Badge.jsx";
+import { StatCard } from "../../shared/components/ui/StatCard.jsx";
 
 export function StockMovementsPage() {
   const { token } = useAuth();
@@ -88,6 +90,11 @@ export function StockMovementsPage() {
   return (
     <div className="ui-page">
       <PageHeader title="Movimentacoes de estoque" description="Ajustes manuais e historico operacional." />
+      <section className="grid gap-3 sm:grid-cols-3">
+        <StatCard label="Movimentacoes na pagina" value={movements.length} />
+        <StatCard label="Entradas" value={movements.filter((m) => m.type === "ENTRY").length} />
+        <StatCard label="Saidas" value={movements.filter((m) => m.type === "EXIT").length} />
+      </section>
       <SectionCard title="Nova movimentacao">
         <p className="text-sm text-slate-600">
           Ajuste manual de estoque (entrada de mercadoria ou saida para uso interno). Vendas continuam baixando
@@ -185,7 +192,11 @@ export function StockMovementsPage() {
                 movements.map((m) => (
                   <tr key={m.id} className="border-b border-slate-100">
                     <td className="py-2 pr-2 whitespace-nowrap">{formatDateTimeBR(m.occurredAt)}</td>
-                    <td className="py-2 pr-2">{m.type === "ENTRY" ? "Entrada" : "Saida"}</td>
+                    <td className="py-2 pr-2">
+                      <Badge variant={m.type === "ENTRY" ? "success" : "warning"}>
+                        {m.type === "ENTRY" ? "Entrada" : "Saida"}
+                      </Badge>
+                    </td>
                     <td className="py-2 pr-2">{m.quantity}</td>
                     <td className="py-2">
                       {m.productVariation?.product?.name} — {m.productVariation?.size}/{m.productVariation?.color}
