@@ -79,7 +79,7 @@ Enums relevantes: `Plan`, `UserType`, `PaymentMethod`, `SaleStatus`, `StockMovem
 - Criação/atualização de venda recalcula totais, aplica política de desconto por `user_type`, valida parcelamento conforme forma de pagamento.
 - A UI de vendas **não** cadastra nem seleciona cliente; `customerId` fica nulo e a NFC-e segue como consumidor final. A API ainda aceita `customerId` opcional (ex.: integração externa).
 - Cancelamento restaura estoque e ajusta totais do cliente quando a venda tinha `customerId`.
-- Após criar venda paga, `enqueueNfceIssue` (`backend/src/jobs/enqueueNfceIssue.js`) enfileira `invoiceService.issueFromSale` **por tenant** (cadeia de promises, uma emissão por vez por `tenantId`), com retries limitados para falhas retriáveis.
+- Após criar venda paga, `enqueueNfceIssue` (`backend/src/jobs/enqueueNfceIssue.js`) grava job em `NfceIssueJob` (Postgres) e processa por tenant com serialização e retry/backoff.
 
 ### Relatórios
 
@@ -112,10 +112,10 @@ Todas abaixo do prefixo **`/api/v1`**.
 | Produtos | `GET\|POST /products`, `GET /products/low-stock`, `GET\|PUT\|DELETE /products/:id` |
 | Variações | `GET\|POST /product-variations`, `GET\|PUT\|DELETE /product-variations/:id` |
 | Dashboard | `GET /dashboard/admin` |
-| Vendas | `GET\|POST /sales`, `PUT /sales/:id`, `POST /sales/:id/cancel` |
+| Vendas | `GET\|POST /sales`, `GET /sales/summary`, `GET /sales/:id`, `PUT /sales/:id`, `POST /sales/:id/cancel` |
 | Estoque (manual + listagem) | `GET /stock-movements`, `POST /stock-movements` |
 | Relatórios | `GET /reports/sales`, `GET /reports/low-stock` |
-| NFC-e | `GET /invoices/connection-test`, `POST /invoices/issue/:saleId`, `GET /invoices/sale/:saleId/pdf` |
+| NFC-e | `GET /invoices/connection-test`, `POST /invoices/issue/:saleId`, `GET /invoices/sale/:saleId/pdf`, `GET /invoices/sale/:saleId/job` |
 
 ## 8. Tratamento de erros e logging
 
@@ -133,7 +133,7 @@ Todas abaixo do prefixo **`/api/v1`**.
 
 - Índices Prisma em `tenantId` (e compostos onde necessário) para filtros frequentes.
 - API stateless facilita réplicas atrás de load balancer.
-- NFC-e na Nuvem Fiscal pode ficar pendente na resposta; a fila em memória serializa por tenant e aplica retries; para múltiplos processos ou durabilidade após restart, avaliar fila externa (Redis/Bull).
+- NFC-e na Nuvem Fiscal pode ficar pendente; a fila persistida em Postgres (`NfceIssueJob`) serializa por tenant e aplica retries. Para alto volume/múltiplas instâncias, avaliar worker dedicado com Redis/Bull.
 - Agregações pesadas futuras podem usar cache ou leitura dedicada (read model), se necessário.
 
 ## 11. Roadmap técnico (pendências explícitas)

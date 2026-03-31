@@ -12,7 +12,6 @@ export function BrandLogo({ compact = false }) {
       {!compact ? (
         <div className="flex flex-col leading-tight sm:flex-row sm:items-baseline sm:gap-2">
           <span className="text-lg font-semibold text-slate-900">Luxuosa SaaS</span>
-          <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700">NFC-e</span>
         </div>
       ) : null}
     </div>

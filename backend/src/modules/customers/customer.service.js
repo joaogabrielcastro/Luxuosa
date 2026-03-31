@@ -13,11 +13,23 @@ export const customerService = {
     return customerRepository.create(tenantId, payload);
   },
 
-  update(tenantId, id, payload) {
-    return customerRepository.update(tenantId, id, payload);
+  async update(tenantId, id, payload) {
+    const result = await customerRepository.update(tenantId, id, payload);
+    if (result.count === 0) {
+      const err = new Error("Cliente nao encontrado.");
+      err.statusCode = 404;
+      throw err;
+    }
+    return result;
   },
 
-  remove(tenantId, id) {
-    return customerRepository.delete(tenantId, id);
+  async remove(tenantId, id) {
+    const result = await customerRepository.delete(tenantId, id);
+    if (result.count === 0) {
+      const err = new Error("Cliente nao encontrado.");
+      err.statusCode = 404;
+      throw err;
+    }
+    return result;
   }
 };

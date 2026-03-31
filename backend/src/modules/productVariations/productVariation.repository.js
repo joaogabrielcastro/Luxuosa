@@ -9,6 +9,37 @@ export const productVariationRepository = {
     });
   },
 
+  async listPaged(tenantId, { take = 50, skip = 0, q, categoryId, brandId, productId } = {}) {
+    const where = { tenantId };
+    if (productId) where.productId = productId;
+    if (categoryId || brandId || q) {
+      where.product = {
+        ...(categoryId ? { categoryId } : {}),
+        ...(brandId ? { brandId } : {}),
+        ...(q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" } },
+                { sku: { contains: q, mode: "insensitive" } }
+              ]
+            }
+          : {})
+      };
+    }
+
+    const [items, total] = await Promise.all([
+      prisma.productVariation.findMany({
+        where,
+        include: { product: { include: { category: true, brand: true } } },
+        orderBy: { createdAt: "desc" },
+        take,
+        skip
+      }),
+      prisma.productVariation.count({ where })
+    ]);
+    return { items, total, take, skip };
+  },
+
   findById(tenantId, id) {
     return prisma.productVariation.findFirst({
       where: { tenantId, id },

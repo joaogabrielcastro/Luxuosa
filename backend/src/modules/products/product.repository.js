@@ -9,10 +9,34 @@ export const productRepository = {
     });
   },
 
+  async listPaged(tenantId, { take = 50, skip = 0, q, categoryId, brandId } = {}) {
+    const where = { tenantId };
+    if (categoryId) where.categoryId = categoryId;
+    if (brandId) where.brandId = brandId;
+    if (q) {
+      where.OR = [
+        { name: { contains: q, mode: "insensitive" } },
+        { sku: { contains: q, mode: "insensitive" } }
+      ];
+    }
+
+    const [items, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        include: { category: true, brand: true, variations: true },
+        orderBy: { createdAt: "desc" },
+        take,
+        skip
+      }),
+      prisma.product.count({ where })
+    ]);
+    return { items, total, take, skip };
+  },
+
   findById(tenantId, id) {
     return prisma.product.findFirst({
       where: { tenantId, id },
-      include: { category: true, variations: true }
+      include: { category: true, brand: true, variations: true }
     });
   },
 

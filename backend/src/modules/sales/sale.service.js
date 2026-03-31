@@ -84,9 +84,17 @@ async function restoreSaleEffects(tx, tenantId, sale) {
 }
 
 export const saleService = {
-  async list(tenantId) {
-    const sales = await saleRepository.list(tenantId);
-    if (!sales.length) return sales;
+  async list(tenantId, { skip = 0, take = 50, paymentMethod, nfce, q, summary = false } = {}) {
+    const { items, total } = await saleRepository.list(tenantId, {
+      skip,
+      take,
+      paymentMethod,
+      nfce,
+      q,
+      summary
+    });
+    const sales = items;
+    if (!sales.length) return { items: [], total, skip, take };
 
     const saleIds = sales.map((s) => s.id);
     const jobs = await prisma.nfceIssueJob.findMany({
@@ -95,10 +103,15 @@ export const saleService = {
     });
     const jobsBySale = new Map(jobs.map((j) => [j.saleId, j]));
 
-    return sales.map((sale) => ({
+    const enriched = sales.map((sale) => ({
       ...sale,
       nfceJob: jobsBySale.get(sale.id) || null
     }));
+    return { items: enriched, total, skip, take };
+  },
+
+  getById(tenantId, saleId) {
+    return saleRepository.findByIdPlain(tenantId, saleId);
   },
 
   async create(tenantId, userId, userType, payload) {
@@ -157,10 +170,15 @@ export const saleService = {
       );
 
       for (const item of saleItems) {
-        await tx.productVariation.updateMany({
-          where: { tenantId, id: item.productVariationId },
+        const dec = await tx.productVariation.updateMany({
+          where: { tenantId, id: item.productVariationId, stock: { gte: item.quantity } },
           data: { stock: { decrement: item.quantity } }
         });
+        if (dec.count === 0) {
+          const err = new Error(`Estoque insuficiente para variacao ${item.productVariationId}.`);
+          err.statusCode = 400;
+          throw err;
+        }
         await tx.stockMovement.create({
           data: {
             tenantId,
@@ -260,10 +278,15 @@ export const saleService = {
       );
 
       for (const item of saleItems) {
-        await tx.productVariation.updateMany({
-          where: { tenantId, id: item.productVariationId },
+        const dec = await tx.productVariation.updateMany({
+          where: { tenantId, id: item.productVariationId, stock: { gte: item.quantity } },
           data: { stock: { decrement: item.quantity } }
         });
+        if (dec.count === 0) {
+          const err = new Error(`Estoque insuficiente para variacao ${item.productVariationId}.`);
+          err.statusCode = 400;
+          throw err;
+        }
         await tx.stockMovement.create({
           data: {
             tenantId,

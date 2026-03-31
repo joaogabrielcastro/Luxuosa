@@ -1,17 +1,38 @@
 import { prisma } from "../../config/prisma.js";
 
 export const saleRepository = {
-  list(tenantId) {
-    return prisma.sale.findMany({
-      where: { tenantId },
-      include: {
-        customer: true,
-        user: true,
-        invoice: true,
-        items: { include: { productVariation: { include: { product: true } } } }
-      },
-      orderBy: { occurredAt: "desc" }
-    });
+  async list(tenantId, { skip = 0, take = 50, paymentMethod, nfce, q, summary = false } = {}) {
+    const where = { tenantId };
+    if (paymentMethod) where.paymentMethod = paymentMethod;
+    if (nfce === "WAITING") where.invoice = null;
+    else if (nfce) where.invoice = { status: nfce };
+    if (q) {
+      where.OR = [
+        { id: { contains: q, mode: "insensitive" } },
+        { invoice: { is: { key: { contains: q, mode: "insensitive" } } } }
+      ];
+    }
+
+    const include = summary
+      ? { invoice: true }
+      : {
+          customer: true,
+          user: true,
+          invoice: true,
+          items: { include: { productVariation: { include: { product: true } } } }
+        };
+
+    const [items, total] = await Promise.all([
+      prisma.sale.findMany({
+        where,
+        include,
+        orderBy: { occurredAt: "desc" },
+        skip,
+        take
+      }),
+      prisma.sale.count({ where })
+    ]);
+    return { items, total };
   },
 
   createWithItems(tx, tenantId, data, items) {
@@ -40,6 +61,18 @@ export const saleRepository = {
       include: {
         customer: true,
         items: true
+      }
+    });
+  },
+
+  findByIdPlain(tenantId, id) {
+    return prisma.sale.findFirst({
+      where: { tenantId, id },
+      include: {
+        customer: true,
+        user: true,
+        invoice: true,
+        items: { include: { productVariation: { include: { product: true } } } }
       }
     });
   },

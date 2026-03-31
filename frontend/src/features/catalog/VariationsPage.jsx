@@ -5,6 +5,8 @@ import { useToast } from "../../shared/components/ToastProvider.jsx";
 import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
 import { DataTable } from "../../shared/components/DataTable.jsx";
 
+const EMPTY_VARIATION_FORM = { productId: "", size: "", color: "", stock: 0 };
+
 export function VariationsPage() {
   const { token } = useAuth();
   const { showToast } = useToast();
@@ -20,31 +22,47 @@ export function VariationsPage() {
   const [productFilter, setProductFilter] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [listLoading, setListLoading] = useState(false);
+  const [variationSkip, setVariationSkip] = useState(0);
+  const [totalVariations, setTotalVariations] = useState(0);
+  const variationTake = 50;
   const [formCategoryId, setFormCategoryId] = useState("");
   const [formBrandId, setFormBrandId] = useState("");
-  const [form, setForm] = useState({
-    productId: "",
-    size: "",
-    color: "",
-    stock: 0
-  });
+  const [form, setForm] = useState(EMPTY_VARIATION_FORM);
 
   async function load() {
+    setListLoading(true);
+    const params = new URLSearchParams();
+    params.set("take", String(variationTake));
+    params.set("skip", String(variationSkip));
+    if (query.trim()) params.set("q", query.trim());
+    if (categoryFilter) params.set("categoryId", categoryFilter);
+    if (brandFilter) params.set("brandId", brandFilter);
+    if (productFilter) params.set("productId", productFilter);
     const [categoriesData, brandsData, productsData, variationsData] = await Promise.all([
       apiClient("/categories", { token }),
       apiClient("/brands", { token }),
       apiClient("/products", { token }),
-      apiClient("/product-variations", { token })
+      apiClient(`/product-variations?${params.toString()}`, { token })
     ]);
     setCategories(categoriesData);
     setBrands(brandsData);
     setProducts(productsData);
-    setVariations(variationsData);
+    setVariations(variationsData.items || []);
+    setTotalVariations(Number(variationsData.total || 0));
+    setListLoading(false);
   }
 
   useEffect(() => {
-    load().catch((err) => setError(err.message));
-  }, []);
+    load().catch((err) => {
+      setListLoading(false);
+      setError(err.message);
+    });
+  }, [variationSkip, token, query, categoryFilter, brandFilter, productFilter]);
+
+  useEffect(() => {
+    setVariationSkip(0);
+  }, [query, categoryFilter, brandFilter, productFilter]);
 
   async function createVariation(event) {
     event.preventDefault();
@@ -60,7 +78,7 @@ export function VariationsPage() {
       setEditingId("");
       setFormCategoryId("");
       setFormBrandId("");
-      setForm({ productId: "", size: "", color: "", stock: 0 });
+      setForm(EMPTY_VARIATION_FORM);
       await load();
     } catch (err) {
       setError(err.message);
@@ -215,7 +233,7 @@ export function VariationsPage() {
                   setEditingId("");
                   setFormCategoryId("");
                   setFormBrandId("");
-                  setForm({ productId: "", size: "", color: "", stock: 0 });
+                  setForm(EMPTY_VARIATION_FORM);
                 }}
               >
                 Cancelar
@@ -243,7 +261,7 @@ export function VariationsPage() {
           query,
           onQueryChange: setQuery,
           placeholder: "Buscar por produto, tamanho ou cor...",
-          matcher: (row, q) => `${row.product?.name || ""} ${row.size || ""} ${row.color || ""}`.toLowerCase().includes(q.toLowerCase())
+          matcher: () => true
         }}
         filters={[
           {
@@ -255,7 +273,7 @@ export function VariationsPage() {
               setProductFilter("");
             },
             options: [{ value: "", label: "Todas as categorias" }, ...categories.map((item) => ({ value: item.id, label: item.name }))],
-            matcher: (row, value) => row.product?.categoryId === value
+            matcher: () => true
           },
           {
             id: "brand",
@@ -270,14 +288,14 @@ export function VariationsPage() {
                 .filter((b) => products.some((p) => p.brandId === b.id && (!categoryFilter || p.categoryId === categoryFilter)))
                 .map((item) => ({ value: item.id, label: item.name }))
             ],
-            matcher: (row, value) => row.product?.brandId === value
+            matcher: () => true
           },
           {
             id: "product",
             value: productFilter,
             onChange: setProductFilter,
             options: [{ value: "", label: "Todos os produtos" }, ...productsForListFilter.map((item) => ({ value: item.id, label: item.name }))],
-            matcher: (row, value) => row.productId === value
+            matcher: () => true
           }
         ]}
         renderCells={(item) => (
@@ -298,6 +316,27 @@ export function VariationsPage() {
           </>
         )}
       />
+      <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-xs text-slate-600 shadow-sm">
+        <span>{listLoading ? "Carregando..." : `Mostrando ${variations.length} de ${totalVariations} variacoes`}</span>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="rounded border px-2 py-1 disabled:opacity-50"
+            disabled={variationSkip === 0 || listLoading}
+            onClick={() => setVariationSkip((v) => Math.max(v - variationTake, 0))}
+          >
+            Anterior
+          </button>
+          <button
+            type="button"
+            className="rounded border px-2 py-1 disabled:opacity-50"
+            disabled={variationSkip + variationTake >= totalVariations || listLoading}
+            onClick={() => setVariationSkip((v) => v + variationTake)}
+          >
+            Proxima
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

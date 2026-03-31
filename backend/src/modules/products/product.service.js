@@ -6,6 +6,10 @@ export const productService = {
     return productRepository.list(tenantId);
   },
 
+  listPaged(tenantId, options) {
+    return productRepository.listPaged(tenantId, options);
+  },
+
   getById(tenantId, id) {
     return productRepository.findById(tenantId, id);
   },
@@ -51,11 +55,23 @@ export const productService = {
         throw err;
       }
     }
-    return productRepository.update(tenantId, id, payload);
+    const result = await productRepository.update(tenantId, id, payload);
+    if (result.count === 0) {
+      const err = new Error("Produto nao encontrado.");
+      err.statusCode = 404;
+      throw err;
+    }
+    return result;
   },
 
-  remove(tenantId, id) {
-    return productRepository.remove(tenantId, id);
+  async remove(tenantId, id) {
+    const result = await productRepository.remove(tenantId, id);
+    if (result.count === 0) {
+      const err = new Error("Produto nao encontrado.");
+      err.statusCode = 404;
+      throw err;
+    }
+    return result;
   },
 
   async lowStock(tenantId) {

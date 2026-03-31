@@ -25,16 +25,28 @@ function parseRange(fromStr, toStr) {
 export const reportsService = {
   async salesByPeriod(tenantId, fromStr, toStr) {
     const { start, end } = parseRange(fromStr, toStr);
-    const sales = await prisma.sale.findMany({
-      where: {
-        tenantId,
-        status: "PAID",
-        occurredAt: { gte: start, lte: end }
-      },
-      select: { totalValue: true, occurredAt: true }
-    });
+    const [sales, agg] = await Promise.all([
+      prisma.sale.findMany({
+        where: {
+          tenantId,
+          status: "PAID",
+          occurredAt: { gte: start, lte: end }
+        },
+        select: { totalValue: true, occurredAt: true }
+      }),
+      prisma.sale.aggregate({
+        where: {
+          tenantId,
+          status: "PAID",
+          occurredAt: { gte: start, lte: end }
+        },
+        _sum: { totalValue: true },
+        _count: { _all: true }
+      })
+    ]);
 
-    const totalAmount = sales.reduce((acc, s) => acc + Number(s.totalValue), 0);
+    const totalAmount = Number(agg?._sum?.totalValue || 0);
+    const saleCount = Number(agg?._count?._all || 0);
     const byDayMap = new Map();
     for (const s of sales) {
       const d = new Date(s.occurredAt);
@@ -49,7 +61,7 @@ export const reportsService = {
     return {
       from: fromStr,
       to: toStr,
-      saleCount: sales.length,
+      saleCount,
       totalAmount,
       byDay
     };

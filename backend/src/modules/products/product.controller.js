@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parsePageQuery } from "../../shared/pagination.js";
 import { productService } from "./product.service.js";
 
 const productSchema = z.object({
@@ -19,6 +20,15 @@ const productSchema = z.object({
 export const productController = {
   async list(req, res, next) {
     try {
+      const hasPaging = req.query.take !== undefined || req.query.skip !== undefined;
+      if (hasPaging) {
+        const { take, skip } = parsePageQuery(req.query, { defaultTake: 50, maxTake: 200 });
+        const q = req.query.q ? String(req.query.q).trim() : undefined;
+        const categoryId = req.query.categoryId ? String(req.query.categoryId) : undefined;
+        const brandId = req.query.brandId ? String(req.query.brandId) : undefined;
+        const paged = await productService.listPaged(req.tenantId, { take, skip, q, categoryId, brandId });
+        return res.json(paged);
+      }
       const products = await productService.list(req.tenantId);
       return res.json(products);
     } catch (error) {

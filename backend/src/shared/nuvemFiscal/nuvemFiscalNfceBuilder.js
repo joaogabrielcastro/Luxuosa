@@ -46,6 +46,61 @@ function round2(n) {
   return Math.round(Number(n) * 100) / 100;
 }
 
+function allocateItemDiscounts(det, targetVDesc) {
+  const totalCents = Math.max(0, Math.round(round2(targetVDesc) * 100));
+  if (totalCents <= 0 || !det.length) return;
+
+  const lineTotals = det.map((d) => Math.max(0, Math.round(round2(d.prod.vProd) * 100)));
+  const sumLineTotals = lineTotals.reduce((acc, v) => acc + v, 0);
+  if (sumLineTotals <= 0) return;
+
+  // Rateio proporcional por item, com ajuste de resto pelos maiores residuos.
+  const allocations = det.map((_, idx) => {
+    const raw = (totalCents * lineTotals[idx]) / sumLineTotals;
+    const base = Math.floor(raw);
+    return { idx, cents: base, frac: raw - base };
+  });
+
+  let used = allocations.reduce((acc, a) => acc + a.cents, 0);
+  let remainder = totalCents - used;
+  allocations
+    .slice()
+    .sort((a, b) => b.frac - a.frac)
+    .forEach((a) => {
+      if (remainder <= 0) return;
+      a.cents += 1;
+      remainder -= 1;
+    });
+
+  // Garante que nenhum desconto de item ultrapasse vProd do item.
+  let overflow = 0;
+  allocations.forEach((a) => {
+    const max = lineTotals[a.idx];
+    if (a.cents > max) {
+      overflow += a.cents - max;
+      a.cents = max;
+    }
+  });
+  if (overflow > 0) {
+    allocations
+      .slice()
+      .sort((a, b) => lineTotals[b.idx] - b.cents - (lineTotals[a.idx] - a.cents))
+      .forEach((a) => {
+        if (overflow <= 0) return;
+        const room = lineTotals[a.idx] - a.cents;
+        if (room <= 0) return;
+        const extra = Math.min(room, overflow);
+        a.cents += extra;
+        overflow -= extra;
+      });
+  }
+
+  allocations.forEach((a) => {
+    const vDesc = round2(a.cents / 100);
+    if (vDesc > 0) det[a.idx].prod.vDesc = vDesc;
+  });
+}
+
 function randomCNF() {
   return Array.from({ length: 8 }, () => Math.floor(Math.random() * 10)).join("");
 }
@@ -258,6 +313,7 @@ export function buildNfceRequestBody({ sale, empresa, empresaNfce, ambiente, ref
   const vProd = round2(vProdItens);
   const vNF = round2(Number(sale.totalValue));
   const vDesc = round2(Math.max(0, vProd - vNF));
+  allocateItemDiscounts(det, vDesc);
 
   const total = {
     ICMSTot: {

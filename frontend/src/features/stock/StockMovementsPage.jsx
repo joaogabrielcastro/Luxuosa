@@ -10,6 +10,9 @@ export function StockMovementsPage() {
   const [movements, setMovements] = useState([]);
   const [variations, setVariations] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [listLoading, setListLoading] = useState(false);
+  const [listSkip, setListSkip] = useState(0);
+  const pageSize = 100;
   const [form, setForm] = useState({
     productVariationId: "",
     type: "ENTRY",
@@ -27,17 +30,22 @@ export function StockMovementsPage() {
   );
 
   async function load() {
+    setListLoading(true);
     const [m, v] = await Promise.all([
-      apiClient("/stock-movements", { token }),
+      apiClient(`/stock-movements?take=${pageSize}&skip=${listSkip}`, { token }),
       apiClient("/product-variations", { token })
     ]);
     setMovements(m);
     setVariations(v);
+    setListLoading(false);
   }
 
   useEffect(() => {
-    load().catch((err) => showToast(err.message, "error"));
-  }, [token]);
+    load().catch((err) => {
+      setListLoading(false);
+      showToast(err.message, "error");
+    });
+  }, [token, listSkip]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -131,6 +139,27 @@ export function StockMovementsPage() {
 
       <section className="rounded-lg bg-white p-4 shadow-sm">
         <h3 className="mb-3 text-base font-semibold">Historico recente</h3>
+        <div className="mb-3 flex items-center justify-between text-xs text-slate-600">
+          <span>{listLoading ? "Carregando..." : `Mostrando ${movements.length} movimentacoes`}</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="rounded border px-2 py-1 disabled:opacity-50"
+              disabled={listSkip === 0 || listLoading}
+              onClick={() => setListSkip((v) => Math.max(v - pageSize, 0))}
+            >
+              Anterior
+            </button>
+            <button
+              type="button"
+              className="rounded border px-2 py-1 disabled:opacity-50"
+              disabled={movements.length < pageSize || listLoading}
+              onClick={() => setListSkip((v) => v + pageSize)}
+            >
+              Proxima
+            </button>
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead>

@@ -6,7 +6,9 @@ import { saleController } from "./sale.controller.js";
 const router = Router();
 
 router.use(authMiddleware, tenantMiddleware);
+router.get("/summary", saleController.listSummary);
 router.get("/", saleController.list);
+router.get("/:id", saleController.getById);
 router.post("/", saleController.create);
 router.put("/:id", saleController.update);
 router.post("/:id/cancel", saleController.cancel);

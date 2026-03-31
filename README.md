@@ -20,13 +20,13 @@ SaaS multi-tenant para gestão de loja de roupa: catálogo, vendas, estoque, rel
 - **Relatórios (API):** vendas pagas por intervalo de datas (`GET /reports/sales?from=&to=`) e lista de produtos abaixo do mínimo (`GET /reports/low-stock`). O **dashboard admin** continua com visão mais rica (só admin).
 - **Clientes (API):** `GET|POST|PUT|DELETE /customers` para integrações ou dados legados; não há tela dedicada no app.
 - **Dashboard (admin):** métricas agregadas (receita, ticket, vendas por período/atendente, lucro por produto, estoque consolidado, produtos sem venda recente, etc.).
-- **NFC-e (Nuvem Fiscal):** após registrar a venda, o backend enfileira emissão **modelo 65** (fila leve em memória, serializada por `tenantId`); consulta SEFAZ e grava `Invoice`. **PDF (DANFE):** `GET /invoices/sale/:saleId/pdf`. Reemissão/forçar emissão: `POST /invoices/issue/:saleId` (qualquer usuário autenticado da loja). Teste de conexão OAuth: `GET /invoices/connection-test` (só admin). OAuth com scope `empresa nfe nfce`. Simples Nacional (CSOSN 102).
+- **NFC-e (Nuvem Fiscal):** após registrar a venda, o backend enfileira emissão **modelo 65** em fila persistida no banco (`NfceIssueJob`) com serialização por `tenantId`; consulta SEFAZ e grava `Invoice`. **PDF (DANFE):** `GET /invoices/sale/:saleId/pdf`. Reemissão/forçar emissão: `POST /invoices/issue/:saleId` (qualquer usuário autenticado da loja). Status do job por venda: `GET /invoices/sale/:saleId/job`. Teste de conexão OAuth: `GET /invoices/connection-test` (só admin). OAuth com scope `empresa nfe nfce`. Simples Nacional (CSOSN 102).
 
 ## O que ainda é esboço ou não existe
 
 - **NF-e na UI** e refinamentos fiscais avançados (outros CST/CFOP, download automático de XML em massa).
 - **Gestão de usuários** do tenant (criar atendentes), **onboarding** de novos tenants.
-- **Fila persistente** (Redis/Bull) para NFC-e — hoje a fila é em processo; reinício do servidor pode interromper jobs pendentes.
+- **Fila externa dedicada** (Redis/Bull) para NFC-e em cenários de alto volume/múltiplas instâncias (atualmente já há persistência no Postgres via `NfceIssueJob`).
 - **Testes automatizados** em volume.
 
 ## Estrutura do repositório
@@ -101,22 +101,25 @@ Prefixo global: **`/api/v1`**.
 | `GET\|PUT\|DELETE /customers/:id` | |
 | `GET\|POST /categories` | |
 | `GET\|PUT\|DELETE /categories/:id` | |
-| `GET\|POST /products` | |
+| `GET\|POST /products` | `GET` aceita `take`, `skip`, `q`, `categoryId`, `brandId` |
 | `GET /products/low-stock` | |
 | `GET\|PUT\|DELETE /products/:id` | |
-| `GET\|POST /product-variations` | |
+| `GET\|POST /product-variations` | `GET` aceita `take`, `skip`, `q`, `categoryId`, `brandId`, `productId` |
 | `GET\|PUT\|DELETE /product-variations/:id` | |
 | `GET /dashboard/admin` | Só admin |
-| `GET\|POST /sales` | |
+| `GET\|POST /sales` | `GET` aceita `take`, `skip`, `paymentMethod`, `nfce`, `q`, `mode` (`summary`/`full`) |
+| `GET /sales/summary` | Lista enxuta para telas de operação (mesmos filtros de `GET /sales`) |
+| `GET /sales/:id` | Detalhe completo da venda |
 | `PUT /sales/:id` | |
 | `POST /sales/:id/cancel` | |
-| `GET /stock-movements` | Lista movimentações manuais e herdadas de vendas/cancelamentos |
+| `GET /stock-movements` | Lista movimentações; aceita `take` e `skip` |
 | `POST /stock-movements` | Body: `productVariationId`, `type` (`ENTRY` \| `EXIT`), `quantity` |
 | `GET /reports/sales?from=YYYY-MM-DD&to=YYYY-MM-DD` | Vendas pagas no intervalo (totais e por dia) |
 | `GET /reports/low-stock` | Produtos com estoque total ≤ mínimo cadastrado |
 | `GET /invoices/connection-test` | Só admin; testa OAuth + `GET /empresas` na Nuvem Fiscal |
 | `POST /invoices/issue/:saleId` | Reemite/força NFC-e (venda paga); JWT da loja |
 | `GET /invoices/sale/:saleId/pdf` | PDF (DANFE) da NFC-e autorizada |
+| `GET /invoices/sale/:saleId/job` | Status da fila de emissão NFC-e para a venda |
 
 ## Frontend (rotas)
 
@@ -188,7 +191,7 @@ Resetar volume do banco:
 docker compose down -v
 ```
 
-O backend executa `prisma generate`, `prisma db push` e `npm run dev` ao iniciar o container.
+O backend executa `prisma generate`, `prisma migrate deploy` e `npm run dev` ao iniciar o container.
 
 ## Desenvolvimento local (sem Docker)
 

@@ -8,6 +8,16 @@ import { DataTable } from "../../shared/components/DataTable.jsx";
 
 const AUTO_VARIATION_SIZE = "AUTO";
 const AUTO_VARIATION_COLOR = "ESTOQUE";
+const EMPTY_PRODUCT_FORM = {
+  name: "",
+  description: "",
+  price: "",
+  cost: "",
+  categoryId: "",
+  brandId: "",
+  sku: "",
+  minStock: ""
+};
 
 export function ProductsPage() {
   const { token } = useAuth();
@@ -18,37 +28,48 @@ export function ProductsPage() {
   const [brands, setBrands] = useState([]);
   const [editingId, setEditingId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [listLoading, setListLoading] = useState(false);
+  const [productSkip, setProductSkip] = useState(0);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const productTake = 50;
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [brandFilter, setBrandFilter] = useState("");
   const [error, setError] = useState("");
   const [scannerSku, setScannerSku] = useState("");
-  const [form, setForm] = useState({
-    name: "",
-    description: "",
-    price: "",
-    cost: "",
-    categoryId: "",
-    brandId: "",
-    sku: "",
-    minStock: ""
-  });
+  const [form, setForm] = useState(EMPTY_PRODUCT_FORM);
   const [currentStockPreview, setCurrentStockPreview] = useState(0);
 
   async function load() {
+    setListLoading(true);
+    const params = new URLSearchParams();
+    params.set("take", String(productTake));
+    params.set("skip", String(productSkip));
+    if (query.trim()) params.set("q", query.trim());
+    if (categoryFilter) params.set("categoryId", categoryFilter);
+    if (brandFilter) params.set("brandId", brandFilter);
     const [productsData, categoriesData, brandsData] = await Promise.all([
-      apiClient("/products", { token }),
+      apiClient(`/products?${params.toString()}`, { token }),
       apiClient("/categories", { token }),
       apiClient("/brands", { token })
     ]);
-    setProducts(productsData);
+    setProducts(productsData.items || []);
+    setTotalProducts(Number(productsData.total || 0));
     setCategories(categoriesData);
     setBrands(brandsData);
+    setListLoading(false);
   }
 
   useEffect(() => {
-    load().catch((err) => setError(err.message));
-  }, []);
+    load().catch((err) => {
+      setListLoading(false);
+      setError(err.message);
+    });
+  }, [productSkip, token, query, categoryFilter, brandFilter]);
+
+  useEffect(() => {
+    setProductSkip(0);
+  }, [query, categoryFilter, brandFilter]);
 
   async function syncProductStock(productId, desiredStock) {
     const product = await apiClient(`/products/${productId}`, { token });
@@ -116,7 +137,7 @@ export function ProductsPage() {
       }
       showToast(editingId ? "Produto atualizado." : "Produto criado.");
       setEditingId("");
-      setForm({ name: "", description: "", price: "", cost: "", categoryId: "", brandId: "", sku: "", minStock: "" });
+      setForm(EMPTY_PRODUCT_FORM);
       setCurrentStockPreview(0);
       await load();
     } catch (err) {
@@ -278,7 +299,7 @@ export function ProductsPage() {
                 className="rounded-md border px-4 py-2"
                 onClick={() => {
                   setEditingId("");
-                  setForm({ name: "", description: "", price: "", cost: "", categoryId: "", brandId: "", sku: "", minStock: "" });
+                  setForm(EMPTY_PRODUCT_FORM);
                   setCurrentStockPreview(0);
                 }}
               >
@@ -291,6 +312,27 @@ export function ProductsPage() {
       </div>
 
       <div className="rounded-lg bg-white p-4 shadow-sm">
+        <div className="mb-3 flex items-center justify-between text-xs text-slate-600">
+          <span>{listLoading ? "Carregando..." : `Mostrando ${products.length} de ${totalProducts} produtos`}</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="rounded border px-2 py-1 disabled:opacity-50"
+              disabled={productSkip === 0 || listLoading}
+              onClick={() => setProductSkip((v) => Math.max(v - productTake, 0))}
+            >
+              Anterior
+            </button>
+            <button
+              type="button"
+              className="rounded border px-2 py-1 disabled:opacity-50"
+              disabled={productSkip + productTake >= totalProducts || listLoading}
+              onClick={() => setProductSkip((v) => v + productTake)}
+            >
+              Proxima
+            </button>
+          </div>
+        </div>
         <DataTable
           title="Lista de produtos"
           data={products}
@@ -310,7 +352,7 @@ export function ProductsPage() {
             query,
             onQueryChange: setQuery,
             placeholder: "Buscar por nome ou SKU...",
-            matcher: (row, q) => `${row.name} ${row.sku}`.toLowerCase().includes(q.toLowerCase())
+            matcher: () => true
           }}
           filters={[
             {
@@ -321,14 +363,14 @@ export function ProductsPage() {
                 setBrandFilter("");
               },
               options: [{ value: "", label: "Todas as categorias" }, ...categories.map((item) => ({ value: item.id, label: item.name }))],
-              matcher: (row, value) => row.categoryId === value
+              matcher: () => true
             },
             {
               id: "brand",
               value: brandFilter,
               onChange: setBrandFilter,
               options: [{ value: "", label: "Todas as marcas" }, ...brands.map((item) => ({ value: item.id, label: item.name }))],
-              matcher: (row, value) => row.brandId === value
+              matcher: () => true
             }
           ]}
           renderCells={(item) => (

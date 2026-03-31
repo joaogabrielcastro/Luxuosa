@@ -6,6 +6,10 @@ export const productVariationService = {
     return productVariationRepository.list(tenantId);
   },
 
+  listPaged(tenantId, options) {
+    return productVariationRepository.listPaged(tenantId, options);
+  },
+
   getById(tenantId, id) {
     return productVariationRepository.findById(tenantId, id);
   },
@@ -33,10 +37,22 @@ export const productVariationService = {
         throw err;
       }
     }
-    return productVariationRepository.update(tenantId, id, payload);
+    const result = await productVariationRepository.update(tenantId, id, payload);
+    if (result.count === 0) {
+      const err = new Error("Variacao nao encontrada.");
+      err.statusCode = 404;
+      throw err;
+    }
+    return result;
   },
 
-  remove(tenantId, id) {
-    return productVariationRepository.remove(tenantId, id);
+  async remove(tenantId, id) {
+    const result = await productVariationRepository.remove(tenantId, id);
+    if (result.count === 0) {
+      const err = new Error("Variacao nao encontrada.");
+      err.statusCode = 404;
+      throw err;
+    }
+    return result;
   }
 };
