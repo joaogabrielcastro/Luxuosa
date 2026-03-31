@@ -7,6 +7,8 @@ import { SalesTableCard } from "./components/SalesTableCard.jsx";
 import { useSalesActions } from "./hooks/useSalesActions.js";
 import { useSalesData } from "./hooks/useSalesData.js";
 import { nfceJobStatusLabel, paymentLabel, saleStatusLabel } from "./sales.utils.js";
+import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
+import { Modal } from "../../shared/components/ui/Modal.jsx";
 
 /** Página de vendas (NFC-e consumidor final, sem seleção de cliente na UI). */
 export function SalesPage() {
@@ -54,13 +56,8 @@ export function SalesPage() {
   }, [search, paymentFilter, nfceFilter, setSalesSkip]);
 
   return (
-    <div className="space-y-4">
-      <header className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h1 className="text-xl font-semibold text-slate-900">Vendas</h1>
-        </div>
-        <p className="mt-1 text-xs text-slate-500">Nota como consumidor final (sem cliente na tela).</p>
-      </header>
+    <div className="ui-page">
+      <PageHeader title="Vendas" description="Nota como consumidor final (sem cliente na tela)." />
       <SalesFormCard
         editingSaleId={editingSaleId}
         form={form}
@@ -103,28 +100,9 @@ export function SalesPage() {
         setNfceErrorDetail={setNfceErrorDetail}
       />
 
-      {nfceErrorDetail ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="nfce-err-title"
-        >
-          <div className="max-h-[80vh] w-full max-w-lg overflow-auto rounded-lg bg-white p-4 shadow-lg">
-            <h3 id="nfce-err-title" className="text-sm font-semibold">
-              Detalhe do erro NFC-e
-            </h3>
-            <pre className="mt-3 whitespace-pre-wrap break-words text-xs text-slate-800">{nfceErrorDetail}</pre>
-            <button
-              type="button"
-              className="mt-4 rounded bg-slate-900 px-3 py-2 text-sm text-white"
-              onClick={() => setNfceErrorDetail(null)}
-            >
-              Fechar
-            </button>
-          </div>
-        </div>
-      ) : null}
+      <Modal open={Boolean(nfceErrorDetail)} title="Detalhe do erro NFC-e" onClose={() => setNfceErrorDetail(null)}>
+        <pre className="whitespace-pre-wrap break-words text-xs text-slate-800">{nfceErrorDetail}</pre>
+      </Modal>
     </div>
   );
 }

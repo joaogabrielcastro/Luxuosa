@@ -1,5 +1,8 @@
 import { DataTable } from "../../../shared/components/DataTable.jsx";
 import { formatCurrencyBRL, formatDateTimeBR } from "../../../shared/formatters.js";
+import { Button } from "../../../shared/components/ui/Button.jsx";
+import { Badge } from "../../../shared/components/ui/Badge.jsx";
+import { SectionCard } from "../../../shared/components/ui/SectionCard.jsx";
 
 export function SalesTableCard({
   sales,
@@ -28,31 +31,40 @@ export function SalesTableCard({
 
   return (
     <>
-      <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-xs text-slate-600 shadow-sm">
+      <SectionCard
+        title="Ultimas vendas"
+        actions={
+          <div className="flex items-center gap-2 text-xs text-slate-600">
+            <span>
+              Mostrando {sales.length} de {totalSales}
+            </span>
+            <Button
+              type="button"
+              variant="secondary"
+              className="px-2 py-1 text-xs"
+              disabled={!canPrev}
+              onClick={() => setSalesSkip((v) => Math.max(v - salesTake, 0))}
+            >
+              Anterior
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="px-2 py-1 text-xs"
+              disabled={!canNext}
+              onClick={() => setSalesSkip((v) => v + salesTake)}
+            >
+              Proxima
+            </Button>
+          </div>
+        }
+      >
+      <div className="mb-2 text-xs text-slate-600">
         <span>
-          Mostrando {sales.length} de {totalSales} vendas
+          Filtros aplicados no servidor para melhor performance.
         </span>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            className="rounded border px-2 py-1 disabled:opacity-50"
-            disabled={!canPrev}
-            onClick={() => setSalesSkip((v) => Math.max(v - salesTake, 0))}
-          >
-            Anterior
-          </button>
-          <button
-            type="button"
-            className="rounded border px-2 py-1 disabled:opacity-50"
-            disabled={!canNext}
-            onClick={() => setSalesSkip((v) => v + salesTake)}
-          >
-            Proxima
-          </button>
-        </div>
       </div>
       <DataTable
-        title="Ultimas vendas"
       data={sales}
       columns={[
         { key: "date", label: "Data" },
@@ -121,42 +133,45 @@ export function SalesTableCard({
           <td className="py-2">{saleStatusLabel(sale.status)}</td>
           <td className="max-w-[220px] py-2 align-top text-xs">
             {sale.nfceJob?.status && sale.nfceJob.status !== "COMPLETED" ? (
-              <div className="mb-1 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700">
-                Fila: <strong>{nfceJobStatusLabel(sale.nfceJob.status)}</strong>
+              <div className="mb-1">
+                <Badge variant="warning">
+                Fila: {nfceJobStatusLabel(sale.nfceJob.status)}
                 {sale.nfceJob.attempts ? ` · tentativas: ${sale.nfceJob.attempts}` : ""}
+                </Badge>
               </div>
             ) : null}
             {!sale.invoice ? (
               <div className="space-y-1">
                 <span className="text-slate-500">Aguardando NFC-e...</span>
                 {sale.status === "PAID" ? (
-                  <button
+                  <Button
                     type="button"
-                    className="block w-full rounded border border-slate-300 px-2 py-1 text-left text-[11px] hover:bg-slate-50"
+                    variant="secondary"
+                    className="block w-full px-2 py-1 text-left text-[11px]"
                     disabled={loading}
                     onClick={() => retryNfce(sale.id)}
                   >
                     Emitir agora
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             ) : sale.invoice.status === "ISSUED" ? (
               <div className="space-y-1">
-                <span className="font-medium text-emerald-700">Autorizada (SEFAZ)</span>
+                <Badge variant="success">Autorizada (SEFAZ)</Badge>
                 {sale.invoice.number ? <div className="text-slate-600">Nº {sale.invoice.number}</div> : null}
                 {sale.invoice.key ? (
                   <div className="break-all font-mono text-[10px] text-slate-500" title={sale.invoice.key}>
                     {sale.invoice.key.slice(0, 24)}…
                   </div>
                 ) : null}
-                <button
+                <Button
                   type="button"
-                  className="mt-1 block w-full rounded bg-slate-900 px-2 py-1 text-left text-[11px] text-white hover:bg-slate-800 disabled:opacity-50"
+                  className="mt-1 block w-full px-2 py-1 text-left text-[11px]"
                   disabled={loading}
                   onClick={() => downloadNfcePdf(sale.id)}
                 >
                   Baixar PDF da NFC-e
-                </button>
+                </Button>
               </div>
             ) : sale.invoice.status === "ERROR" ? (
               <div className="space-y-1">
@@ -179,39 +194,41 @@ export function SalesTableCard({
                   </button>
                 ) : null}
                 {sale.status === "PAID" ? (
-                  <button
+                  <Button
                     type="button"
-                    className="block w-full rounded border border-slate-300 px-2 py-1 text-left hover:bg-slate-50"
+                    variant="secondary"
+                    className="block w-full px-2 py-1 text-left"
                     disabled={loading}
                     onClick={() => retryNfce(sale.id)}
                   >
                     Tentar NFC-e novamente
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             ) : (
               <span className="text-amber-700">Enviando NFC-e para SEFAZ...</span>
             )}
             {sale.status === "PAID" && sale.invoice?.status === "PENDING" ? (
-              <button
+              <Button
                 type="button"
-                className="mt-1 block w-full rounded border border-slate-300 px-2 py-1 text-left text-[11px] hover:bg-slate-50"
+                variant="secondary"
+                className="mt-1 block w-full px-2 py-1 text-left text-[11px]"
                 disabled={loading}
                 onClick={() => retryNfce(sale.id)}
               >
                 Forçar emissão NFC-e
-              </button>
+              </Button>
             ) : null}
           </td>
           <td className="py-2">
             {sale.status !== "CANCELED" ? (
               <div className="inline-flex gap-2">
-                <button className="rounded border px-2 py-1 text-xs" onClick={() => editSale(sale)}>
+                <Button variant="secondary" className="px-2 py-1 text-xs" onClick={() => editSale(sale)}>
                   Editar
-                </button>
-                <button className="rounded border border-red-600 px-2 py-1 text-xs text-red-700" onClick={() => cancelSale(sale.id)}>
+                </Button>
+                <Button variant="danger" className="px-2 py-1 text-xs" onClick={() => cancelSale(sale.id)}>
                   Cancelar
-                </button>
+                </Button>
               </div>
             ) : (
               <span className="text-xs text-slate-500">Sem acoes</span>
@@ -220,6 +237,7 @@ export function SalesTableCard({
         </>
       )}
       />
+      </SectionCard>
     </>
   );
 }

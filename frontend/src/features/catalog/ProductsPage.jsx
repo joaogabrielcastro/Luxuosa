@@ -5,6 +5,13 @@ import { useToast } from "../../shared/components/ToastProvider.jsx";
 import { formatCurrencyBRL, maskCurrencyInput, parseCurrencyInput } from "../../shared/formatters.js";
 import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
 import { DataTable } from "../../shared/components/DataTable.jsx";
+import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
+import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
+import { Input } from "../../shared/components/ui/Input.jsx";
+import { Select } from "../../shared/components/ui/Select.jsx";
+import { Textarea } from "../../shared/components/ui/Textarea.jsx";
+import { Button } from "../../shared/components/ui/Button.jsx";
+import { Alert } from "../../shared/components/ui/Alert.jsx";
 
 const AUTO_VARIATION_SIZE = "AUTO";
 const AUTO_VARIATION_COLOR = "ESTOQUE";
@@ -189,16 +196,15 @@ export function ProductsPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">Produtos</h2>
+    <div className="ui-page">
+      <PageHeader title="Produtos" description="Cadastre e mantenha seu catalogo principal." />
+      <SectionCard title={editingId ? "Editar produto" : "Novo produto"}>
         <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs text-slate-600">
             Leitor de codigo de barras: clique no campo, bip no scanner e pressione Enter.
           </p>
           <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-            <input
-              className="w-full rounded-md border p-2"
+            <Input
               placeholder="Aguardando leitura do scanner..."
               value={scannerSku}
               onChange={(e) => setScannerSku(e.target.value)}
@@ -209,39 +215,34 @@ export function ProductsPage() {
                 }
               }}
             />
-            <button type="button" className="rounded-md border px-4 py-2" onClick={applyScannedSku}>
+            <Button type="button" variant="secondary" onClick={applyScannedSku}>
               Aplicar codigo
-            </button>
+            </Button>
           </div>
         </div>
         <form className="mt-3 grid gap-2 md:grid-cols-2" onSubmit={createProduct}>
-          <input
-            className="rounded-md border p-2"
+          <Input
             placeholder="Nome"
             value={form.name}
             onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
           />
-          <input
-            className="rounded-md border p-2"
+          <Input
             placeholder="SKU"
             value={form.sku}
             onChange={(e) => setForm((prev) => ({ ...prev, sku: e.target.value }))}
           />
-          <input
-            className="rounded-md border p-2"
+          <Input
             placeholder="Preco"
             value={form.price}
             onChange={(e) => setForm((prev) => ({ ...prev, price: maskCurrencyInput(e.target.value) }))}
           />
-          <input
-            className="rounded-md border p-2"
+          <Input
             placeholder="Custo"
             value={form.cost}
             onChange={(e) => setForm((prev) => ({ ...prev, cost: maskCurrencyInput(e.target.value) }))}
           />
           <div>
-            <input
-              className="w-full rounded-md border p-2"
+            <Input
               placeholder="Quantidade minima"
               type="number"
               min="0"
@@ -250,8 +251,7 @@ export function ProductsPage() {
             />
           </div>
           <div>
-            <input
-              className="w-full rounded-md border p-2"
+            <Input
               placeholder="Quantidade atual"
               type="number"
               value={currentStockPreview}
@@ -259,8 +259,7 @@ export function ProductsPage() {
               onChange={(e) => setCurrentStockPreview(e.target.value)}
             />
           </div>
-          <select
-            className="rounded-md border p-2"
+          <Select
             value={form.categoryId}
             onChange={(e) => setForm((prev) => ({ ...prev, categoryId: e.target.value }))}
           >
@@ -270,9 +269,8 @@ export function ProductsPage() {
                 {item.name}
               </option>
             ))}
-          </select>
-          <select
-            className="rounded-md border p-2"
+          </Select>
+          <Select
             value={form.brandId}
             onChange={(e) => setForm((prev) => ({ ...prev, brandId: e.target.value }))}
           >
@@ -282,21 +280,21 @@ export function ProductsPage() {
                 {item.name}
               </option>
             ))}
-          </select>
-          <textarea
-            className="rounded-md border p-2 md:col-span-2"
+          </Select>
+          <Textarea
+            className="md:col-span-2"
             placeholder="Descricao"
             value={form.description}
             onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
           />
           <div className="flex gap-2 md:col-span-2">
-            <button className="rounded-md bg-slate-900 px-4 py-2 text-white disabled:opacity-50" disabled={loading}>
+            <Button disabled={loading}>
               {editingId ? "Atualizar produto" : "Salvar produto"}
-            </button>
+            </Button>
             {editingId ? (
-              <button
+              <Button
                 type="button"
-                className="rounded-md border px-4 py-2"
+                variant="secondary"
                 onClick={() => {
                   setEditingId("");
                   setForm(EMPTY_PRODUCT_FORM);
@@ -304,37 +302,38 @@ export function ProductsPage() {
                 }}
               >
                 Cancelar
-              </button>
+              </Button>
             ) : null}
           </div>
         </form>
-        {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
-      </div>
+        {error ? <Alert className="mt-2" variant="danger">{error}</Alert> : null}
+      </SectionCard>
 
-      <div className="rounded-lg bg-white p-4 shadow-sm">
+      <SectionCard title="Lista de produtos">
         <div className="mb-3 flex items-center justify-between text-xs text-slate-600">
           <span>{listLoading ? "Carregando..." : `Mostrando ${products.length} de ${totalProducts} produtos`}</span>
           <div className="flex gap-2">
-            <button
+            <Button
               type="button"
-              className="rounded border px-2 py-1 disabled:opacity-50"
+              variant="secondary"
+              className="px-2 py-1 text-xs"
               disabled={productSkip === 0 || listLoading}
               onClick={() => setProductSkip((v) => Math.max(v - productTake, 0))}
             >
               Anterior
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="rounded border px-2 py-1 disabled:opacity-50"
+              variant="secondary"
+              className="px-2 py-1 text-xs"
               disabled={productSkip + productTake >= totalProducts || listLoading}
               onClick={() => setProductSkip((v) => v + productTake)}
             >
               Proxima
-            </button>
+            </Button>
           </div>
         </div>
         <DataTable
-          title="Lista de produtos"
           data={products}
           columns={[
             { key: "name", label: "Nome" },
@@ -383,17 +382,17 @@ export function ProductsPage() {
               <td className="py-2">{item.variations?.reduce((acc, v) => acc + v.stock, 0)}</td>
               <td className="py-2">{formatCurrencyBRL(item.price)}</td>
               <td className="py-2">
-                <button className="mr-2 rounded border px-2 py-1 text-xs" onClick={() => startEdit(item)}>
+                <Button variant="secondary" className="mr-2 px-2 py-1 text-xs" onClick={() => startEdit(item)}>
                   Editar
-                </button>
-                <button className="rounded border px-2 py-1 text-xs" onClick={() => removeProduct(item.id)}>
+                </Button>
+                <Button variant="danger" className="px-2 py-1 text-xs" onClick={() => removeProduct(item.id)}>
                   Excluir
-                </button>
+                </Button>
               </td>
             </>
           )}
         />
-      </div>
+      </SectionCard>
     </div>
   );
 }

@@ -2,6 +2,11 @@ import { useEffect, useState } from "react";
 import { apiClient } from "../../shared/apiClient.js";
 import { formatDateBR } from "../../shared/formatters.js";
 import { useAuth } from "../auth/useAuth.jsx";
+import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
+import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
+import { StatCard } from "../../shared/components/ui/StatCard.jsx";
+import { Alert } from "../../shared/components/ui/Alert.jsx";
+import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
 
 export function AdminDashboardPage() {
   const { token } = useAuth();
@@ -27,114 +32,99 @@ export function AdminDashboardPage() {
   }, [token]);
 
   return (
-    <div className="space-y-4">
+    <div className="ui-page">
+      <PageHeader title="Dashboard" description="Visao geral operacional da loja." />
       <section className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-        <Card title="Faturamento do mes" value={`R$ ${Number(data.monthlyRevenue).toFixed(2)}`} />
-        <Card title="Vendas do dia" value={String(data.daySales)} />
-        <Card title="Ticket medio" value={`R$ ${Number(data.ticketAverage).toFixed(2)}`} />
-        <Card title="Estoque baixo" value={`${data.lowStockCount} itens`} />
-        <Card title="Ultimas vendas" value={data.lastSales.length ? String(data.lastSales.length) : "Sem dados"} />
+        <StatCard label="Faturamento do mes" value={`R$ ${Number(data.monthlyRevenue).toFixed(2)}`} />
+        <StatCard label="Vendas do dia" value={String(data.daySales)} />
+        <StatCard label="Ticket medio" value={`R$ ${Number(data.ticketAverage).toFixed(2)}`} />
+        <StatCard label="Estoque baixo" value={`${data.lowStockCount} itens`} />
       </section>
 
-      <section className="rounded-lg bg-white p-4 shadow-sm">
-        <h3 className="mb-3 text-base font-semibold">Vendas por atendente</h3>
+      <SectionCard title="Vendas por atendente">
         {data.salesByAttendant.length ? (
           <ul className="space-y-2 text-sm">
             {data.salesByAttendant.map((row) => (
-              <li key={row.userId} className="rounded border p-2">
+              <li key={row.userId} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                 {row.name} - vendas: {row.sales} - total: R$ {Number(row.amount).toFixed(2)}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-500">Sem dados no periodo.</p>
+          <EmptyState description="Sem dados no periodo." />
         )}
-      </section>
+      </SectionCard>
 
-      <section className="rounded-lg bg-white p-4 shadow-sm">
-        <h3 className="mb-3 text-base font-semibold">Lucro por produto</h3>
+      <SectionCard title="Lucro por produto">
         {data.profitByProduct.length ? (
           <ul className="space-y-2 text-sm">
             {data.profitByProduct.slice(0, 8).map((row) => (
-              <li key={row.productId} className="rounded border p-2">
+              <li key={row.productId} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                 {row.name} - receita: R$ {Number(row.revenue).toFixed(2)} - lucro: R$ {Number(row.profit).toFixed(2)}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-500">Sem vendas pagas para calcular lucro.</p>
+          <EmptyState description="Sem vendas pagas para calcular lucro." />
         )}
-      </section>
+      </SectionCard>
 
-      <section className="rounded-lg bg-white p-4 shadow-sm">
-        <h3 className="mb-3 text-base font-semibold">Produtos sem venda ha 30 dias</h3>
+      <SectionCard title="Produtos sem venda ha 30 dias">
         {data.productsWithoutSales.length ? (
           <ul className="space-y-2 text-sm">
             {data.productsWithoutSales.slice(0, 8).map((row) => (
-              <li key={row.productId} className="rounded border p-2">
+              <li key={row.productId} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                 {row.name} - ultima venda: {row.lastSaleAt ? formatDateBR(row.lastSaleAt) : "Nunca"}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-500">Todos os produtos venderam recentemente.</p>
+          <EmptyState description="Todos os produtos venderam recentemente." />
         )}
-      </section>
+      </SectionCard>
 
-      <section className="rounded-lg bg-white p-4 shadow-sm">
-        <h3 className="mb-3 text-base font-semibold">Estoque consolidado</h3>
+      <SectionCard title="Estoque consolidado">
         {data.stockConsolidated.length ? (
           <ul className="space-y-2 text-sm">
             {data.stockConsolidated.slice(0, 8).map((row) => (
-              <li key={row.productId} className="rounded border p-2">
+              <li key={row.productId} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                 {row.name} - estoque total: {row.stock}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-500">Sem produtos cadastrados.</p>
+          <EmptyState description="Sem produtos cadastrados." />
         )}
-      </section>
+      </SectionCard>
 
-      <section className="rounded-lg bg-white p-4 shadow-sm">
-        <h3 className="mb-3 text-base font-semibold">Vendas por periodo (mes atual)</h3>
+      <SectionCard title="Vendas por periodo (mes atual)">
         {data.salesByPeriod.length ? (
           <ul className="space-y-2 text-sm">
             {data.salesByPeriod.map((row) => (
-              <li key={row.date} className="rounded border p-2">
+              <li key={row.date} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                 {formatDateBR(row.date)} - vendas: {row.count} - total: R$ {Number(row.amount).toFixed(2)}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-500">Sem vendas no mes atual.</p>
+          <EmptyState description="Sem vendas no mes atual." />
         )}
-      </section>
+      </SectionCard>
 
-      <section className="rounded-lg bg-white p-4 shadow-sm">
-        <h3 className="mb-3 text-base font-semibold">Produtos com estoque baixo</h3>
+      <SectionCard title="Produtos com estoque baixo">
         {data.lowStockItems.length ? (
           <ul className="space-y-2 text-sm">
             {data.lowStockItems.map((item) => (
-              <li key={item.id} className="rounded border p-2">
+              <li key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                 {item.name} - atual: {item.currentStock} / minimo: {item.minStock}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-slate-500">Sem alertas no momento.</p>
+          <EmptyState description="Sem alertas no momento." />
         )}
-        {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
-      </section>
+      </SectionCard>
+      {error ? <Alert variant="danger">{error}</Alert> : null}
     </div>
-  );
-}
-
-function Card({ title, value }) {
-  return (
-    <article className="rounded-lg bg-white p-4 shadow">
-      <p className="text-sm text-slate-500">{title}</p>
-      <strong className="text-lg">{value}</strong>
-    </article>
   );
 }

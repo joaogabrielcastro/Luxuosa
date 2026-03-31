@@ -2,6 +2,13 @@ import { useEffect, useState } from "react";
 import { apiClient } from "../../shared/apiClient.js";
 import { useAuth } from "../auth/useAuth.jsx";
 import { formatCurrencyBRL, formatDateBR } from "../../shared/formatters.js";
+import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
+import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
+import { Input } from "../../shared/components/ui/Input.jsx";
+import { Button } from "../../shared/components/ui/Button.jsx";
+import { StatCard } from "../../shared/components/ui/StatCard.jsx";
+import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
+import { Alert } from "../../shared/components/ui/Alert.jsx";
 
 function defaultFromTo() {
   const d = new Date();
@@ -41,14 +48,13 @@ export function ReportsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">Vendas por periodo</h2>
+    <div className="ui-page">
+      <PageHeader title="Relatorios" description="Acompanhe vendas e alertas de estoque." />
+      <SectionCard title="Vendas por periodo">
         <form className="mt-3 flex flex-wrap items-end gap-3" onSubmit={applyRange}>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-slate-600">De</span>
-            <input
-              className="rounded border p-2"
+            <Input
               type="date"
               value={from}
               onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
@@ -56,27 +62,20 @@ export function ReportsPage() {
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-slate-600">Ate</span>
-            <input
-              className="rounded border p-2"
+            <Input
               type="date"
               value={to}
               onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
             />
           </label>
-          <button type="submit" className="rounded bg-slate-900 px-4 py-2 text-sm text-white">
+          <Button type="submit" className="text-sm">
             Atualizar
-          </button>
+          </Button>
         </form>
         {salesReport ? (
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <article className="rounded border p-3">
-              <p className="text-xs text-slate-500">Vendas (pagas)</p>
-              <p className="text-xl font-semibold">{salesReport.saleCount}</p>
-            </article>
-            <article className="rounded border p-3">
-              <p className="text-xs text-slate-500">Total no periodo</p>
-              <p className="text-xl font-semibold">{formatCurrencyBRL(salesReport.totalAmount)}</p>
-            </article>
+            <StatCard label="Vendas (pagas)" value={salesReport.saleCount} />
+            <StatCard label="Total no periodo" value={formatCurrencyBRL(salesReport.totalAmount)} />
           </div>
         ) : null}
         {salesReport?.byDay?.length ? (
@@ -94,12 +93,11 @@ export function ReportsPage() {
             </ul>
           </div>
         ) : salesReport && !salesReport.saleCount ? (
-          <p className="mt-3 text-sm text-slate-500">Nenhuma venda paga neste intervalo.</p>
+          <EmptyState description="Nenhuma venda paga neste intervalo." />
         ) : null}
-      </section>
+      </SectionCard>
 
-      <section className="rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">Estoque abaixo do minimo</h2>
+      <SectionCard title="Estoque abaixo do minimo">
         <p className="mt-1 text-sm text-slate-600">
           Soma das variacoes por produto comparada ao estoque minimo cadastrado no produto.
         </p>
@@ -117,11 +115,11 @@ export function ReportsPage() {
             ))}
           </ul>
         ) : (
-          <p className="mt-3 text-sm text-slate-500">Nenhum produto abaixo do minimo no momento.</p>
+          <EmptyState description="Nenhum produto abaixo do minimo no momento." />
         )}
-      </section>
+      </SectionCard>
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <Alert variant="danger">{error}</Alert> : null}
     </div>
   );
 }

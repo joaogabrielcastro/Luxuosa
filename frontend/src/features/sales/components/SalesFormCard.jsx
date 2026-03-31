@@ -1,4 +1,10 @@
 import { brandIdsForCategory, variationsForCategoryAndBrand } from "../sales.utils.js";
+import { SectionCard } from "../../../shared/components/ui/SectionCard.jsx";
+import { Alert } from "../../../shared/components/ui/Alert.jsx";
+import { Input } from "../../../shared/components/ui/Input.jsx";
+import { Select } from "../../../shared/components/ui/Select.jsx";
+import { Button } from "../../../shared/components/ui/Button.jsx";
+import { formatCurrencyBRL, parseCurrencyInput } from "../../../shared/formatters.js";
 
 export function SalesFormCard({
   editingSaleId,
@@ -18,14 +24,21 @@ export function SalesFormCard({
   loading,
   cancelEdit
 }) {
+  const subtotal = items.reduce((acc, item) => {
+    const qty = Number(item.quantity || 0);
+    const unit = parseCurrencyInput(item.unitPrice);
+    if (!Number.isFinite(qty) || qty <= 0) return acc;
+    return acc + qty * unit;
+  }, 0);
+  const discountValue = Number(form.discountValue || 0);
+  const discountPercentValue = Number(form.discountPercent || 0);
+  const discountFromPercent = subtotal * (discountPercentValue / 100);
+  const totalDiscount = Math.max(0, discountValue + discountFromPercent);
+  const total = Math.max(0, subtotal - totalDiscount);
+
   return (
-    <div className="rounded-lg bg-white p-4 shadow-sm">
-      <h2 className="text-lg font-semibold">{editingSaleId ? "Editar venda" : "Nova venda"}</h2>
-      <p className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-        <strong>NFC-e</strong> em <strong>consumidor final</strong> (sem cliente na nota). A lista atualiza sozinha
-        enquanto a nota estiver pendente; em caso de erro use <strong>Tentar novamente</strong> ou{" "}
-        <strong>Baixar PDF</strong> quando autorizada.
-      </p>
+    <SectionCard title={editingSaleId ? "Editar venda" : "Nova venda"}>
+
       <form className="mt-4 space-y-6" onSubmit={createSale}>
         <div className="space-y-3">
           <p className="text-sm font-medium text-slate-700">Pagamento</p>
@@ -36,8 +49,7 @@ export function SalesFormCard({
           <div className="grid gap-3 md:grid-cols-2">
             <label className="flex flex-col gap-1 md:max-w-xs">
               <span className="text-xs font-medium text-slate-600">Forma de pagamento</span>
-              <select
-                className="rounded border p-2"
+              <Select
                 value={form.paymentMethod}
                 onChange={(e) => {
                   const paymentMethod = e.target.value;
@@ -53,14 +65,13 @@ export function SalesFormCard({
                 <option value="CREDIT_CARD">Cartao credito</option>
                 <option value="DEBIT_CARD">Cartao debito</option>
                 <option value="INSTALLMENT">Parcelado</option>
-              </select>
+              </Select>
             </label>
           </div>
           {form.paymentMethod === "INSTALLMENT" ? (
             <label className="flex max-w-xs flex-col gap-1">
               <span className="text-xs font-medium text-slate-600">Numero de parcelas</span>
-              <input
-                className="rounded border p-2"
+              <Input
                 type="number"
                 min={2}
                 placeholder="Ex.: 3"
@@ -77,8 +88,7 @@ export function SalesFormCard({
           <div className="grid gap-3 md:grid-cols-2">
             <label className="flex flex-col gap-1">
               <span className="text-xs font-medium text-slate-600">Desconto em reais (R$)</span>
-              <input
-                className="rounded border p-2"
+              <Input
                 type="number"
                 min="0"
                 step="0.01"
@@ -89,8 +99,7 @@ export function SalesFormCard({
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-xs font-medium text-slate-600">Desconto em porcentagem (%)</span>
-              <input
-                className="rounded border p-2"
+              <Input
                 type="number"
                 min="0"
                 max="100"
@@ -110,8 +119,7 @@ export function SalesFormCard({
               Leitura rapida por codigo: bip no scanner e Enter para adicionar automaticamente.
             </p>
             <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-              <input
-                className="w-full rounded border border-slate-300 bg-white p-2"
+              <Input
                 placeholder="Codigo de barras / SKU"
                 value={barcodeInput}
                 onChange={(e) => setBarcodeInput(e.target.value)}
@@ -122,9 +130,9 @@ export function SalesFormCard({
                   }
                 }}
               />
-              <button type="button" className="rounded border px-3 py-2 text-sm" onClick={addItemByBarcode}>
+              <Button type="button" variant="secondary" className="text-sm" onClick={addItemByBarcode}>
                 Adicionar por codigo
-              </button>
+              </Button>
             </div>
           </div>
           <p className="text-xs text-slate-500">
@@ -144,8 +152,7 @@ export function SalesFormCard({
                 <div className="grid gap-3 md:grid-cols-3">
                   <label className="flex flex-col gap-1">
                     <span className="text-xs font-medium text-slate-600">Categoria</span>
-                    <select
-                      className="rounded border border-slate-300 bg-white p-2"
+                    <Select
                       value={item.categoryId}
                       onChange={(e) => updateItem(index, "categoryId", e.target.value)}
                     >
@@ -155,12 +162,11 @@ export function SalesFormCard({
                           {cat.name}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </label>
                   <label className="flex flex-col gap-1">
                     <span className="text-xs font-medium text-slate-600">Marca</span>
-                    <select
-                      className="rounded border border-slate-300 bg-white p-2"
+                    <Select
                       disabled={!item.categoryId}
                       value={item.brandId}
                       onChange={(e) => updateItem(index, "brandId", e.target.value)}
@@ -173,12 +179,11 @@ export function SalesFormCard({
                           {b.name}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </label>
                   <label className="flex flex-col gap-1">
                     <span className="text-xs font-medium text-slate-600">Produto e variacao</span>
-                    <select
-                      className="rounded border border-slate-300 bg-white p-2"
+                    <Select
                       disabled={!item.categoryId || !item.brandId}
                       value={item.productVariationId}
                       onChange={(e) => updateItem(index, "productVariationId", e.target.value)}
@@ -195,14 +200,13 @@ export function SalesFormCard({
                           {variation.product?.name} - {variation.size}/{variation.color} (estoque: {variation.stock})
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </label>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className="flex flex-col gap-1">
                     <span className="text-xs font-medium text-slate-600">Quantidade</span>
-                    <input
-                      className="rounded border border-slate-300 bg-white p-2"
+                    <Input
                       type="number"
                       min="1"
                       step="1"
@@ -213,8 +217,7 @@ export function SalesFormCard({
                   </label>
                   <label className="flex flex-col gap-1">
                     <span className="text-xs font-medium text-slate-600">Preco unitario (R$)</span>
-                    <input
-                      className="rounded border border-slate-300 bg-white p-2"
+                    <Input
                       inputMode="decimal"
                       placeholder="Ex.: 59,90"
                       value={item.unitPrice}
@@ -228,20 +231,34 @@ export function SalesFormCard({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="rounded border px-3 py-2 text-sm" onClick={addItem}>
+          <Button type="button" variant="secondary" className="text-sm" onClick={addItem}>
             Adicionar item
-          </button>
-          <button className="rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50" disabled={loading}>
+          </Button>
+          <Button className="text-sm" disabled={loading}>
             {editingSaleId ? "Salvar edicao" : "Finalizar venda"}
-          </button>
+          </Button>
           {editingSaleId ? (
-            <button type="button" className="rounded border px-3 py-2 text-sm" onClick={cancelEdit}>
+            <Button type="button" variant="secondary" className="text-sm" onClick={cancelEdit}>
               Cancelar edicao
-            </button>
+            </Button>
           ) : null}
         </div>
+        <div className="grid gap-2 rounded-lg border border-indigo-100 bg-indigo-50/70 p-3 text-sm sm:grid-cols-3">
+          <div>
+            <p className="text-xs font-medium text-indigo-700">Subtotal</p>
+            <p className="text-base font-semibold text-indigo-900">{formatCurrencyBRL(subtotal)}</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-indigo-700">Descontos</p>
+            <p className="text-base font-semibold text-indigo-900">- {formatCurrencyBRL(totalDiscount)}</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-indigo-700">Total da compra</p>
+            <p className="text-lg font-bold text-indigo-900">{formatCurrencyBRL(total)}</p>
+          </div>
+        </div>
       </form>
-      {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
-    </div>
+      {error ? <Alert className="mt-3" variant="danger">{error}</Alert> : null}
+    </SectionCard>
   );
 }

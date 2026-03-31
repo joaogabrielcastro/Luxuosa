@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { Button } from "./ui/Button.jsx";
 
 const ToastContext = createContext(null);
 
@@ -29,15 +30,17 @@ export function ToastProvider({ children }) {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`pointer-events-auto rounded-md px-3 py-2 text-sm text-white shadow ${
-              toast.type === "error" ? "bg-red-600" : "bg-emerald-600"
+            className={`pointer-events-auto rounded-xl border px-3 py-2 text-sm shadow-lg backdrop-blur ${
+              toast.type === "error"
+                ? "border-red-200 bg-red-50 text-red-900"
+                : "border-emerald-200 bg-emerald-50 text-emerald-900"
             }`}
           >
             <div className="flex items-center justify-between gap-3">
               <span>{toast.message}</span>
-              <button className="text-xs opacity-90" onClick={() => removeToast(toast.id)}>
+              <Button variant="ghost" className="px-1 py-0.5 text-xs" onClick={() => removeToast(toast.id)}>
                 Fechar
-              </button>
+              </Button>
             </div>
           </div>
         ))}

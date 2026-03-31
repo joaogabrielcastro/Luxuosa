@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { Input } from "./ui/Input.jsx";
+import { Select } from "./ui/Select.jsx";
+import { Button } from "./ui/Button.jsx";
+import { EmptyState } from "./ui/EmptyState.jsx";
 
 export function DataTable({
   title,
@@ -40,8 +44,8 @@ export function DataTable({
   const paginated = filteredData.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
-    <div className="rounded-lg bg-white p-4 shadow-sm">
-      {title ? <h3 className="mb-2 font-semibold">{title}</h3> : null}
+    <div className="ui-surface p-4">
+      {title ? <h3 className="mb-3 font-semibold">{title}</h3> : null}
 
       {search || filters.length ? (
         <div
@@ -50,17 +54,17 @@ export function DataTable({
           }`}
         >
           {search ? (
-            <input
-              className="rounded border p-2 text-sm"
+            <Input
+              className="text-sm"
               placeholder={search.placeholder || "Buscar..."}
               value={search.query}
               onChange={(event) => search.onQueryChange(event.target.value)}
             />
           ) : null}
           {filters.map((filter) => (
-            <select
+            <Select
               key={filter.id}
-              className="rounded border p-2 text-sm"
+              className="text-sm"
               value={filter.value}
               onChange={(event) => filter.onChange(event.target.value)}
             >
@@ -69,17 +73,17 @@ export function DataTable({
                   {option.label}
                 </option>
               ))}
-            </select>
+            </Select>
           ))}
         </div>
       ) : null}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[560px] text-left text-sm">
+        <table className="w-full min-w-[620px] text-left text-sm">
           <thead>
-            <tr className="border-b">
+            <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               {columns.map((column) => (
-                <th key={column.key} className={`py-2 ${column.className || ""}`}>
+                <th key={column.key} className={`py-2.5 ${column.className || ""}`}>
                   {column.label}
                 </th>
               ))}
@@ -87,14 +91,14 @@ export function DataTable({
           </thead>
           <tbody>
             {paginated.map((row) => (
-              <tr key={getRowKey(row)} className="border-b">
+              <tr key={getRowKey(row)} className="border-b border-slate-100 hover:bg-slate-50">
                 {renderCells(row)}
               </tr>
             ))}
             {!paginated.length ? (
               <tr>
-                <td className="py-3 text-slate-500" colSpan={columns.length}>
-                  {emptyMessage}
+                <td className="py-5 text-slate-500" colSpan={columns.length}>
+                  <EmptyState title="Nada para mostrar" description={emptyMessage} />
                 </td>
               </tr>
             ) : null}
@@ -107,12 +111,22 @@ export function DataTable({
           Pagina {currentPage} de {totalPages}
         </span>
         <div className="flex gap-2">
-          <button className="rounded border px-2 py-1 disabled:opacity-50" disabled={currentPage <= 1} onClick={() => setPage((p) => p - 1)}>
+          <Button
+            variant="secondary"
+            className="px-2 py-1 text-xs"
+            disabled={currentPage <= 1}
+            onClick={() => setPage((p) => p - 1)}
+          >
             Anterior
-          </button>
-          <button className="rounded border px-2 py-1 disabled:opacity-50" disabled={currentPage >= totalPages} onClick={() => setPage((p) => p + 1)}>
+          </Button>
+          <Button
+            variant="secondary"
+            className="px-2 py-1 text-xs"
+            disabled={currentPage >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
             Proxima
-          </button>
+          </Button>
         </div>
       </div>
     </div>

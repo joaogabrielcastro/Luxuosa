@@ -3,6 +3,12 @@ import { apiClient } from "../../shared/apiClient.js";
 import { useAuth } from "../auth/useAuth.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
 import { formatDateTimeBR } from "../../shared/formatters.js";
+import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
+import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
+import { Input } from "../../shared/components/ui/Input.jsx";
+import { Select } from "../../shared/components/ui/Select.jsx";
+import { Button } from "../../shared/components/ui/Button.jsx";
+import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
 
 export function StockMovementsPage() {
   const { token } = useAuth();
@@ -80,18 +86,17 @@ export function StockMovementsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">Nova movimentacao</h2>
-        <p className="mt-1 text-sm text-slate-600">
+    <div className="ui-page">
+      <PageHeader title="Movimentacoes de estoque" description="Ajustes manuais e historico operacional." />
+      <SectionCard title="Nova movimentacao">
+        <p className="text-sm text-slate-600">
           Ajuste manual de estoque (entrada de mercadoria ou saida para uso interno). Vendas continuam baixando
           estoque automaticamente.
         </p>
         <form className="mt-4 grid max-w-xl gap-3" onSubmit={handleSubmit}>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-slate-600">Produto / variacao</span>
-            <select
-              className="rounded border p-2"
+            <Select
               value={form.productVariationId}
               onChange={(e) => setForm((p) => ({ ...p, productVariationId: e.target.value }))}
             >
@@ -101,24 +106,22 @@ export function StockMovementsPage() {
                   {v.product?.name} — {v.size}/{v.color} (atual: {v.stock})
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1">
               <span className="text-xs font-medium text-slate-600">Tipo</span>
-              <select
-                className="rounded border p-2"
+              <Select
                 value={form.type}
                 onChange={(e) => setForm((p) => ({ ...p, type: e.target.value }))}
               >
                 <option value="ENTRY">Entrada</option>
                 <option value="EXIT">Saida</option>
-              </select>
+              </Select>
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-xs font-medium text-slate-600">Quantidade</span>
-              <input
-                className="rounded border p-2"
+              <Input
                 type="number"
                 min={1}
                 step={1}
@@ -127,37 +130,38 @@ export function StockMovementsPage() {
               />
             </label>
           </div>
-          <button
+          <Button
             type="submit"
-            className="max-w-xs rounded bg-slate-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+            className="max-w-xs text-sm"
             disabled={loading}
           >
             {loading ? "Salvando..." : "Registrar"}
-          </button>
+          </Button>
         </form>
-      </section>
+      </SectionCard>
 
-      <section className="rounded-lg bg-white p-4 shadow-sm">
-        <h3 className="mb-3 text-base font-semibold">Historico recente</h3>
+      <SectionCard title="Historico recente">
         <div className="mb-3 flex items-center justify-between text-xs text-slate-600">
           <span>{listLoading ? "Carregando..." : `Mostrando ${movements.length} movimentacoes`}</span>
           <div className="flex gap-2">
-            <button
+            <Button
               type="button"
-              className="rounded border px-2 py-1 disabled:opacity-50"
+              variant="secondary"
+              className="px-2 py-1 text-xs"
               disabled={listSkip === 0 || listLoading}
               onClick={() => setListSkip((v) => Math.max(v - pageSize, 0))}
             >
               Anterior
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="rounded border px-2 py-1 disabled:opacity-50"
+              variant="secondary"
+              className="px-2 py-1 text-xs"
               disabled={movements.length < pageSize || listLoading}
               onClick={() => setListSkip((v) => v + pageSize)}
             >
               Proxima
-            </button>
+            </Button>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -174,7 +178,7 @@ export function StockMovementsPage() {
               {movements.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="py-4 text-slate-500">
-                    Nenhuma movimentacao manual ainda.
+                    <EmptyState description="Nenhuma movimentacao manual ainda." />
                   </td>
                 </tr>
               ) : (
@@ -192,7 +196,7 @@ export function StockMovementsPage() {
             </tbody>
           </table>
         </div>
-      </section>
+      </SectionCard>
     </div>
   );
 }

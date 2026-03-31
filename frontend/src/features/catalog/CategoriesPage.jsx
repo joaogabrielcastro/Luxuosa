@@ -4,6 +4,11 @@ import { useAuth } from "../auth/useAuth.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
 import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
 import { DataTable } from "../../shared/components/DataTable.jsx";
+import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
+import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
+import { Input } from "../../shared/components/ui/Input.jsx";
+import { Button } from "../../shared/components/ui/Button.jsx";
+import { Alert } from "../../shared/components/ui/Alert.jsx";
 
 export function CategoriesPage() {
   const { token } = useAuth();
@@ -65,34 +70,33 @@ export function CategoriesPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">Categorias</h2>
+    <div className="ui-page">
+      <PageHeader title="Categorias" description="Organize o catalogo por grupos principais." />
+      <SectionCard title={editingId ? "Editar categoria" : "Nova categoria"}>
         <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={createCategory}>
-          <input
-            className="w-full rounded-md border p-2"
+          <Input
             placeholder="Nome da categoria"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          <button className="rounded-md bg-slate-900 px-4 py-2 text-white disabled:opacity-60" disabled={loading}>
+          <Button disabled={loading}>
             {editingId ? "Atualizar" : "Salvar"}
-          </button>
+          </Button>
           {editingId ? (
-            <button
+            <Button
               type="button"
-              className="rounded-md border px-4 py-2"
+              variant="secondary"
               onClick={() => {
                 setEditingId("");
                 setName("");
               }}
             >
               Cancelar
-            </button>
+            </Button>
           ) : null}
         </form>
-        {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
-      </div>
+        {error ? <Alert className="mt-3" variant="danger">{error}</Alert> : null}
+      </SectionCard>
 
       <DataTable
         title="Lista de categorias"

@@ -9,11 +9,8 @@ export function AuthProvider({ children }) {
     return raw ? JSON.parse(raw) : null;
   });
 
-  async function login(email, password, tenantCnpj) {
+  async function login(email, password) {
     const body = { email, password };
-    if (tenantCnpj && String(tenantCnpj).trim()) {
-      body.tenantCnpj = String(tenantCnpj).trim();
-    }
     const data = await apiClient("/auth/login", {
       method: "POST",
       body

@@ -4,6 +4,12 @@ import { useAuth } from "../auth/useAuth.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
 import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
 import { DataTable } from "../../shared/components/DataTable.jsx";
+import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
+import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
+import { Input } from "../../shared/components/ui/Input.jsx";
+import { Select } from "../../shared/components/ui/Select.jsx";
+import { Button } from "../../shared/components/ui/Button.jsx";
+import { Alert } from "../../shared/components/ui/Alert.jsx";
 
 const EMPTY_VARIATION_FORM = { productId: "", size: "", color: "", stock: 0 };
 
@@ -146,12 +152,11 @@ export function VariationsPage() {
   );
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">Variacoes</h2>
+    <div className="ui-page">
+      <PageHeader title="Variacoes" description="Controle tamanho, cor e estoque por item." />
+      <SectionCard title={editingId ? "Editar variacao" : "Nova variacao"}>
         <form className="mt-3 grid gap-2 md:grid-cols-2" onSubmit={createVariation}>
-          <select
-            className="rounded-md border p-2"
+          <Select
             value={formCategoryId}
             onChange={(e) => {
               const nextCategoryId = e.target.value;
@@ -166,9 +171,8 @@ export function VariationsPage() {
                 {item.name}
               </option>
             ))}
-          </select>
-          <select
-            className="rounded-md border p-2"
+          </Select>
+          <Select
             value={formBrandId}
             disabled={!formCategoryId}
             onChange={(e) => {
@@ -182,9 +186,9 @@ export function VariationsPage() {
                 {item.name}
               </option>
             ))}
-          </select>
-          <select
-            className="rounded-md border p-2 md:col-span-2"
+          </Select>
+          <Select
+            className="md:col-span-2"
             value={form.productId}
             disabled={!formCategoryId || !formBrandId}
             onChange={(e) => setForm((prev) => ({ ...prev, productId: e.target.value }))}
@@ -201,34 +205,32 @@ export function VariationsPage() {
                 {item.name} ({item.sku})
               </option>
             ))}
-          </select>
-          <input
-            className="rounded-md border p-2"
+          </Select>
+          <Input
             placeholder="Tamanho"
             value={form.size}
             onChange={(e) => setForm((prev) => ({ ...prev, size: e.target.value }))}
           />
-          <input
-            className="rounded-md border p-2"
+          <Input
             placeholder="Cor"
             value={form.color}
             onChange={(e) => setForm((prev) => ({ ...prev, color: e.target.value }))}
           />
-          <input
-            className="rounded-md border p-2 md:col-span-2"
+          <Input
+            className="md:col-span-2"
             placeholder="Estoque"
             type="number"
             value={form.stock}
             onChange={(e) => setForm((prev) => ({ ...prev, stock: e.target.value }))}
           />
           <div className="flex gap-2 md:col-span-2">
-            <button className="rounded-md bg-slate-900 px-4 py-2 text-white disabled:opacity-50" disabled={loading}>
+            <Button disabled={loading}>
               {editingId ? "Atualizar variacao" : "Salvar variacao"}
-            </button>
+            </Button>
             {editingId ? (
-              <button
+              <Button
                 type="button"
-                className="rounded-md border px-4 py-2"
+                variant="secondary"
                 onClick={() => {
                   setEditingId("");
                   setFormCategoryId("");
@@ -237,15 +239,15 @@ export function VariationsPage() {
                 }}
               >
                 Cancelar
-              </button>
+              </Button>
             ) : null}
           </div>
         </form>
-        {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
-      </div>
+        {error ? <Alert className="mt-2" variant="danger">{error}</Alert> : null}
+      </SectionCard>
 
+      <SectionCard title="Lista de variacoes">
       <DataTable
-        title="Lista de variacoes"
         data={variations}
         columns={[
           { key: "product", label: "Produto" },
@@ -306,35 +308,38 @@ export function VariationsPage() {
             <td className="py-2">{item.color}</td>
             <td className="py-2">{item.stock}</td>
             <td className="py-2">
-              <button className="mr-2 rounded border px-2 py-1 text-xs" onClick={() => startEdit(item)}>
+              <Button variant="secondary" className="mr-2 px-2 py-1 text-xs" onClick={() => startEdit(item)}>
                 Editar
-              </button>
-              <button className="rounded border px-2 py-1 text-xs" onClick={() => removeVariation(item.id)}>
+              </Button>
+              <Button variant="danger" className="px-2 py-1 text-xs" onClick={() => removeVariation(item.id)}>
                 Excluir
-              </button>
+              </Button>
             </td>
           </>
         )}
       />
+      </SectionCard>
       <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-xs text-slate-600 shadow-sm">
         <span>{listLoading ? "Carregando..." : `Mostrando ${variations.length} de ${totalVariations} variacoes`}</span>
         <div className="flex gap-2">
-          <button
+          <Button
             type="button"
-            className="rounded border px-2 py-1 disabled:opacity-50"
+            variant="secondary"
+            className="px-2 py-1 text-xs"
             disabled={variationSkip === 0 || listLoading}
             onClick={() => setVariationSkip((v) => Math.max(v - variationTake, 0))}
           >
             Anterior
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="rounded border px-2 py-1 disabled:opacity-50"
+            variant="secondary"
+            className="px-2 py-1 text-xs"
             disabled={variationSkip + variationTake >= totalVariations || listLoading}
             onClick={() => setVariationSkip((v) => v + variationTake)}
           >
             Proxima
-          </button>
+          </Button>
         </div>
       </div>
     </div>
