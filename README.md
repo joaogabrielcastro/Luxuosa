@@ -199,7 +199,13 @@ Resetar volume do banco:
 docker compose down -v
 ```
 
-O backend executa `prisma generate`, `prisma migrate deploy` e `npm run dev` ao iniciar o container.
+O `backend/Dockerfile` sobe com `prisma generate` e **`npm run start:prod`** (que corre `migrate deploy` antes de `node src/server.js`).
+
+No **Coolify / Nixpacks**, defina o **Start Command** do serviço API, por exemplo:
+
+`npx prisma generate && npm run start:prod`
+
+(As variáveis `DATABASE_URL` e `PORT` devem estar disponíveis no runtime.) Para **CORS** restrito à origem do teu front em producao, adicione `CORS_ORIGINS=https://teu-dominio-front.com` no backend (lista separada por virgulas se houver varios).
 
 ## Antes de commitar (checagem rápida)
 
@@ -215,6 +221,19 @@ Isso gera o build do frontend e valida o carregamento das rotas do backend. Com 
 
 1. Suba um PostgreSQL e defina `DATABASE_URL` e `JWT_SECRET` em `backend/.env`.
 2. Backend: `cd backend && npm install && npx prisma generate && npx prisma migrate deploy && npm run prisma:seed && npm run dev` (porta padrão 3001). Se o banco foi criado só com `db push` e aparecer erro P3005, veja baseline em `ARCHITECTURE.md` ou use `npx prisma db push` uma vez para alinhar o schema.
+
+### Banco de producao vazio (`User` / tabelas inexistentes, P3018)
+
+As pastas `prisma/migrations` deste repo **nao** incluem uma migração inicial que cria todo o schema; num Postgres **novo**, `migrate deploy` sozinho pode falhar a meio. Nesse caso:
+
+1. Desbloquear a migração em falha:  
+   `npx prisma migrate resolve --rolled-back <nome_da_migracao_que_falhou>`
+2. Aplicar o schema completo **sem** correr o SQL antigo das migrações:  
+   `npx prisma db push`
+3. Marcar como já aplicadas as migrações que **ainda não** constam como concluídas (uma linha por nome de pasta em `prisma/migrations`):  
+   `npx prisma migrate resolve --applied <nome_da_migracao>`
+
+Não voltes a correr `migrate deploy` depois do `db push` até o historico estar alinhado; caso contrário o SQL pode tentar criar tabelas/indices que o `db push` já criou. Depois de todos os `resolve --applied`, `npx prisma migrate status` deve mostrar tudo aplicado. Em seguida: `npm run prisma:seed` se quiser dados iniciais.
 
 ### Prisma (pastas e comandos)
 

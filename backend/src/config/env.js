@@ -6,11 +6,20 @@ function trimEnv(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/** Origens permitidas no CORS (lista separada por virgula). Vazio = qualquer origem (comportamento anterior). */
+function parseCorsOrigins(raw) {
+  return trimEnv(raw)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export const env = {
   port: Number(process.env.PORT || 3001),
   databaseUrl: process.env.DATABASE_URL || "",
   jwtSecret: process.env.JWT_SECRET || "",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "1d",
+  corsOrigins: parseCorsOrigins(process.env.CORS_ORIGINS),
   nuvemFiscal: {
     clientId: trimEnv(process.env.NUVEM_FISCAL_CLIENT_ID),
     clientSecret: trimEnv(process.env.NUVEM_FISCAL_CLIENT_SECRET),

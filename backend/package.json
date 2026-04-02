@@ -10,6 +10,7 @@
     "check:backend": "node -e \"import('./src/routes.js').then(()=>console.log('backend routes ok')).catch(e=>{console.error(e);process.exit(1)})\"",
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
+    "start:prod": "npx prisma migrate deploy && node src/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",

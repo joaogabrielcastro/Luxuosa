@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { apiClient } from "../../shared/apiClient.js";
 import { formatCurrencyBRL, formatDateBR } from "../../shared/formatters.js";
 import { useAuth } from "../auth/useAuth.jsx";
+import { useToast } from "../../shared/components/ToastProvider.jsx";
 import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
 import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
 import { StatCard } from "../../shared/components/ui/StatCard.jsx";
 import { Alert } from "../../shared/components/ui/Alert.jsx";
 import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
-import { AlertTriangle, DollarSign, ShoppingCart, Wallet } from "lucide-react";
+import { Button } from "../../shared/components/ui/Button.jsx";
+import { AlertTriangle, DollarSign, Plug, ShoppingCart, Wallet } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -21,7 +23,10 @@ import {
 } from "recharts";
 
 export function AdminDashboardPage() {
-  const { token } = useAuth();
+  const { token, user, tenant } = useAuth();
+  const { showToast } = useToast();
+  const [nfceConn, setNfceConn] = useState(null);
+  const [nfceConnLoading, setNfceConnLoading] = useState(false);
   const [data, setData] = useState({
     monthlyRevenue: 0,
     daySales: 0,
@@ -45,6 +50,25 @@ export function AdminDashboardPage() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [token]);
+
+  async function runNfceConnectionTest() {
+    setNfceConnLoading(true);
+    setNfceConn(null);
+    try {
+      const data = await apiClient("/invoices/connection-test", { token });
+      setNfceConn({ ok: true, data });
+      showToast(`Nuvem Fiscal OK (${data?.environment || "—"}).`);
+    } catch (err) {
+      setNfceConn({
+        ok: false,
+        message: err.message,
+        details: err.details
+      });
+      showToast(err.message, "error");
+    } finally {
+      setNfceConnLoading(false);
+    }
+  }
 
   const salesByAttendantData = useMemo(
     () =>
@@ -76,6 +100,51 @@ export function AdminDashboardPage() {
   return (
     <div className="ui-page">
       <PageHeader title="Dashboard" description="Visao geral operacional da loja." />
+      {user?.type === "ADMIN" ? (
+        <div className="mb-4">
+        <SectionCard title="Fiscal — Nuvem Fiscal">
+          <p className="text-xs text-slate-600">
+            Testa OAuth e listagem de empresas na API da Nuvem (mesma rota que{" "}
+            <code className="rounded bg-slate-100 px-1">GET /invoices/connection-test</code>). Depois finalize uma venda
+            de teste na pagina Vendas (com NFC-e ligada para o tenant, se aplicavel) e confira o job na lista de vendas.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              className="gap-2 text-sm"
+              disabled={nfceConnLoading}
+              onClick={runNfceConnectionTest}
+            >
+              <Plug className="h-4 w-4" />
+              {nfceConnLoading ? "Testando..." : "Testar conexao Nuvem Fiscal"}
+            </Button>
+            {tenant?.enableNfceEmission ? (
+              <span className="text-xs text-emerald-700">NFC-e habilitada para este tenant.</span>
+            ) : (
+              <span className="text-xs text-slate-500">NFC-e desligada nesta loja (vendas sem fila de nota).</span>
+            )}
+          </div>
+          {nfceConn?.ok ? (
+            <pre className="mt-3 max-h-48 overflow-auto rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
+              {JSON.stringify(nfceConn.data, null, 2)}
+            </pre>
+          ) : null}
+          {nfceConn && !nfceConn.ok ? (
+            <Alert className="mt-3" variant="danger">
+              {nfceConn.message}
+              {nfceConn.details ? (
+                <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs">
+                  {typeof nfceConn.details === "string"
+                    ? nfceConn.details
+                    : JSON.stringify(nfceConn.details, null, 2)}
+                </pre>
+              ) : null}
+            </Alert>
+          ) : null}
+        </SectionCard>
+        </div>
+      ) : null}
       <section className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Faturamento do mes"
