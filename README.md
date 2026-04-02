@@ -207,6 +207,8 @@ No **Coolify / Nixpacks**, defina o **Start Command** do serviço API, por exemp
 
 (As variáveis `DATABASE_URL` e `PORT` devem estar disponíveis no runtime.) Para **CORS** restrito à origem do teu front em producao, adicione `CORS_ORIGINS=https://teu-dominio-front.com` no backend (lista separada por virgulas se houver varios).
 
+No **frontend** em producao (Coolify ou Docker deste repo): defina **VITE_API_URL** no **buildtime** (ex.: `https://api-luxuosa.jwsoftware.com.br/api/v1`), depois `npm run build` e start com `npm run start` ou o `CMD` do `frontend/Dockerfile` — o preview escuta **3000** por defeito (`PORT` pode sobrescrever).
+
 ## Antes de commitar (checagem rápida)
 
 Na raiz do repositório:
