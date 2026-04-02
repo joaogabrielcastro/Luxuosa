@@ -1,6 +1,7 @@
 import { InvoiceStatus, NfceIssueJobStatus } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import { invoiceService } from "../modules/invoices/invoice.service.js";
+import { logger } from "../utils/logger.js";
 
 const chains = new Map();
 
@@ -211,30 +212,43 @@ export async function enqueueNfceIssue(tenantId, saleId) {
  * Recupera jobs presos em PROCESSING (ex.: deploy durante emissao) e retoma filas com PENDING.
  */
 export async function resumeNfceQueuesOnStartup() {
-  const stale = await prisma.nfceIssueJob.updateMany({
-    where: {
-      status: NfceIssueJobStatus.PROCESSING,
-      updatedAt: { lt: new Date(Date.now() - STALE_PROCESSING_MS) }
-    },
-    data: { status: NfceIssueJobStatus.PENDING }
-  });
-  if (stale.count > 0) {
-    console.info(`[NFC-e] recuperados ${stale.count} job(s) presos em PROCESSING.`);
-  }
-
-  const tenants = await prisma.nfceIssueJob.groupBy({
-    by: ["tenantId"],
-    where: {
-      status: NfceIssueJobStatus.PENDING,
-      OR: [{ runAt: null }, { runAt: { lte: new Date() } }]
+  try {
+    const stale = await prisma.nfceIssueJob.updateMany({
+      where: {
+        status: NfceIssueJobStatus.PROCESSING,
+        updatedAt: { lt: new Date(Date.now() - STALE_PROCESSING_MS) }
+      },
+      data: { status: NfceIssueJobStatus.PENDING }
+    });
+    if (stale.count > 0) {
+      console.info(`[NFC-e] recuperados ${stale.count} job(s) presos em PROCESSING.`);
     }
-  });
 
-  for (const row of tenants) {
-    const prev = chains.get(row.tenantId) || Promise.resolve();
-    const next = prev
-      .then(() => drainTenantQueue(row.tenantId))
-      .catch((err) => console.error(`[NFC-e] fila tenant ${row.tenantId}:`, err?.message || err));
-    chains.set(row.tenantId, next);
+    const tenants = await prisma.nfceIssueJob.groupBy({
+      by: ["tenantId"],
+      where: {
+        status: NfceIssueJobStatus.PENDING,
+        OR: [{ runAt: null }, { runAt: { lte: new Date() } }]
+      }
+    });
+
+    for (const row of tenants) {
+      const prev = chains.get(row.tenantId) || Promise.resolve();
+      const next = prev
+        .then(() => drainTenantQueue(row.tenantId))
+        .catch((err) => console.error(`[NFC-e] fila tenant ${row.tenantId}:`, err?.message || err));
+      chains.set(row.tenantId, next);
+    }
+  } catch (err) {
+    const code = err?.code;
+    const msg = String(err?.message || "");
+    if (code === "P2021" || /does not exist in the current database/i.test(msg)) {
+      logger.warn(
+        "Schema Prisma nao aplicado neste banco (faltam tabelas). Com DATABASE_URL de producao: cd backend && npx prisma migrate deploy",
+        { prismaCode: code }
+      );
+      return;
+    }
+    throw err;
   }
 }
