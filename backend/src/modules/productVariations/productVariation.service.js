@@ -47,12 +47,33 @@ export const productVariationService = {
   },
 
   async remove(tenantId, id) {
-    const result = await productVariationRepository.remove(tenantId, id);
-    if (result.count === 0) {
-      const err = new Error("Variacao nao encontrada.");
-      err.statusCode = 404;
-      throw err;
-    }
-    return result;
+    return prisma.$transaction(async (tx) => {
+      const variation = await tx.productVariation.findFirst({
+        where: { tenantId, id },
+        select: { id: true }
+      });
+      if (!variation) {
+        const err = new Error("Variacao nao encontrada.");
+        err.statusCode = 404;
+        throw err;
+      }
+
+      const [saleItems, creditItems] = await Promise.all([
+        tx.saleItem.count({ where: { tenantId, productVariationId: id } }),
+        tx.creditSaleItem.count({ where: { tenantId, productVariationId: id } })
+      ]);
+      if (saleItems > 0 || creditItems > 0) {
+        const err = new Error(
+          "Nao e possivel excluir variacao com vendas ou crediario vinculados."
+        );
+        err.statusCode = 409;
+        throw err;
+      }
+
+      await tx.stockMovement.deleteMany({
+        where: { tenantId, productVariationId: id }
+      });
+      return tx.productVariation.deleteMany({ where: { tenantId, id } });
+    });
   }
 };

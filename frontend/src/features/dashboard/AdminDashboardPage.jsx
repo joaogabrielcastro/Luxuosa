@@ -258,11 +258,25 @@ export function AdminDashboardPage() {
       <SectionCard title="Produtos com estoque baixo">
         {data.lowStockItems.length ? (
           <ul className="space-y-2 text-sm">
-            {data.lowStockItems.map((item) => (
-              <li key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-                {item.name} - atual: {item.currentStock} / minimo: {item.minStock}
-              </li>
-            ))}
+            {data.lowStockItems.map((item) => {
+              const zero = Number(item.currentStock) === 0;
+              return (
+                <li
+                  key={item.id}
+                  className={`rounded-lg border p-2.5 ${
+                    zero
+                      ? "border-rose-300 bg-rose-50 text-rose-950"
+                      : "border-amber-300 bg-amber-50 text-amber-950"
+                  }`}
+                >
+                  <span className="font-medium">{item.name}</span>
+                  <span className="mt-0.5 block text-xs opacity-90">
+                    Atual: <strong>{item.currentStock}</strong> · Minimo: <strong>{item.minStock}</strong>
+                    {zero ? " · sem estoque" : ""}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <EmptyState description="Sem alertas no momento." />

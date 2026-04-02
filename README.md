@@ -79,10 +79,13 @@ Copie `backend/.env.example` para `backend/.env`. Principais chaves:
 | `NUVEM_FISCAL_OAUTH_SCOPE` | Padrão: `empresa nfe nfce` |
 | `NUVEM_FISCAL_AMBIENTE` | `homologacao` ou `producao` (igual à empresa no console Nuvem) |
 | `NUVEM_FISCAL_EMITENTE_CNPJ` | Opcional; 14 dígitos. Se vazio, usa `Tenant.cnpj` |
+| `NUVEM_FISCAL_EMITENTE_IE` | Opcional; IE só dígitos. Sobrescreve a IE vinda da Nuvem se a SEFAZ rejeitar vínculo CNPJ/IE |
 | `NUVEM_FISCAL_RESP_TEC_CNPJ` | CNPJ do responsável técnico (infRespTec), quando exigido pela SEFAZ |
 | `NUVEM_FISCAL_RESP_TEC_CONTATO` | Nome do contato técnico |
 | `NUVEM_FISCAL_RESP_TEC_EMAIL` | Email do responsável técnico |
 | `NUVEM_FISCAL_RESP_TEC_FONE` | Telefone (somente dígitos) do responsável técnico |
+| `NUVEM_FISCAL_RESP_TEC_ID_CSRT` | Identificador do CSRT na SEFAZ (ex.: PR); usado com `NUVEM_FISCAL_CSRT` |
+| `NUVEM_FISCAL_CSRT` | Segredo CSRT (SEFAZ); o backend calcula `hashCSRT` por nota (NT 2018.005) |
 
 No fluxo com Docker deste repositório, o `backend` lê essas variáveis via `env_file` em `docker-compose.yml` (arquivo `/.env.compose`).
 
@@ -155,8 +158,8 @@ Prefixo global: **`/api/v1`**.
 
 ### Troubleshooting rápido (NFC-e)
 
-- **`Nao informado o grupo de informacoes do responsavel tecnico`**: preencha `NUVEM_FISCAL_RESP_TEC_*`.
-- **`IE do emitente nao vinculada ao CNPJ`**: confira IE/CNPJ da empresa no Console Nuvem/SEFAZ.
+- **`Nao informado o grupo de informacoes do responsavel tecnico`**: no Coolify use os nomes exatos `NUVEM_FISCAL_RESP_TEC_CNPJ` (14 dígitos), `NUVEM_FISCAL_RESP_TEC_EMAIL` e `NUVEM_FISCAL_RESP_TEC_CONTATO` (não `..._CONTA`). Em **Paraná / produção** (desde 01/04/2026) costuma ser obrigatório também **CSRT**: `NUVEM_FISCAL_RESP_TEC_ID_CSRT` + `NUVEM_FISCAL_CSRT` (solicitados na SEFAZ para o sistema emissor).
+- **`IE do emitente nao vinculada ao CNPJ`**: a IE na nota tem de ser a **mesma** que a SEFAZ tem para esse CNPJ. Corrija em **Nuvem Fiscal → Empresa → Dados** (inscrição estadual) ou defina **`NUVEM_FISCAL_EMITENTE_IE`** (só dígitos) no backend até alinhar o cadastro na Nuvem. Confirme a IE no **cadastro estadual** (ex.: portal Receita/SEFAZ PR).
 - **`Ja existe NFC-e emitida` + sem PDF**: o backend já reconcilia estado local vs Nuvem e libera reemissão quando a autorização remota não for 100/150.
 - **`Nuvem Fiscal retornou 404 ao baixar PDF`**: pode ser atraso de disponibilização; o backend já faz retry e valida autorização antes de baixar.
 

@@ -1,5 +1,7 @@
 /** @typedef {{ endereco: { logradouro: string; numero?: string; complemento?: string; bairro: string; codigo_municipio: string; cidade: string; uf: string; cep: string }; cpf_cnpj: string; nome_razao_social: string; nome_fantasia?: string; inscricao_estadual?: string; fone?: string }} EmpresaNuvem */
 
+import crypto from "node:crypto";
+
 const UF_CUF = {
   RO: 11,
   AC: 12,
@@ -114,6 +116,13 @@ function modulo11Cdv(chave43) {
   }
   const mod = sum % 11;
   return mod === 0 || mod === 1 ? 0 : 11 - mod;
+}
+
+/** Hash CSRT (NT 2018.005): Base64(SHA1(UTF8(CSRT + chave44))). */
+export function buildHashCsrt(csrtSecret, infNFeId) {
+  const chave44 = String(infNFeId || "").replace(/^NFe/i, "");
+  if (chave44.length !== 44 || !/^\d{44}$/.test(chave44)) return null;
+  return crypto.createHash("sha1").update(csrtSecret + chave44, "utf8").digest("base64");
 }
 
 function buildInfNfeId({ cUF, dhEmi, cnpjEmit, mod, serie, nNF, tpEmis, cNF }) {
@@ -262,7 +271,7 @@ function buildDetItem(item, nItem) {
  * NFC-e modelo 65 — varejo / consumidor. POST /nfce na Nuvem Fiscal.
  * Com cliente + dados fiscais completos usa CPF/CNPJ e endereco do cliente; senao CONSUMIDOR FINAL no endereco do emitente.
  */
-export function buildNfceRequestBody({ sale, empresa, empresaNfce, ambiente, referencia }) {
+export function buildNfceRequestBody({ sale, empresa, empresaNfce, ambiente, referencia, csrt }) {
   const emit = buildEmit(empresa, empresaNfce?.CRT);
   const useCustomer =
     sale.customer && customerFiscalComplete(sale.customer) && digitsOnly(sale.customer.cpfCnpj).length >= 11;
@@ -285,6 +294,15 @@ export function buildNfceRequestBody({ sale, empresa, empresaNfce, ambiente, ref
     tpEmis: 1,
     cNF
   });
+
+  let respTec = empresaNfce?.respTec || null;
+  if (respTec && csrt?.id && csrt?.secret) {
+    const hashCSRT = buildHashCsrt(csrt.secret, idData.Id);
+    const idNum = Number.parseInt(String(csrt.id).replace(/\D/g, ""), 10);
+    if (hashCSRT && Number.isFinite(idNum) && idNum > 0) {
+      respTec = { ...respTec, idCSRT: idNum, hashCSRT };
+    }
+  }
 
   const ide = {
     cUF,
@@ -359,8 +377,6 @@ export function buildNfceRequestBody({ sale, empresa, empresaNfce, ambiente, ref
     ],
     vTroco: 0
   };
-
-  const respTec = empresaNfce?.respTec || null;
 
   return {
     infNFe: {

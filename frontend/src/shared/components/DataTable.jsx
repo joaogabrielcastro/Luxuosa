@@ -9,6 +9,7 @@ export function DataTable({
   data,
   columns,
   getRowKey,
+  getRowClassName,
   renderCells,
   emptyMessage = "Sem registros.",
   search,
@@ -90,11 +91,17 @@ export function DataTable({
             </tr>
           </thead>
           <tbody>
-            {paginated.map((row) => (
-              <tr key={getRowKey(row)} className="border-b border-slate-100 hover:bg-slate-50">
-                {renderCells(row)}
-              </tr>
-            ))}
+            {paginated.map((row) => {
+              const extra = getRowClassName ? getRowClassName(row) : "";
+              return (
+                <tr
+                  key={getRowKey(row)}
+                  className={`border-b border-slate-100 hover:bg-slate-50 ${extra}`.trim()}
+                >
+                  {renderCells(row)}
+                </tr>
+              );
+            })}
             {!paginated.length ? (
               <tr>
                 <td className="py-5 text-slate-500" colSpan={columns.length}>

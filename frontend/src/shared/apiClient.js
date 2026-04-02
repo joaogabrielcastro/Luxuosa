@@ -11,14 +11,36 @@ function defaultMessageForStatus(status) {
   return "Nao foi possivel completar a operacao.";
 }
 
+/** Evita mostrar ao utilizador mensagens tecnicas (Prisma, SQL, stack). */
+function humanizeErrorText(raw, status) {
+  const s = String(raw || "").trim();
+  if (!s) return defaultMessageForStatus(status);
+  if (
+    /Invalid `prisma\./i.test(s) ||
+    /PrismaClient/i.test(s) ||
+    /ConnectorError|P20\d{3}/i.test(s) ||
+    /foreign key|RESTRICT|violates/i.test(s) ||
+    /StockMovement_|productVariationId/i.test(s)
+  ) {
+    if (status === 409) {
+      return "Nao e possivel excluir: ainda ha dados ligados a este item (estoque, vendas ou outro cadastro).";
+    }
+    if (status >= 500) return "Erro no servidor ao guardar dados. Tente de novo ou contacte o suporte.";
+    return "Nao foi possivel concluir a operacao. Verifique os dados e tente novamente.";
+  }
+  return s;
+}
+
 function extractErrorMessage(data, status) {
   if (data == null) return defaultMessageForStatus(status);
-  if (typeof data.error === "string" && data.error.trim()) return data.error;
-  if (typeof data.message === "string" && data.message.trim()) return data.message;
-  if (Array.isArray(data) && data[0]?.message) {
-    return data.map((x) => x.message).filter(Boolean).join(" ");
+  let raw = null;
+  if (typeof data.error === "string" && data.error.trim()) raw = data.error;
+  else if (typeof data.message === "string" && data.message.trim()) raw = data.message;
+  else if (Array.isArray(data) && data[0]?.message) {
+    raw = data.map((x) => x.message).filter(Boolean).join(" ");
   }
-  return defaultMessageForStatus(status);
+  if (raw == null) return defaultMessageForStatus(status);
+  return humanizeErrorText(raw, status);
 }
 
 export async function apiClient(path, { method = "GET", body, token } = {}) {

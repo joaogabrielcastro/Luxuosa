@@ -245,6 +245,11 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
     throw err;
   }
 
+  const ieOverride = digitsOnly(nf.emitenteIe || "");
+  if (ieOverride.length >= 2 && ieOverride.length <= 14) {
+    empresa.inscricao_estadual = ieOverride;
+  }
+
   const nfceCfgRes = await getEmpresaNfceConfig(nf, emitCnpj);
   const empresaNfce = nfceCfgRes.ok ? nfceCfgRes.body : null;
 
@@ -270,12 +275,25 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
         }
       : null;
 
+  const empresaNfceMerged = { ...(empresaNfce || {}) };
+  if (infRespTec) {
+    empresaNfceMerged.respTec = infRespTec;
+  } else {
+    delete empresaNfceMerged.respTec;
+  }
+
+  const csrtId = String(nf.respTecIdCsrt || "").trim();
+  const csrtSecret = String(nf.csrt || "").trim();
+  const csrt =
+    csrtId && csrtSecret ? { id: csrtId, secret: csrtSecret } : null;
+
   const payload = buildNfceRequestBody({
     sale,
     empresa,
-    empresaNfce: { ...(empresaNfce || {}), ...(infRespTec ? { respTec: infRespTec } : {}) },
+    empresaNfce: empresaNfceMerged,
     ambiente,
-    referencia: sale.id
+    referencia: sale.id,
+    csrt
   });
 
   await ensureInvoiceRow(tenantId, saleId);

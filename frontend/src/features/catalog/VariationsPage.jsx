@@ -98,7 +98,8 @@ export function VariationsPage() {
     try {
       const confirmed = await confirm({
         title: "Excluir variacao",
-        message: "Deseja excluir esta variacao?",
+        message:
+          "Excluir esta variacao? So e possivel se nao houver vendas/crediario; o historico de movimentos de estoque desta variacao sera apagado.",
         confirmText: "Excluir"
       });
       if (!confirmed) return;

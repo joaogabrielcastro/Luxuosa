@@ -15,6 +15,21 @@ import { Alert } from "../../shared/components/ui/Alert.jsx";
 
 const AUTO_VARIATION_SIZE = "AUTO";
 const AUTO_VARIATION_COLOR = "ESTOQUE";
+function productCurrentStock(item) {
+  return (item.variations || []).reduce((acc, v) => acc + Number(v.stock || 0), 0);
+}
+
+function productLowStockClass(item) {
+  const min = Number(item.minStock ?? 0);
+  if (min <= 0) return "";
+  const current = productCurrentStock(item);
+  if (current > min) return "";
+  if (current === 0) {
+    return "border-l-4 border-l-rose-500 bg-rose-50/90 hover:bg-rose-50";
+  }
+  return "border-l-4 border-l-amber-500 bg-amber-50/80 hover:bg-amber-50/90";
+}
+
 const EMPTY_PRODUCT_FORM = {
   name: "",
   description: "",
@@ -159,7 +174,8 @@ export function ProductsPage() {
     try {
       const confirmed = await confirm({
         title: "Excluir produto",
-        message: "Deseja excluir este produto?",
+        message:
+          "Excluir este produto e todas as variacoes? So e possivel se nao houver vendas/crediario vinculados e se os movimentos de estoque puderem ser removidos.",
         confirmText: "Excluir"
       });
       if (!confirmed) return;
@@ -335,6 +351,7 @@ export function ProductsPage() {
         </div>
         <DataTable
           data={products}
+          getRowClassName={productLowStockClass}
           columns={[
             { key: "name", label: "Nome" },
             { key: "sku", label: "SKU" },
@@ -372,14 +389,23 @@ export function ProductsPage() {
               matcher: () => true
             }
           ]}
-          renderCells={(item) => (
+          renderCells={(item) => {
+            const current = productCurrentStock(item);
+            const min = Number(item.minStock ?? 0);
+            const low = min > 0 && current <= min;
+            const stockClass = low
+              ? current === 0
+                ? "font-semibold text-rose-700"
+                : "font-semibold text-amber-800"
+              : "";
+            return (
             <>
               <td className="py-2">{item.name}</td>
               <td className="py-2">{item.sku}</td>
               <td className="py-2">{item.category?.name}</td>
               <td className="py-2">{item.brand?.name}</td>
               <td className="py-2">{item.minStock}</td>
-              <td className="py-2">{item.variations?.reduce((acc, v) => acc + v.stock, 0)}</td>
+              <td className={`py-2 ${stockClass}`}>{current}</td>
               <td className="py-2">{formatCurrencyBRL(item.price)}</td>
               <td className="py-2">
                 <Button variant="secondary" className="mr-2 px-2 py-1 text-xs" onClick={() => startEdit(item)}>
@@ -390,7 +416,8 @@ export function ProductsPage() {
                 </Button>
               </td>
             </>
-          )}
+            );
+          }}
         />
       </SectionCard>
     </div>
