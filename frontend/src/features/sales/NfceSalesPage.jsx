@@ -12,7 +12,8 @@ import { Modal } from "../../shared/components/ui/Modal.jsx";
 
 /** Página de vendas (NFC-e consumidor final, sem seleção de cliente na UI). */
 export function SalesPage() {
-  const { token } = useAuth();
+  const { token, tenant } = useAuth();
+  const enableNfceEmission = tenant?.enableNfceEmission === true;
   const { showToast } = useToast();
   const { confirm } = useConfirm();
   const [paymentFilter, setPaymentFilter] = useState("");
@@ -38,18 +39,18 @@ export function SalesPage() {
     items,
     editingSaleId,
     loading,
-    barcodeInput,
-    setBarcodeInput,
-    addItem,
     updateItem,
+    removeItem,
     addItemByBarcode,
     addItemByVariationId,
+    addManualLine,
     createSale,
     editSale,
     cancelSale,
     cancelEdit,
     retryNfce,
-    downloadNfcePdf
+    downloadNfcePdf,
+    getRemainingUnits
   } = useSalesActions({ token, variations, load, setError, showToast, confirm });
 
   useEffect(() => {
@@ -70,13 +71,14 @@ export function SalesPage() {
         sortedCategories={sortedCategories}
         variations={variations}
         updateItem={updateItem}
-        barcodeInput={barcodeInput}
-        setBarcodeInput={setBarcodeInput}
+        removeItem={removeItem}
         addItemByBarcode={addItemByBarcode}
         addItemByVariationId={addItemByVariationId}
-        addItem={addItem}
+        addManualLine={addManualLine}
         loading={loading}
         cancelEdit={cancelEdit}
+        enableNfceEmission={enableNfceEmission}
+        getRemainingUnits={getRemainingUnits}
       />
 
       <SalesTableCard
@@ -100,6 +102,7 @@ export function SalesPage() {
         editSale={editSale}
         cancelSale={cancelSale}
         setNfceErrorDetail={setNfceErrorDetail}
+        enableNfceEmission={enableNfceEmission}
       />
 
       <Modal open={Boolean(nfceErrorDetail)} title="Detalhe do erro NFC-e" onClose={() => setNfceErrorDetail(null)}>

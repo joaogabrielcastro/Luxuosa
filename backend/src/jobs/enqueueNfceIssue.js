@@ -161,6 +161,22 @@ async function drainTenantQueue(tenantId) {
  * Um worker logico por tenant (Promise chain) evita corrida e rate limit na Nuvem Fiscal.
  */
 export async function enqueueNfceIssue(tenantId, saleId) {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { enableNfceEmission: true }
+  });
+  if (!tenant?.enableNfceEmission) {
+    await prisma.nfceIssueJob.updateMany({
+      where: { tenantId, saleId },
+      data: {
+        status: NfceIssueJobStatus.FAILED,
+        lastError: "NFC-e nao habilitada para esta loja (emitente Nuvem Fiscal).",
+        runAt: null
+      }
+    });
+    return;
+  }
+
   const inv = await prisma.invoice.findUnique({
     where: { saleId },
     select: { status: true }

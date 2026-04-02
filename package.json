@@ -3,6 +3,8 @@
   "private": true,
   "description": "Monorepo: use npm run na raiz para Prisma (delega para backend/).",
   "scripts": {
+    "build": "npm run build --prefix frontend",
+    "check": "npm run build --prefix frontend && npm run check:backend --prefix backend",
     "prisma:generate": "cd backend && npx prisma generate",
     "prisma:migrate": "cd backend && npx prisma migrate dev",
     "prisma:deploy": "cd backend && npx prisma migrate deploy",

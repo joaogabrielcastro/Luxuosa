@@ -11,7 +11,9 @@ import {
   PackageSearch,
   ReceiptText,
   ShoppingCart,
-  Tags
+  Tags,
+  Users,
+  WalletCards
 } from "lucide-react";
 
 const navItems = [
@@ -21,6 +23,8 @@ const navItems = [
   { to: "/catalog/products", label: "Produtos", icon: PackageSearch },
   { to: "/catalog/variations", label: "Variacoes", icon: ClipboardList },
   { to: "/vendas", label: "Vendas", icon: ShoppingCart },
+  { to: "/crediario", label: "Crediario", icon: WalletCards },
+  { to: "/clientes", label: "Clientes", icon: Users },
   { to: "/estoque/movimentos", label: "Estoque", icon: BarChart3 },
   { to: "/relatorios", label: "Relatorios", icon: ReceiptText }
 ];
@@ -33,19 +37,19 @@ export function AppShell({ children }) {
     <div className="min-h-screen text-slate-900">
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
-              className="rounded-md border border-slate-200 p-2 text-slate-700 md:hidden"
+              className="shrink-0 rounded-md border border-slate-200 p-2 text-slate-700 md:hidden"
               onClick={() => setMenuOpen((v) => !v)}
               aria-label="Abrir menu"
             >
               ☰
             </button>
-            <BrandLogo compact />
-            <div className="hidden sm:block">
-              <p className="text-sm font-semibold text-slate-800">{tenant?.name}</p>
-              <p className="text-xs text-slate-500">{user?.name}</p>
+            <BrandLogo compact tenant={tenant} />
+            <div className="min-w-0 flex-1 sm:flex-none">
+              <p className="truncate text-sm font-semibold leading-tight text-slate-900">{tenant?.name ?? "—"}</p>
+              <p className="truncate text-xs text-slate-500">{user?.name ?? "—"}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

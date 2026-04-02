@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { env } from "../../config/env.js";
+import { prisma } from "../../config/prisma.js";
 import { authRepository } from "./auth.repository.js";
 
 function digitsOnly(value) {
@@ -66,8 +67,35 @@ export const authService = {
       tenant: {
         id: user.tenant.id,
         name: user.tenant.name,
-        plan: user.tenant.plan
+        cnpj: user.tenant.cnpj,
+        plan: user.tenant.plan,
+        enableNfceEmission: user.tenant.enableNfceEmission
       }
     };
+  },
+
+  async me(tenantId, userId) {
+    const [tenant, profile] = await Promise.all([
+      prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: {
+          id: true,
+          name: true,
+          cnpj: true,
+          plan: true,
+          enableNfceEmission: true
+        }
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, email: true, type: true, tenantId: true }
+      })
+    ]);
+    if (!tenant || !profile) {
+      const err = new Error("Sessao invalida.");
+      err.statusCode = 401;
+      throw err;
+    }
+    return { tenant, profile };
   }
 };

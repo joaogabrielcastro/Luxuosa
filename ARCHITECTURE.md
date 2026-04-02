@@ -138,10 +138,9 @@ Todas abaixo do prefixo **`/api/v1`**.
 
 ## 11. Roadmap técnico (pendências explícitas)
 
-1. **Telas de clientes** no frontend (API já existe).
-2. **Fila persistente** e/ou workers dedicados para NFC-e em alto volume ou ambientes multi-instância.
-3. **Exportação** de relatórios (CSV/PDF) e filtros avançados além do mínimo atual.
-4. **Gestão de usuários** por tenant e onboarding self-service.
-5. **Testes** de integração multi-tenant e monitoramento (APM/alertas).
+1. **Fila persistente** e/ou workers dedicados para NFC-e em alto volume ou ambientes multi-instância.
+2. **Exportação** de relatórios (CSV/PDF) e filtros avançados além do mínimo atual.
+3. **Gestão de usuários** por tenant e onboarding self-service.
+4. **Testes** de integração multi-tenant e monitoramento (APM/alertas).
 
 Este documento deve evoluir junto com o repositório; em caso de divergência, prevalece o comportamento do código e do `schema.prisma`.

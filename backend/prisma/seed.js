@@ -6,10 +6,11 @@ const prisma = new PrismaClient();
 async function main() {
   const tenantsSeed = [
     {
-      name: "Luxuosa Loja Demo",
+      name: "Luxuosa Loja",
       cnpj: "12345678000199",
       email: "contato@luxuosa.com",
       phone: "11999999999",
+      enableNfceEmission: true,
       users: [{ name: "Administrador", email: "admin@luxuosa.com" }]
     },
     {
@@ -17,6 +18,7 @@ async function main() {
       cnpj: "11111111000191",
       email: "marianapavin@admin.com",
       phone: "11911111111",
+      enableNfceEmission: false,
       users: [{ name: "Mariana Pavin", email: "marianapavin@admin.com" }]
     },
     {
@@ -24,6 +26,7 @@ async function main() {
       cnpj: "22222222000191",
       email: "marisafernandes@admin.com",
       phone: "11922222222",
+      enableNfceEmission: false,
       users: [{ name: "Marisa Fernandes", email: "marisafernandes@admin.com" }]
     }
   ];
@@ -37,14 +40,16 @@ async function main() {
         name: tenantCfg.name,
         email: tenantCfg.email,
         phone: tenantCfg.phone,
-        plan: Plan.BASIC
+        plan: Plan.BASIC,
+        enableNfceEmission: Boolean(tenantCfg.enableNfceEmission)
       },
       create: {
         name: tenantCfg.name,
         cnpj: tenantCfg.cnpj,
         email: tenantCfg.email,
         phone: tenantCfg.phone,
-        plan: Plan.BASIC
+        plan: Plan.BASIC,
+        enableNfceEmission: Boolean(tenantCfg.enableNfceEmission)
       }
     });
 

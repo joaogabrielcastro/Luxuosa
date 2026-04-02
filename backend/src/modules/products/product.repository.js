@@ -53,12 +53,6 @@ export const productRepository = {
     });
   },
 
-  remove(tenantId, id) {
-    return prisma.product.deleteMany({
-      where: { tenantId, id }
-    });
-  },
-
   findLowStock(tenantId) {
     return prisma.product.findMany({
       where: { tenantId },

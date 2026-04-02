@@ -143,6 +143,20 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
   const silent = opts.silent === true;
   const nf = env.nuvemFiscal;
 
+  const tenantPolicy = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { enableNfceEmission: true, cnpj: true }
+  });
+  if (!tenantPolicy?.enableNfceEmission) {
+    if (silent) return null;
+    const err = new Error(
+      "Emissao de NFC-e nao habilitada para esta loja. Configure o CNPJ na Nuvem Fiscal ou use venda sem nota."
+    );
+    err.statusCode = 403;
+    err.code = "NFCE_TENANT_DISABLED";
+    throw err;
+  }
+
   if (!nf.clientId || !nf.clientSecret) {
     if (silent) return null;
     const err = new Error("Nuvem Fiscal nao configurado.");
@@ -207,8 +221,7 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
     });
   }
 
-  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
-  const emitCnpj = getEmitenteCnpj(tenant.cnpj);
+  const emitCnpj = getEmitenteCnpj(tenantPolicy.cnpj);
 
   if (emitCnpj.length !== 14) {
     const err = new Error("CNPJ do emitente invalido (tenant ou NUVEM_FISCAL_EMITENTE_CNPJ).");

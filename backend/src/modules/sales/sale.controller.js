@@ -6,6 +6,8 @@ const saleSchema = z.object({
   customerId: z.string().optional(),
   discountValue: z.coerce.number().nonnegative().optional(),
   discountPercent: z.coerce.number().nonnegative().optional(),
+  /** Se false, nao enfileira emissao de NFC-e (venda ainda e registrada e estoque baixa). */
+  emitNfce: z.boolean().optional(),
   paymentMethod: z.string().min(1),
   installments: z.coerce.number().int().positive().optional(),
   items: z

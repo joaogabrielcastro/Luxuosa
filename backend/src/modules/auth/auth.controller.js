@@ -22,7 +22,21 @@ export const authController = {
     return res.status(204).send();
   },
 
-  me(req, res) {
-    return res.json({ user: req.user });
+  async me(req, res, next) {
+    try {
+      const { tenant, profile } = await authService.me(req.tenantId, req.user.id);
+      return res.json({
+        user: {
+          id: profile.id,
+          name: profile.name,
+          email: profile.email,
+          type: profile.type,
+          tenant_id: profile.tenantId
+        },
+        tenant
+      });
+    } catch (error) {
+      return next(error);
+    }
   }
 };

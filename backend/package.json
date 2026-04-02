@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
   "scripts": {
+    "check:backend": "node -e \"import('./src/routes.js').then(()=>console.log('backend routes ok')).catch(e=>{console.error(e);process.exit(1)})\"",
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "prisma:generate": "prisma generate",

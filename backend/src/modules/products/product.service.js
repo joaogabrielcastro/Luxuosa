@@ -65,13 +65,42 @@ export const productService = {
   },
 
   async remove(tenantId, id) {
-    const result = await productRepository.remove(tenantId, id);
-    if (result.count === 0) {
-      const err = new Error("Produto nao encontrado.");
-      err.statusCode = 404;
-      throw err;
-    }
-    return result;
+    return prisma.$transaction(async (tx) => {
+      const product = await tx.product.findFirst({
+        where: { tenantId, id },
+        include: { variations: { select: { id: true } } }
+      });
+      if (!product) {
+        const err = new Error("Produto nao encontrado.");
+        err.statusCode = 404;
+        throw err;
+      }
+
+      const varIds = product.variations.map((v) => v.id);
+      if (varIds.length > 0) {
+        const [saleItems, creditItems] = await Promise.all([
+          tx.saleItem.count({ where: { tenantId, productVariationId: { in: varIds } } }),
+          tx.creditSaleItem.count({ where: { tenantId, productVariationId: { in: varIds } } })
+        ]);
+        if (saleItems > 0 || creditItems > 0) {
+          const err = new Error(
+            "Nao e possivel excluir produto com vendas ou crediario vinculados as variacoes."
+          );
+          err.statusCode = 409;
+          throw err;
+        }
+
+        await tx.stockMovement.deleteMany({
+          where: { tenantId, productVariationId: { in: varIds } }
+        });
+        await tx.productVariation.deleteMany({
+          where: { tenantId, productId: id }
+        });
+      }
+
+      const deleted = await tx.product.deleteMany({ where: { tenantId, id } });
+      return deleted;
+    });
   },
 
   async lowStock(tenantId) {

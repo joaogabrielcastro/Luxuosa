@@ -200,10 +200,17 @@ export const saleService = {
       }
 
       return sale;
-    }).then((sale) => {
-      void enqueueNfceIssue(tenantId, sale.id).catch((err) =>
-        console.error("[NFC-e] enqueue:", err?.message || err)
-      );
+    }).then(async (sale) => {
+      const wantsNfce = payload.emitNfce === undefined ? true : payload.emitNfce === true;
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { enableNfceEmission: true }
+      });
+      if (wantsNfce && tenant?.enableNfceEmission) {
+        void enqueueNfceIssue(tenantId, sale.id).catch((err) =>
+          console.error("[NFC-e] enqueue:", err?.message || err)
+        );
+      }
       return sale;
     });
   },

@@ -23,5 +23,7 @@ export const DEFAULT_SALE_FORM = {
   paymentMethod: "PIX",
   installments: 1,
   discountValue: "",
-  discountPercent: ""
+  discountPercent: "",
+  /** Apenas na criacao: enfileira emissao NFC-e apos a venda. */
+  emitNfce: true
 };

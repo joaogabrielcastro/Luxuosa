@@ -14,11 +14,12 @@ SaaS multi-tenant para gestão de loja de roupa: catálogo, vendas, estoque, rel
 ## O que já existe no produto
 
 - **Autenticação:** login (`POST /auth/logout` e `GET /auth/me` requerem JWT). Email é único **por loja**: `@@unique([tenantId, email])` no Prisma. Se o mesmo email existir em mais de um tenant, o login exige **`tenantCnpj`** (14 dígitos) no body para escolher a loja.
-- **Catálogo:** categorias, produtos, variações (tamanho/cor/estoque), alerta de estoque baixo (produto vs soma das variações).
-- **Vendas:** criar, listar, editar, cancelar; baixa de estoque e movimentação `EXIT`; desconto com política por tipo de usuário (admin vs atendente); UI por categoria e produto; **sem cadastro de cliente na interface** — a NFC-e sai como **consumidor final**.
+- **Catálogo:** categorias, marcas, produtos, variações (tamanho/cor/estoque), alerta de estoque baixo (produto vs soma das variações).
+- **Vendas:** criar, listar, editar, cancelar; baixa de estoque e movimentação `EXIT`; desconto com política por tipo de usuário (admin vs atendente); UI por categoria e produto; **sem seleção de cliente na tela de venda** — a NFC-e padrão sai como **consumidor final** (`customerId` opcional na API).
+- **Crediário (contas a receber):** vendas a prazo sem NFC-e; parcelas e baixas; disponível para todos os tenants.
+- **Clientes:** tela em `/clientes` (CRUD) alinhada ao `GET|POST|PUT|DELETE /customers`; uso no crediário e vendas quando aplicável.
 - **Movimentações de estoque manuais:** entrada e saída sem venda (`POST /stock-movements`), com histórico (`GET /stock-movements`). Saída não pode ultrapassar o estoque da variação.
 - **Relatórios (API):** vendas pagas por intervalo de datas (`GET /reports/sales?from=&to=`) e lista de produtos abaixo do mínimo (`GET /reports/low-stock`). O **dashboard admin** continua com visão mais rica (só admin).
-- **Clientes (API):** `GET|POST|PUT|DELETE /customers` para integrações ou dados legados; não há tela dedicada no app.
 - **Dashboard (admin):** métricas agregadas (receita, ticket, vendas por período/atendente, lucro por produto, estoque consolidado, produtos sem venda recente, etc.).
 - **NFC-e (Nuvem Fiscal):** após registrar a venda, o backend enfileira emissão **modelo 65** em fila persistida no banco (`NfceIssueJob`) com serialização por `tenantId`; consulta SEFAZ e grava `Invoice`. **PDF (DANFE):** `GET /invoices/sale/:saleId/pdf`. Reemissão/forçar emissão: `POST /invoices/issue/:saleId` (qualquer usuário autenticado da loja). Status do job por venda: `GET /invoices/sale/:saleId/job`. Teste de conexão OAuth: `GET /invoices/connection-test` (só admin). OAuth com scope `empresa nfe nfce`. Simples Nacional (CSOSN 102).
 
@@ -57,7 +58,7 @@ Luxuosa/
   frontend/
     src/
       app/
-      features/         # auth, dashboard, catalog, sales, stock, reports
+      features/         # auth, dashboard, catalog, sales, stock, reports, crediario, customers
       shared/
   docker-compose.yml
   ARCHITECTURE.md
@@ -108,6 +109,10 @@ Prefixo global: **`/api/v1`**.
 | `GET\|PUT\|DELETE /product-variations/:id` | |
 | `GET /dashboard/admin` | Só admin |
 | `GET\|POST /sales` | `GET` aceita `take`, `skip`, `paymentMethod`, `nfce`, `q`, `mode` (`summary`/`full`) |
+| `GET\|POST /crediario` | Crediário: listar e criar venda a prazo (JWT + tenant) |
+| `GET /crediario/:id` | Detalhe com parcelas |
+| `POST /crediario/:id/payments` | Registrar pagamento |
+| `POST /crediario/:id/cancel` | Cancelar crediário |
 | `GET /sales/summary` | Lista enxuta para telas de operação (mesmos filtros de `GET /sales`) |
 | `GET /sales/:id` | Detalhe completo da venda |
 | `PUT /sales/:id` | |
@@ -128,9 +133,12 @@ Prefixo global: **`/api/v1`**.
 | `/login` | Login (campo opcional CNPJ da loja se necessário) |
 | `/` | Dashboard admin |
 | `/catalog/categories` | Categorias |
+| `/catalog/brands` | Marcas |
 | `/catalog/products` | Produtos |
 | `/catalog/variations` | Variações |
 | `/vendas` | Vendas + NFC-e (lista com atualização automática enquanto pendente, filtros, PDF, reemissão) |
+| `/crediario` | Crediário (contas a receber) |
+| `/clientes` | Clientes |
 | `/sales` | Redireciona para `/vendas` |
 | `/estoque/movimentos` | Movimentações de estoque manuais |
 | `/stock` | Redireciona para `/estoque/movimentos` |
@@ -192,6 +200,16 @@ docker compose down -v
 ```
 
 O backend executa `prisma generate`, `prisma migrate deploy` e `npm run dev` ao iniciar o container.
+
+## Antes de commitar (checagem rápida)
+
+Na raiz do repositório:
+
+```bash
+npm run check
+```
+
+Isso gera o build do frontend e valida o carregamento das rotas do backend. Com banco novo ou após puxar migrações: `npm run prisma:deploy` (aplica migrações em `backend/prisma/migrations`).
 
 ## Desenvolvimento local (sem Docker)
 

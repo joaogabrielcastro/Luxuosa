@@ -24,7 +24,8 @@ export function SalesTableCard({
   downloadNfcePdf,
   editSale,
   cancelSale,
-  setNfceErrorDetail
+  setNfceErrorDetail,
+  enableNfceEmission = true
 }) {
   const canPrev = salesSkip > 0;
   const canNext = salesSkip + salesTake < totalSales;
@@ -139,6 +140,17 @@ export function SalesTableCard({
             <Badge variant={saleStatusVariant(sale.status)}>{saleStatusLabel(sale.status)}</Badge>
           </td>
           <td className="max-w-[220px] py-2 align-top text-xs">
+            {!enableNfceEmission && sale.invoice?.status !== "ISSUED" ? (
+              <span className="text-slate-500">
+                {sale.nfceJob?.lastError?.includes("nao habilitada") ? (
+                  <span title={sale.nfceJob.lastError}>Sem NFC-e (loja)</span>
+                ) : (
+                  "Sem emissao fiscal nesta loja"
+                )}
+              </span>
+            ) : null}
+            {enableNfceEmission || sale.invoice?.status === "ISSUED" ? (
+              <>
             {sale.nfceJob?.status && sale.nfceJob.status !== "COMPLETED" ? (
               <div className="mb-1">
                 <Badge variant="warning">
@@ -150,7 +162,7 @@ export function SalesTableCard({
             {!sale.invoice ? (
               <div className="space-y-1">
                 <span className="text-slate-500">Aguardando NFC-e...</span>
-                {sale.status === "PAID" ? (
+                {enableNfceEmission && sale.status === "PAID" ? (
                   <Button
                     type="button"
                     variant="secondary"
@@ -200,7 +212,7 @@ export function SalesTableCard({
                     Ver mensagem completa
                   </button>
                 ) : null}
-                {sale.status === "PAID" ? (
+                {enableNfceEmission && sale.status === "PAID" ? (
                   <Button
                     type="button"
                     variant="secondary"
@@ -215,7 +227,7 @@ export function SalesTableCard({
             ) : (
               <span className="text-amber-700">Enviando NFC-e para SEFAZ...</span>
             )}
-            {sale.status === "PAID" && sale.invoice?.status === "PENDING" ? (
+            {enableNfceEmission && sale.status === "PAID" && sale.invoice?.status === "PENDING" ? (
               <Button
                 type="button"
                 variant="secondary"
@@ -225,6 +237,8 @@ export function SalesTableCard({
               >
                 Forçar emissão NFC-e
               </Button>
+            ) : null}
+              </>
             ) : null}
           </td>
           <td className="py-2">

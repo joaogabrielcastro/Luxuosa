@@ -2,14 +2,14 @@ import { useState } from "react";
 import { apiBaseUrl, apiClient } from "../../../shared/apiClient.js";
 import { maskCurrencyInput, parseCurrencyInput } from "../../../shared/formatters.js";
 import { DEFAULT_SALE_FORM } from "../sales.constants.js";
-import { emptyLineItem } from "../sales.utils.js";
 
 export function useSalesActions({ token, variations, load, setError, showToast, confirm }) {
   const [form, setForm] = useState(DEFAULT_SALE_FORM);
-  const [items, setItems] = useState([emptyLineItem()]);
+  const [items, setItems] = useState([]);
   const [editingSaleId, setEditingSaleId] = useState(null);
+  /** Ao editar venda: quantidades da venda original por variacao (estoque "devolvido" na validacao). */
+  const [editSaleStockRelease, setEditSaleStockRelease] = useState(() => new Map());
   const [loading, setLoading] = useState(false);
-  const [barcodeInput, setBarcodeInput] = useState("");
 
   function parseQuantity(raw) {
     if (raw === "" || raw === undefined) return 1;
@@ -17,15 +17,36 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
     return Number.isFinite(n) ? n : NaN;
   }
 
-  function addItem() {
-    setItems((prev) => [...prev, emptyLineItem()]);
+  function ceilingForVariation(variationId) {
+    const v = variations.find((x) => x.id === variationId);
+    const base = Number(v?.stock ?? 0);
+    const released = editSaleStockRelease.get(variationId) || 0;
+    return base + released;
+  }
+
+  function sumQtyForVariation(cart, variationId, excludeIndex = -1) {
+    return cart.reduce((acc, it, idx) => {
+      if (idx === excludeIndex) return acc;
+      if (it.productVariationId !== variationId) return acc;
+      const q = parseQuantity(it.quantity);
+      return acc + (Number.isInteger(q) && q >= 1 ? q : 0);
+    }, 0);
+  }
+
+  /** Quantidade ainda disponivel para incluir no carrinho (considera edicao de venda). */
+  function remainingUnits(variationId, cart, excludeIndex = -1) {
+    return Math.max(0, ceilingForVariation(variationId) - sumQtyForVariation(cart, variationId, excludeIndex));
+  }
+
+  function removeItem(index) {
+    setItems((prev) => prev.filter((_, i) => i !== index));
   }
 
   function updateItem(index, key, value) {
     setItems((prev) =>
       prev.map((item, i) => {
         if (i !== index) return item;
-        const next = { ...item, [key]: value };
+        let next = { ...item, [key]: value };
         if (key === "categoryId") {
           next.brandId = "";
           next.productVariationId = "";
@@ -43,27 +64,50 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
         if (key === "unitPrice") {
           next.unitPrice = maskCurrencyInput(value);
         }
+        if (key === "quantity") {
+          const vid = item.productVariationId;
+          const maxQ = ceilingForVariation(vid);
+          let q = parseQuantity(value);
+          if (Number.isInteger(q) && q >= 1 && q > maxQ) {
+            showToast(`Estoque maximo para esta variacao: ${maxQ}.`, "error");
+            q = maxQ;
+          }
+          if (Number.isInteger(q) && q >= 1) {
+            next = { ...next, quantity: String(q) };
+          }
+        }
         return next;
       })
     );
   }
 
-  function addItemByBarcode() {
-    const code = String(barcodeInput || "").trim();
-    if (!code) return;
+  /** Bip ou SKU exato — incrementa +1 se o item ja estiver na lista. */
+  function addItemByBarcode(code) {
+    const raw = String(code ?? "").trim();
+    if (!raw) return;
 
-    const candidates = variations.filter((v) => String(v.product?.sku || "").trim() === code);
+    const candidates = variations.filter((v) => String(v.product?.sku || "").trim() === raw);
     if (!candidates.length) {
-      showToast("Codigo nao encontrado nos produtos.", "error");
+      showToast("Codigo / SKU nao encontrado.", "error");
       return;
     }
 
-    const selected = candidates.find((v) => Number(v.stock) > 0) || candidates[0];
+    const selected = candidates.find((v) => remainingUnits(v.id, items) > 0) || null;
+    if (!selected) {
+      showToast("Sem estoque disponivel para este codigo.", "error");
+      return;
+    }
+
     const existingIdx = items.findIndex((it) => it.productVariationId === selected.id);
     const productPrice = Number(selected.product?.price || 0);
     const maskedUnitPrice = productPrice > 0 ? maskCurrencyInput(String(Math.round(productPrice * 100))) : "";
 
     if (existingIdx >= 0) {
+      const canAdd = remainingUnits(selected.id, items, existingIdx);
+      if (canAdd < 1) {
+        showToast("Sem estoque disponivel para aumentar a quantidade.", "error");
+        return;
+      }
       setItems((prev) =>
         prev.map((it, idx) => {
           if (idx !== existingIdx) return it;
@@ -84,8 +128,61 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
       ]);
     }
 
-    setBarcodeInput("");
     showToast(`Item adicionado: ${selected.product?.name || "Produto"}.`);
+  }
+
+  /** Fluxo manual: categoria + marca + produto + quantidade. */
+  function addManualLine(draft) {
+    const { categoryId, brandId, productVariationId, quantity } = draft;
+    if (!categoryId || !brandId || !productVariationId) {
+      showToast("Selecione categoria, marca e produto.", "error");
+      return;
+    }
+    const qty = parseQuantity(quantity);
+    if (!Number.isInteger(qty) || qty < 1) {
+      showToast("Informe uma quantidade valida (inteiro >= 1).", "error");
+      return;
+    }
+
+    const selected = variations.find((v) => v.id === productVariationId);
+    if (!selected) {
+      showToast("Variacao invalida.", "error");
+      return;
+    }
+
+    const productPrice = Number(selected.product?.price || 0);
+    const maskedUnitPrice = productPrice > 0 ? maskCurrencyInput(String(Math.round(productPrice * 100))) : "";
+    const existingIdx = items.findIndex((it) => it.productVariationId === selected.id);
+    const rem = remainingUnits(selected.id, items, existingIdx >= 0 ? existingIdx : -1);
+    if (existingIdx >= 0) {
+      if (qty > rem) {
+        showToast(`Sem estoque suficiente. Disponivel: ${rem}.`, "error");
+        return;
+      }
+      setItems((prev) =>
+        prev.map((it, idx) => {
+          if (idx !== existingIdx) return it;
+          const current = parseQuantity(it.quantity);
+          return { ...it, quantity: String(Math.max(1, current + qty)) };
+        })
+      );
+    } else {
+      if (qty > rem) {
+        showToast(`Sem estoque suficiente. Disponivel: ${rem}.`, "error");
+        return;
+      }
+      setItems((prev) => [
+        ...prev,
+        {
+          categoryId: selected.product?.categoryId || "",
+          brandId: selected.product?.brandId || "",
+          productVariationId: selected.id,
+          quantity: String(qty),
+          unitPrice: maskedUnitPrice
+        }
+      ]);
+    }
+    showToast(`${selected.product?.name || "Item"} adicionado à lista.`);
   }
 
   function addItemByVariationId(variationId) {
@@ -96,6 +193,11 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
     const maskedUnitPrice = productPrice > 0 ? maskCurrencyInput(String(Math.round(productPrice * 100))) : "";
 
     if (existingIdx >= 0) {
+      const canAdd = remainingUnits(selected.id, items, existingIdx);
+      if (canAdd < 1) {
+        showToast("Sem estoque disponivel para aumentar a quantidade.", "error");
+        return;
+      }
       setItems((prev) =>
         prev.map((it, idx) => {
           if (idx !== existingIdx) return it;
@@ -104,6 +206,10 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
         })
       );
     } else {
+      if (remainingUnits(selected.id, items) < 1) {
+        showToast("Sem estoque disponivel para esta variacao.", "error");
+        return;
+      }
       setItems((prev) => [
         ...prev,
         {
@@ -162,6 +268,12 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
   async function createSale(event) {
     event.preventDefault();
     setError("");
+    if (!items.length) {
+      const msg = "Adicione pelo menos um produto à venda.";
+      setError(msg);
+      showToast(msg, "error");
+      return;
+    }
     for (let i = 0; i < items.length; i += 1) {
       const row = items[i];
       if (!row.categoryId) {
@@ -196,30 +308,49 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
         showToast(msg, "error");
         return;
       }
+      const maxQ = ceilingForVariation(row.productVariationId);
+      if (qty > maxQ) {
+        const msg = `Item ${i + 1}: estoque insuficiente (maximo ${maxQ}).`;
+        setError(msg);
+        showToast(msg, "error");
+        return;
+      }
     }
     setLoading(true);
     try {
       const endpoint = editingSaleId ? `/sales/${editingSaleId}` : "/sales";
       const method = editingSaleId ? "PUT" : "POST";
+      const installments =
+        form.paymentMethod === "INSTALLMENT" ? Math.max(2, Number(form.installments) || 2) : 1;
+      const body = {
+        paymentMethod: form.paymentMethod,
+        installments,
+        discountValue: form.discountValue === "" ? 0 : Number(form.discountValue),
+        discountPercent: form.discountPercent === "" ? 0 : Number(form.discountPercent),
+        items: items.map((item) => ({
+          productVariationId: item.productVariationId,
+          quantity: parseQuantity(item.quantity),
+          unitPrice: parseCurrencyInput(item.unitPrice)
+        }))
+      };
+      /** `Boolean(undefined)` vira false e quebrava o padrao; `!== false` reflete desmarcado e omissao corretamente. */
+      if (!editingSaleId) {
+        body.emitNfce = form.emitNfce !== false;
+      }
+
       await apiClient(endpoint, {
         method,
         token,
-        body: {
-          ...form,
-          installments: form.paymentMethod === "INSTALLMENT" ? Math.max(2, Number(form.installments) || 2) : 1,
-          discountValue: form.discountValue === "" ? 0 : Number(form.discountValue),
-          discountPercent: form.discountPercent === "" ? 0 : Number(form.discountPercent),
-          items: items.map((item) => ({
-            productVariationId: item.productVariationId,
-            quantity: parseQuantity(item.quantity),
-            unitPrice: parseCurrencyInput(item.unitPrice)
-          }))
-        }
+        body
       });
       showToast(editingSaleId ? "Venda atualizada." : "Venda criada.");
       setEditingSaleId(null);
-      setForm(DEFAULT_SALE_FORM);
-      setItems([emptyLineItem()]);
+      setEditSaleStockRelease(new Map());
+      setForm((prev) => ({
+        ...DEFAULT_SALE_FORM,
+        emitNfce: prev.emitNfce
+      }));
+      setItems([]);
       await load();
     } catch (err) {
       setError(err.message);
@@ -238,8 +369,15 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
         paymentMethod: fullSale.paymentMethod,
         installments: Math.max(1, Number(fullSale.installments || 1)),
         discountValue: dv !== 0 ? dv : "",
-        discountPercent: dp !== 0 ? dp : ""
+        discountPercent: dp !== 0 ? dp : "",
+        emitNfce: DEFAULT_SALE_FORM.emitNfce
       });
+      const release = new Map();
+      for (const it of fullSale.items || []) {
+        const id = it.productVariationId;
+        release.set(id, (release.get(id) || 0) + Number(it.quantity || 0));
+      }
+      setEditSaleStockRelease(release);
       setItems(
         (fullSale.items || []).map((item) => {
           const fromApi = item.productVariation;
@@ -294,8 +432,9 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
 
   function cancelEdit() {
     setEditingSaleId(null);
+    setEditSaleStockRelease(new Map());
     setForm(DEFAULT_SALE_FORM);
-    setItems([emptyLineItem()]);
+    setItems([]);
   }
 
   return {
@@ -304,17 +443,17 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
     items,
     editingSaleId,
     loading,
-    barcodeInput,
-    setBarcodeInput,
-    addItem,
     updateItem,
+    removeItem,
     addItemByBarcode,
     addItemByVariationId,
+    addManualLine,
     createSale,
     editSale,
     cancelSale,
     cancelEdit,
     retryNfce,
-    downloadNfcePdf
+    downloadNfcePdf,
+    getRemainingUnits: (variationId, excludeIndex = -1) => remainingUnits(variationId, items, excludeIndex)
   };
 }

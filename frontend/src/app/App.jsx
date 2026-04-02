@@ -9,6 +9,8 @@ import { VariationsPage } from "../features/catalog/VariationsPage.jsx";
 import { SalesPage } from "../features/sales/NfceSalesPage.jsx";
 import { StockMovementsPage } from "../features/stock/StockMovementsPage.jsx";
 import { ReportsPage } from "../features/reports/ReportsPage.jsx";
+import { CrediarioPage } from "../features/crediario/CrediarioPage.jsx";
+import { CustomersPage } from "../features/customers/CustomersPage.jsx";
 import { AppShell } from "../shared/components/AppShell.jsx";
 import { ToastProvider } from "../shared/components/ToastProvider.jsx";
 import { ConfirmProvider } from "../shared/components/ConfirmProvider.jsx";
@@ -40,6 +42,8 @@ function AppRoutes() {
       <Route path="/stock" element={<Navigate to="/estoque/movimentos" replace />} />
       <Route path="/reports" element={<Navigate to="/relatorios" replace />} />
       <Route path="/vendas" element={<PrivateShell><SalesPage /></PrivateShell>} />
+      <Route path="/crediario" element={<PrivateShell><CrediarioPage /></PrivateShell>} />
+      <Route path="/clientes" element={<PrivateShell><CustomersPage /></PrivateShell>} />
       <Route path="/estoque/movimentos" element={<PrivateShell><StockMovementsPage /></PrivateShell>} />
       <Route path="/relatorios" element={<PrivateShell><ReportsPage /></PrivateShell>} />
     </Routes>
