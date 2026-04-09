@@ -105,7 +105,7 @@ model Customer {
   id              String   @id @default(cuid())
   tenantId        String
   name            String
-  cpfCnpj         String
+  cpfCnpj         String?
   phone           String?
   email           String?
   address         String?

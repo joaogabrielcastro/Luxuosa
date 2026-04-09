@@ -361,7 +361,7 @@ export function CrediarioPage() {
                     <td className="py-2 pr-2 whitespace-nowrap">{formatDt(row.occurredAt)}</td>
                     <td className="py-2 pr-2">
                       <div className="font-medium text-slate-800">{row.customer?.name}</div>
-                      <div className="text-xs text-slate-500">{row.customer?.cpfCnpj}</div>
+                      <div className="text-xs text-slate-500">{row.customer?.cpfCnpj || "Sem CPF/CNPJ"}</div>
                     </td>
                     <td className="py-2 pr-2">{formatBrl(row.totalValue)}</td>
                     <td className="py-2 pr-2">{formatBrl(row.paidTotal)}</td>
@@ -447,7 +447,7 @@ export function CrediarioPage() {
               <option value="">Selecione...</option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name} — {c.cpfCnpj}
+                  {c.cpfCnpj ? `${c.name} — ${c.cpfCnpj}` : c.name}
                 </option>
               ))}
             </Select>

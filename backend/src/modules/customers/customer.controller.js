@@ -1,9 +1,23 @@
 import { z } from "zod";
 import { customerService } from "./customer.service.js";
 
+function digitsOnly(value) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+/** null = sem documento; senao 11 (CPF) ou 14 (CNPJ) digitos. */
+const cpfCnpjSchema = z
+  .preprocess((v) => {
+    const d = digitsOnly(v);
+    return d.length === 0 ? null : d;
+  }, z.union([z.null(), z.string()]))
+  .refine((v) => v === null || v.length === 11 || v.length === 14, {
+    message: "CPF (11 digitos), CNPJ (14 digitos) ou em branco."
+  });
+
 const customerSchema = z.object({
   name: z.string().min(2),
-  cpfCnpj: z.string().min(11),
+  cpfCnpj: cpfCnpjSchema,
   phone: z.string().min(8).optional(),
   email: z.string().email().optional(),
   address: z.string().optional(),

@@ -37,7 +37,7 @@ function buildCreateBody(form) {
   const cpf = digitsOnly(form.cpfCnpj);
   const body = {
     name: form.name.trim(),
-    cpfCnpj: cpf
+    cpfCnpj: cpf.length === 11 || cpf.length === 14 ? cpf : null
   };
   const phone = digitsOnly(form.phone);
   if (phone.length >= 8) body.phone = phone;
@@ -69,7 +69,7 @@ function buildUpdateBody(form) {
   const body = {};
   if (form.name.trim()) body.name = form.name.trim();
   const cpf = digitsOnly(form.cpfCnpj);
-  if (cpf.length >= 11) body.cpfCnpj = cpf;
+  body.cpfCnpj = cpf.length === 11 || cpf.length === 14 ? cpf : null;
   const phone = digitsOnly(form.phone);
   if (phone.length >= 8) body.phone = phone;
   const em = form.email.trim();
@@ -134,19 +134,14 @@ export function CustomersPage() {
       return;
     }
     const cpf = digitsOnly(form.cpfCnpj);
-    if (cpf.length < 11) {
-      setError("CPF ou CNPJ deve ter pelo menos 11 digitos.");
+    if (cpf.length > 0 && cpf.length !== 11 && cpf.length !== 14) {
+      setError("CPF deve ter 11 digitos, CNPJ 14 digitos, ou deixe o documento em branco.");
       return;
     }
     setLoading(true);
     try {
       if (editingId) {
         const body = buildUpdateBody(form);
-        if (Object.keys(body).length === 0) {
-          setError("Nada para atualizar.");
-          setLoading(false);
-          return;
-        }
         await apiClient(`/customers/${editingId}`, { method: "PUT", token, body });
         showToast("Cliente atualizado.");
       } else {
@@ -187,7 +182,7 @@ export function CustomersPage() {
     <div className="ui-page">
       <PageHeader
         title="Clientes"
-        description="Cadastro de clientes para vendas e crediario a prazo. CPF ou CNPJ sao obrigatorios."
+        description="Cadastro de clientes para vendas e crediario a prazo. CPF ou CNPJ e opcional; informe quando precisar de nota com dados do cliente."
       />
       <section className="grid gap-3 sm:grid-cols-2">
         <StatCard
@@ -213,12 +208,11 @@ export function CustomersPage() {
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-slate-600">CPF ou CNPJ *</span>
+            <span className="text-xs font-medium text-slate-600">CPF ou CNPJ (opcional)</span>
             <Input
               value={form.cpfCnpj}
               onChange={(e) => setForm((f) => ({ ...f, cpfCnpj: e.target.value }))}
-              placeholder="Somente numeros ou com pontuacao"
-              required
+              placeholder="11 digitos (CPF) ou 14 (CNPJ); vazio se nao tiver"
             />
           </label>
           <label className="flex flex-col gap-1">
@@ -303,7 +297,7 @@ export function CustomersPage() {
         renderCells={(c) => (
           <>
             <td className="py-2 font-medium text-slate-900">{c.name}</td>
-            <td className="py-2 font-mono text-xs text-slate-700">{c.cpfCnpj}</td>
+            <td className="py-2 font-mono text-xs text-slate-700">{c.cpfCnpj || "—"}</td>
             <td className="py-2 text-sm text-slate-600">{c.phone || "—"}</td>
             <td className="max-w-[180px] truncate py-2 text-sm text-slate-600">{c.email || "—"}</td>
             <td className="py-2">
