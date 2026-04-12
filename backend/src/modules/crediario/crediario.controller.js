@@ -12,7 +12,8 @@ const createSchema = z.object({
       z.object({
         productVariationId: z.string().min(1),
         quantity: z.coerce.number().int().positive(),
-        unitPrice: z.coerce.number().positive()
+        unitPrice: z.coerce.number().positive(),
+        stockUnitId: z.string().optional()
       })
     )
     .min(1)

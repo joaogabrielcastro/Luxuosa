@@ -35,6 +35,16 @@ export function VariationsPage() {
   const [formCategoryId, setFormCategoryId] = useState("");
   const [formBrandId, setFormBrandId] = useState("");
   const [form, setForm] = useState(EMPTY_VARIATION_FORM);
+  const [stockUnits, setStockUnits] = useState([]);
+  const [newUnitBarcode, setNewUnitBarcode] = useState("");
+  const [newUnitNotes, setNewUnitNotes] = useState("");
+  const [unitsLoading, setUnitsLoading] = useState(false);
+
+  const selectedProduct = useMemo(
+    () => products.find((p) => p.id === form.productId),
+    [products, form.productId]
+  );
+  const trackByUnit = selectedProduct?.trackByUnit === true;
 
   async function load() {
     setListLoading(true);
@@ -70,6 +80,76 @@ export function VariationsPage() {
     setVariationSkip(0);
   }, [query, categoryFilter, brandFilter, productFilter]);
 
+  async function loadStockUnits(variationId) {
+    if (!variationId || !trackByUnit) {
+      setStockUnits([]);
+      return;
+    }
+    setUnitsLoading(true);
+    try {
+      const data = await apiClient(`/stock-units?productVariationId=${encodeURIComponent(variationId)}`, { token });
+      setStockUnits(Array.isArray(data) ? data : []);
+    } catch {
+      setStockUnits([]);
+    } finally {
+      setUnitsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (editingId && trackByUnit) {
+      loadStockUnits(editingId).catch(() => setStockUnits([]));
+    } else {
+      setStockUnits([]);
+    }
+  }, [editingId, trackByUnit, token]);
+
+  async function addStockUnit(e) {
+    e.preventDefault();
+    if (!editingId || !newUnitBarcode.trim()) return;
+    setError("");
+    setLoading(true);
+    try {
+      await apiClient("/stock-units", {
+        method: "POST",
+        token,
+        body: {
+          productVariationId: editingId,
+          barcode: newUnitBarcode.trim(),
+          notes: newUnitNotes.trim() || undefined
+        }
+      });
+      setNewUnitBarcode("");
+      setNewUnitNotes("");
+      showToast("Codigo cadastrado.");
+      await loadStockUnits(editingId);
+      await load();
+    } catch (err) {
+      setError(err.message);
+      showToast(err.message, "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function removeStockUnit(unitId) {
+    try {
+      const confirmed = await confirm({
+        title: "Remover codigo",
+        message: "Remover esta unidade do estoque disponivel?",
+        confirmText: "Remover"
+      });
+      if (!confirmed) return;
+      await apiClient(`/stock-units/${unitId}`, { method: "DELETE", token });
+      showToast("Unidade removida.");
+      if (editingId) await loadStockUnits(editingId);
+      await load();
+    } catch (err) {
+      setError(err.message);
+      showToast(err.message, "error");
+    }
+  }
+
   async function createVariation(event) {
     event.preventDefault();
     setError("");
@@ -78,7 +158,10 @@ export function VariationsPage() {
       await apiClient(editingId ? `/product-variations/${editingId}` : "/product-variations", {
         method: editingId ? "PUT" : "POST",
         token,
-        body: { ...form, stock: Number(form.stock) }
+        body: {
+          ...form,
+          stock: trackByUnit ? 0 : Number(form.stock)
+        }
       });
       showToast(editingId ? "Variacao atualizada." : "Variacao criada.");
       setEditingId("");
@@ -219,11 +302,17 @@ export function VariationsPage() {
           />
           <Input
             className="md:col-span-2"
-            placeholder="Estoque"
+            placeholder={trackByUnit ? "Estoque (calculado pelos codigos)" : "Estoque"}
             type="number"
             value={form.stock}
+            disabled={trackByUnit}
             onChange={(e) => setForm((prev) => ({ ...prev, stock: e.target.value }))}
           />
+          {trackByUnit ? (
+            <p className="md:col-span-2 text-xs text-slate-600">
+              Com &quot;rastrear por peca&quot; no produto, cadastre cada codigo abaixo apos salvar a variacao.
+            </p>
+          ) : null}
           <div className="flex gap-2 md:col-span-2">
             <Button disabled={loading}>
               {editingId ? "Atualizar variacao" : "Salvar variacao"}
@@ -246,6 +335,51 @@ export function VariationsPage() {
         </form>
         {error ? <Alert className="mt-2" variant="danger">{error}</Alert> : null}
       </SectionCard>
+
+      {editingId && trackByUnit ? (
+        <SectionCard title="Codigos de barras desta variacao">
+          <p className="text-xs text-slate-600">
+            Cada linha e uma peca fisica. O estoque da variacao e a quantidade de codigos disponiveis.
+          </p>
+          <form className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end" onSubmit={addStockUnit}>
+            <Input
+              placeholder="Codigo de barras"
+              value={newUnitBarcode}
+              onChange={(e) => setNewUnitBarcode(e.target.value)}
+            />
+            <Input
+              className="sm:flex-1"
+              placeholder="Observacao (opcional)"
+              value={newUnitNotes}
+              onChange={(e) => setNewUnitNotes(e.target.value)}
+            />
+            <Button type="submit" disabled={loading || !newUnitBarcode.trim()}>
+              Adicionar
+            </Button>
+          </form>
+          <div className="mt-3 rounded border border-slate-200">
+            {unitsLoading ? (
+              <p className="p-3 text-xs text-slate-500">Carregando...</p>
+            ) : stockUnits.length === 0 ? (
+              <p className="p-3 text-xs text-slate-500">Nenhum codigo cadastrado.</p>
+            ) : (
+              <ul className="divide-y divide-slate-100 text-sm">
+                {stockUnits.map((u) => (
+                  <li key={u.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                    <span className="font-mono text-xs">{u.barcode}</span>
+                    <span className="text-xs text-slate-500">{u.status}</span>
+                    {u.status === "AVAILABLE" ? (
+                      <Button type="button" variant="danger" className="px-2 py-0.5 text-xs" onClick={() => removeStockUnit(u.id)}>
+                        Remover
+                      </Button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </SectionCard>
+      ) : null}
 
       <SectionCard title="Lista de variacoes">
       <DataTable
@@ -307,7 +441,14 @@ export function VariationsPage() {
             <td className="py-2">{item.product?.brand?.name}</td>
             <td className="py-2">{item.size}</td>
             <td className="py-2">{item.color}</td>
-            <td className="py-2">{item.stock}</td>
+            <td className="py-2">
+              {item.stock}
+              {item.product?.trackByUnit ? (
+                <span className="ml-1 text-[10px] text-violet-700" title="Estoque por codigo">
+                  (peca)
+                </span>
+              ) : null}
+            </td>
             <td className="py-2">
               <Button variant="secondary" className="mr-2 px-2 py-1 text-xs" onClick={() => startEdit(item)}>
                 Editar

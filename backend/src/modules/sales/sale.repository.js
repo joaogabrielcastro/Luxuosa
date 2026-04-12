@@ -45,7 +45,8 @@ export const saleRepository = {
             tenantId,
             productVariationId: item.productVariationId,
             quantity: item.quantity,
-            unitPrice: item.unitPrice
+            unitPrice: item.unitPrice,
+            ...(item.stockUnitId ? { stockUnitId: item.stockUnitId } : {})
           }))
         }
       },
@@ -99,7 +100,8 @@ export const saleRepository = {
             tenantId,
             productVariationId: item.productVariationId,
             quantity: item.quantity,
-            unitPrice: item.unitPrice
+            unitPrice: item.unitPrice,
+            ...(item.stockUnitId ? { stockUnitId: item.stockUnitId } : {})
           }))
         }
       },

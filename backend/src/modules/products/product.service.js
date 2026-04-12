@@ -1,5 +1,42 @@
+import { StockUnitStatus } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
 import { productRepository } from "./product.repository.js";
+
+async function assertTrackByUnitToggle(tenantId, productId, wasTrackByUnit, nextTrackByUnit) {
+  if (wasTrackByUnit === nextTrackByUnit) return;
+
+  const variations = await prisma.productVariation.findMany({
+    where: { tenantId, productId },
+    select: { id: true, stock: true }
+  });
+
+  if (nextTrackByUnit === true) {
+    const hasStock = variations.some((v) => v.stock > 0);
+    if (hasStock) {
+      const err = new Error(
+        "Para ativar rastreio por peca, o estoque numerico das variacoes deve estar zero. Ajuste ou cadastre unidades com codigo de barras."
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+    return;
+  }
+
+  const available = await prisma.stockUnit.count({
+    where: {
+      tenantId,
+      status: StockUnitStatus.AVAILABLE,
+      productVariationId: { in: variations.map((v) => v.id) }
+    }
+  });
+  if (available > 0) {
+    const err = new Error(
+      "Para desativar rastreio por peca, remova ou venda todas as unidades ainda disponiveis (codigos em estoque)."
+    );
+    err.statusCode = 400;
+    throw err;
+  }
+}
 
 export const productService = {
   list(tenantId) {
@@ -55,6 +92,20 @@ export const productService = {
         throw err;
       }
     }
+
+    if (payload.trackByUnit !== undefined) {
+      const current = await prisma.product.findFirst({
+        where: { tenantId, id },
+        select: { trackByUnit: true }
+      });
+      if (!current) {
+        const err = new Error("Produto nao encontrado.");
+        err.statusCode = 404;
+        throw err;
+      }
+      await assertTrackByUnitToggle(tenantId, id, current.trackByUnit, payload.trackByUnit);
+    }
+
     const result = await productRepository.update(tenantId, id, payload);
     if (result.count === 0) {
       const err = new Error("Produto nao encontrado.");

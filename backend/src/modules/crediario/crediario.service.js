@@ -1,6 +1,12 @@
-import { CreditSaleStatus, PaymentMethod, StockMovementType } from "@prisma/client";
+import { CreditSaleStatus, PaymentMethod } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
 import { pagedResult } from "../../shared/pagination.js";
+import {
+  applyStockExitForLine,
+  assertStockUnitsAvailable,
+  buildAndValidateSaleLineItems,
+  restoreStockForLine
+} from "../../shared/saleStockLineItems.js";
 
 function toNumber(value, fallback = 0) {
   const parsed = Number(value);
@@ -42,18 +48,7 @@ function assertDiscountPolicy(userType, discountValue, discountPercent, grossTot
 
 async function restoreCreditSaleEffects(tx, tenantId, creditSale) {
   for (const item of creditSale.items) {
-    await tx.productVariation.updateMany({
-      where: { tenantId, id: item.productVariationId },
-      data: { stock: { increment: item.quantity } }
-    });
-    await tx.stockMovement.create({
-      data: {
-        tenantId,
-        productVariationId: item.productVariationId,
-        type: StockMovementType.ENTRY,
-        quantity: item.quantity
-      }
-    });
+    await restoreStockForLine(tx, tenantId, item);
   }
 
   const totalValue = toNumber(creditSale.totalValue);
@@ -157,19 +152,8 @@ export const crediarioService = {
       }
 
       const variationMap = new Map(variations.map((item) => [item.id, item]));
-      const saleItems = payload.items.map((item) => {
-        const variation = variationMap.get(item.productVariationId);
-        if (!variation || variation.stock < item.quantity) {
-          const err = new Error(`Estoque insuficiente para variacao ${item.productVariationId}.`);
-          err.statusCode = 400;
-          throw err;
-        }
-        return {
-          productVariationId: item.productVariationId,
-          quantity: item.quantity,
-          unitPrice: Number(item.unitPrice)
-        };
-      });
+      const saleItems = buildAndValidateSaleLineItems(payload.items, variationMap);
+      await assertStockUnitsAvailable(tx, tenantId, saleItems);
 
       const grossTotal = saleItems.reduce((acc, item) => acc + item.quantity * item.unitPrice, 0);
       const discountValue = toNumber(payload.discountValue, 0);
@@ -194,7 +178,8 @@ export const crediarioService = {
               tenantId,
               productVariationId: item.productVariationId,
               quantity: item.quantity,
-              unitPrice: item.unitPrice
+              unitPrice: item.unitPrice,
+              ...(item.stockUnitId ? { stockUnitId: item.stockUnitId } : {})
             }))
           }
         },
@@ -205,23 +190,7 @@ export const crediarioService = {
       });
 
       for (const item of saleItems) {
-        const dec = await tx.productVariation.updateMany({
-          where: { tenantId, id: item.productVariationId, stock: { gte: item.quantity } },
-          data: { stock: { decrement: item.quantity } }
-        });
-        if (dec.count === 0) {
-          const err = new Error(`Estoque insuficiente para variacao ${item.productVariationId}.`);
-          err.statusCode = 400;
-          throw err;
-        }
-        await tx.stockMovement.create({
-          data: {
-            tenantId,
-            productVariationId: item.productVariationId,
-            type: StockMovementType.EXIT,
-            quantity: item.quantity
-          }
-        });
+        await applyStockExitForLine(tx, tenantId, item);
       }
 
       await tx.customer.updateMany({

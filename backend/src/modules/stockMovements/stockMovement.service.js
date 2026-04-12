@@ -29,11 +29,20 @@ export const stockMovementService = {
 
     return prisma.$transaction(async (tx) => {
       const variation = await tx.productVariation.findFirst({
-        where: { id: payload.productVariationId, tenantId }
+        where: { id: payload.productVariationId, tenantId },
+        include: { product: true }
       });
       if (!variation) {
         const err = new Error("Variacao nao encontrada nesta loja.");
         err.statusCode = 404;
+        throw err;
+      }
+
+      if (variation.product.trackByUnit) {
+        const err = new Error(
+          "Este produto rastreia estoque por peca. Use cadastro de codigos na variacao em vez de movimento manual."
+        );
+        err.statusCode = 400;
         throw err;
       }
 

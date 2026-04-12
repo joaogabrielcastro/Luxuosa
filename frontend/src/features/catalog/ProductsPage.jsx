@@ -38,7 +38,8 @@ const EMPTY_PRODUCT_FORM = {
   categoryId: "",
   brandId: "",
   sku: "",
-  minStock: ""
+  minStock: "",
+  trackByUnit: false
 };
 
 export function ProductsPage() {
@@ -150,11 +151,12 @@ export function ProductsPage() {
           ...form,
           price: parseCurrencyInput(form.price),
           cost: parseCurrencyInput(form.cost),
-          minStock: Number(form.minStock || 0)
+          minStock: Number(form.minStock || 0),
+          trackByUnit: Boolean(form.trackByUnit)
         }
       });
       const productId = editingId || response?.id;
-      if (productId) {
+      if (productId && !form.trackByUnit) {
         await syncProductStock(productId, currentStockPreview);
       }
       showToast(editingId ? "Produto atualizado." : "Produto criado.");
@@ -198,7 +200,8 @@ export function ProductsPage() {
       categoryId: item.categoryId || "",
       brandId: item.brandId || "",
       sku: item.sku || "",
-      minStock: Number(item.minStock || 0)
+      minStock: Number(item.minStock || 0),
+      trackByUnit: item.trackByUnit === true
     });
     setCurrentStockPreview(item.variations?.reduce((acc, v) => acc + v.stock, 0) || 0);
   }
@@ -267,11 +270,25 @@ export function ProductsPage() {
             />
           </div>
           <div>
+            <label className="mb-1 flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={Boolean(form.trackByUnit)}
+                onChange={(e) => setForm((prev) => ({ ...prev, trackByUnit: e.target.checked }))}
+              />
+              Rastrear estoque por peca (codigo de barras por unidade)
+            </label>
+            <p className="text-xs text-slate-500">
+              Ative para pecas unicas; o estoque sera a soma dos codigos cadastrados em Variacoes.
+            </p>
+          </div>
+          <div>
             <Input
-              placeholder="Quantidade atual"
+              placeholder={form.trackByUnit ? "Estoque por codigos (ver Variacoes)" : "Quantidade atual"}
               type="number"
-              value={form.stock}
+              value={form.trackByUnit ? String(currentStockPreview) : currentStockPreview}
               min="0"
+              disabled={form.trackByUnit}
               onChange={(e) => setCurrentStockPreview(e.target.value)}
             />
           </div>
@@ -354,7 +371,7 @@ export function ProductsPage() {
           getRowClassName={productLowStockClass}
           columns={[
             { key: "name", label: "Nome" },
-            { key: "sku", label: "SKU" },
+            { key: "sku", label: "SKU / tipo" },
             { key: "category", label: "Categoria" },
             { key: "brand", label: "Marca" },
             { key: "min", label: "Min" },
@@ -401,7 +418,14 @@ export function ProductsPage() {
             return (
             <>
               <td className="py-2">{item.name}</td>
-              <td className="py-2">{item.sku}</td>
+              <td className="py-2">
+                {item.sku}
+                {item.trackByUnit ? (
+                  <span className="ml-2 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-800">
+                    Por peca
+                  </span>
+                ) : null}
+              </td>
               <td className="py-2">{item.category?.name}</td>
               <td className="py-2">{item.brand?.name}</td>
               <td className="py-2">{item.minStock}</td>

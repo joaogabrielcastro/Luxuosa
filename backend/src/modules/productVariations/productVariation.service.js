@@ -23,10 +23,24 @@ export const productVariationService = {
       err.statusCode = 400;
       throw err;
     }
-    return productVariationRepository.create(tenantId, payload);
+    const data = { ...payload };
+    if (product.trackByUnit) {
+      data.stock = 0;
+    }
+    return productVariationRepository.create(tenantId, data);
   },
 
   async update(tenantId, id, payload) {
+    const existing = await prisma.productVariation.findFirst({
+      where: { tenantId, id },
+      include: { product: true }
+    });
+    if (!existing) {
+      const err = new Error("Variacao nao encontrada.");
+      err.statusCode = 404;
+      throw err;
+    }
+
     if (payload.productId) {
       const product = await prisma.product.findFirst({
         where: { id: payload.productId, tenantId }
@@ -37,7 +51,16 @@ export const productVariationService = {
         throw err;
       }
     }
-    const result = await productVariationRepository.update(tenantId, id, payload);
+
+    const data = { ...payload };
+    const productRef = await prisma.product.findFirst({
+      where: { id: payload.productId || existing.productId, tenantId }
+    });
+    if (productRef?.trackByUnit && data.stock !== undefined) {
+      delete data.stock;
+    }
+
+    const result = await productVariationRepository.update(tenantId, id, data);
     if (result.count === 0) {
       const err = new Error("Variacao nao encontrada.");
       err.statusCode = 404;
@@ -58,13 +81,21 @@ export const productVariationService = {
         throw err;
       }
 
-      const [saleItems, creditItems] = await Promise.all([
+      const [saleItems, creditItems, unitCount] = await Promise.all([
         tx.saleItem.count({ where: { tenantId, productVariationId: id } }),
-        tx.creditSaleItem.count({ where: { tenantId, productVariationId: id } })
+        tx.creditSaleItem.count({ where: { tenantId, productVariationId: id } }),
+        tx.stockUnit.count({ where: { tenantId, productVariationId: id } })
       ]);
       if (saleItems > 0 || creditItems > 0) {
         const err = new Error(
           "Nao e possivel excluir variacao com vendas ou crediario vinculados."
+        );
+        err.statusCode = 409;
+        throw err;
+      }
+      if (unitCount > 0) {
+        const err = new Error(
+          "Remova as unidades (codigos de barras) desta variacao antes de excluir."
         );
         err.statusCode = 409;
         throw err;

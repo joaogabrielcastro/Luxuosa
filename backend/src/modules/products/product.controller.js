@@ -11,6 +11,8 @@ const productSchema = z.object({
   brandId: z.string().min(1),
   sku: z.string().min(2),
   minStock: z.coerce.number().int().nonnegative(),
+  /** Estoque por peca (codigo de barras por unidade fisica). */
+  trackByUnit: z.boolean().optional(),
   ncm: z.string().regex(/^\d{8}$/).optional(),
   cfop: z.string().regex(/^\d{4}$/).optional(),
   icmsOrig: z.coerce.number().int().min(0).max(8).optional(),

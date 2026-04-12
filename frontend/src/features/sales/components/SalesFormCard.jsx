@@ -93,13 +93,13 @@ export function SalesFormCard({
       .slice(0, 8);
   }, [unifiedInput, variations, getRemainingUnits]);
 
-  function handleUnifiedEnter() {
+  async function handleUnifiedEnter() {
     const raw = unifiedInput.trim();
     if (!raw) return;
 
     const skuHits = variations.filter((v) => String(v.product?.sku || "").trim() === raw);
     if (skuHits.length) {
-      addItemByBarcode(raw);
+      await addItemByBarcode(raw);
       setUnifiedInput("");
       return;
     }
@@ -114,7 +114,9 @@ export function SalesFormCard({
       showToast("Varios resultados: toque em um item da lista abaixo.", "error");
       return;
     }
-    showToast("Nenhum produto encontrado. Confira o SKU ou busque na lista.", "error");
+
+    await addItemByBarcode(raw);
+    setUnifiedInput("");
   }
 
   const brandsInManual = brandIdsForCategory(variations, manualDraft.categoryId);
@@ -161,7 +163,7 @@ export function SalesFormCard({
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
-                  handleUnifiedEnter();
+                  void handleUnifiedEnter();
                 }
               }}
               autoComplete="off"
