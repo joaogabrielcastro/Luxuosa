@@ -61,7 +61,8 @@ export function ProductsPage() {
   const [error, setError] = useState("");
   const [scannerSku, setScannerSku] = useState("");
   const [form, setForm] = useState(EMPTY_PRODUCT_FORM);
-  const [currentStockPreview, setCurrentStockPreview] = useState(0);
+  /** String vazia = mostrar placeholder (como minima); nao exibir 0 no campo. */
+  const [currentStockPreview, setCurrentStockPreview] = useState("");
 
   async function load() {
     setListLoading(true);
@@ -157,12 +158,15 @@ export function ProductsPage() {
       });
       const productId = editingId || response?.id;
       if (productId && !form.trackByUnit) {
-        await syncProductStock(productId, currentStockPreview);
+        const skipStockAdjust = Boolean(editingId) && currentStockPreview === "";
+        if (!skipStockAdjust) {
+          await syncProductStock(productId, currentStockPreview);
+        }
       }
       showToast(editingId ? "Produto atualizado." : "Produto criado.");
       setEditingId("");
       setForm(EMPTY_PRODUCT_FORM);
-      setCurrentStockPreview(0);
+      setCurrentStockPreview("");
       await load();
     } catch (err) {
       setError(err.message);
@@ -203,7 +207,8 @@ export function ProductsPage() {
       minStock: Number(item.minStock || 0),
       trackByUnit: item.trackByUnit === true
     });
-    setCurrentStockPreview(item.variations?.reduce((acc, v) => acc + v.stock, 0) || 0);
+    const stockSum = productCurrentStock(item);
+    setCurrentStockPreview(stockSum > 0 ? String(stockSum) : "");
   }
 
   function applyScannedSku() {
@@ -262,11 +267,13 @@ export function ProductsPage() {
           />
           <div>
             <Input
-              placeholder="Quantidade minima"
+              placeholder={form.trackByUnit ? "Estoque por codigos (ver Variacoes)" : "Quantidade atual"}
               type="number"
+              inputMode="numeric"
               min="0"
-              value={form.minStock}
-              onChange={(e) => setForm((prev) => ({ ...prev, minStock: e.target.value }))}
+              value={form.trackByUnit ? (Number(currentStockPreview) > 0 ? currentStockPreview : "") : currentStockPreview}
+              disabled={form.trackByUnit}
+              onChange={(e) => setCurrentStockPreview(e.target.value)}
             />
           </div>
           <div>
@@ -284,12 +291,11 @@ export function ProductsPage() {
           </div>
           <div>
             <Input
-              placeholder={form.trackByUnit ? "Estoque por codigos (ver Variacoes)" : "Quantidade atual"}
+              placeholder="Quantidade minima"
               type="number"
-              value={form.trackByUnit ? String(currentStockPreview) : currentStockPreview}
               min="0"
-              disabled={form.trackByUnit}
-              onChange={(e) => setCurrentStockPreview(e.target.value)}
+              value={form.minStock}
+              onChange={(e) => setForm((prev) => ({ ...prev, minStock: e.target.value }))}
             />
           </div>
           <Select
@@ -331,7 +337,7 @@ export function ProductsPage() {
                 onClick={() => {
                   setEditingId("");
                   setForm(EMPTY_PRODUCT_FORM);
-                  setCurrentStockPreview(0);
+                  setCurrentStockPreview("");
                 }}
               >
                 Cancelar

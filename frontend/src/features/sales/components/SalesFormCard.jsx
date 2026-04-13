@@ -106,6 +106,13 @@ export function SalesFormCard({
 
     const opts = quickOptions;
     if (opts.length === 1) {
+      if (opts[0].product?.trackByUnit) {
+        showToast(
+          "Produto por peca: nao da para confirmar com Enter nesta busca. Bip o codigo da etiqueta da peca (cadastrado em Variacoes).",
+          "error"
+        );
+        return;
+      }
       addItemByVariationId(opts[0].id);
       setUnifiedInput("");
       return;
@@ -146,7 +153,8 @@ export function SalesFormCard({
           <div>
             <h3 className="text-sm font-semibold text-slate-900">1. Adicionar produtos</h3>
             <p className="mt-1 text-xs text-slate-500">
-              Um unico campo: digite para buscar ou use o leitor de codigo de barras / SKU (Enter confirma).
+              Busca por nome, SKU, tamanho ou cor. <strong className="font-medium text-slate-700">Produtos por peca:</strong> so entram na venda pelo{" "}
+              <strong className="font-medium text-slate-700">codigo da etiqueta</strong> (bip neste campo), nao pelo SKU nem pelo clique na lista.
             </p>
           </div>
 
@@ -157,7 +165,7 @@ export function SalesFormCard({
             <Input
               id="sale-unified-search"
               className="text-base md:text-lg"
-              placeholder="Nome, SKU, tamanho, cor — ou bip do codigo de barras"
+              placeholder="Busca ou bip — por peca use codigo da etiqueta (nao o SKU)"
               value={unifiedInput}
               onChange={(e) => setUnifiedInput(e.target.value)}
               onKeyDown={(e) => {
@@ -170,20 +178,35 @@ export function SalesFormCard({
             />
             {quickOptions.length ? (
               <div className="max-h-48 overflow-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-                {quickOptions.map((variation) => (
-                  <button
-                    key={variation.id}
-                    type="button"
-                    className="flex w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5 text-left text-sm last:border-0 hover:bg-slate-50"
-                    onClick={() => {
-                      addItemByVariationId(variation.id);
-                      setUnifiedInput("");
-                    }}
-                  >
-                    <span className="min-w-0 truncate">{variationLabel(variation)}</span>
-                    <span className="shrink-0 text-xs text-slate-500">SKU {variation.product?.sku}</span>
-                  </button>
-                ))}
+                {quickOptions.map((variation) =>
+                  variation.product?.trackByUnit ? (
+                    <div
+                      key={variation.id}
+                      className="flex flex-col gap-0.5 border-b border-slate-100 bg-amber-50/80 px-3 py-2.5 text-left text-sm last:border-0"
+                    >
+                      <div className="flex w-full items-center justify-between gap-2">
+                        <span className="min-w-0 truncate">{variationLabel(variation)}</span>
+                        <span className="shrink-0 text-xs text-slate-500">SKU {variation.product?.sku}</span>
+                      </div>
+                      <p className="text-[11px] leading-snug text-amber-900">
+                        Por peca: bip o codigo da etiqueta neste campo (nao clique aqui — use o leitor).
+                      </p>
+                    </div>
+                  ) : (
+                    <button
+                      key={variation.id}
+                      type="button"
+                      className="flex w-full items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5 text-left text-sm last:border-0 hover:bg-slate-50"
+                      onClick={() => {
+                        addItemByVariationId(variation.id);
+                        setUnifiedInput("");
+                      }}
+                    >
+                      <span className="min-w-0 truncate">{variationLabel(variation)}</span>
+                      <span className="shrink-0 text-xs text-slate-500">SKU {variation.product?.sku}</span>
+                    </button>
+                  )
+                )}
               </div>
             ) : null}
           </div>

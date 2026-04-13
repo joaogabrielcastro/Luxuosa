@@ -310,7 +310,9 @@ export function VariationsPage() {
           />
           {trackByUnit ? (
             <p className="md:col-span-2 text-xs text-slate-600">
-              Com &quot;rastrear por peca&quot; no produto, cadastre cada codigo abaixo apos salvar a variacao.
+              {editingId
+                ? "O estoque e a quantidade de codigos na secao 'Codigos de barras' logo abaixo. Cadastre cada etiqueta com Adicionar; em Vendas, bip esse codigo."
+                : "Salve a variacao; depois use Editar na lista para abrir a secao de codigos (cada codigo = 1 peca em estoque)."}
             </p>
           ) : null}
           <div className="flex gap-2 md:col-span-2">

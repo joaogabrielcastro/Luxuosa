@@ -145,7 +145,10 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
     }
 
     if (selected.product?.trackByUnit) {
-      showToast("Este produto exige o codigo de barras da peca (etiqueta), nao o SKU.", "error");
+      showToast(
+        "Voce digitou o SKU do produto. Com 'por peca', cada etiqueta tem outro codigo — cadastre-o em Variacoes e bip aqui (nao use o SKU).",
+        "error"
+      );
       return;
     }
 
@@ -247,7 +250,10 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
     const selected = variations.find((v) => v.id === variationId);
     if (!selected) return;
     if (selected.product?.trackByUnit) {
-      showToast("Bip o codigo de barras da peca no campo de busca.", "error");
+      showToast(
+        "Este produto vende por peca: use o codigo da etiqueta (cadastrado em Variacoes), nao o SKU nem a lista. Bip esse codigo neste mesmo campo.",
+        "error"
+      );
       return;
     }
     const existingIdx = items.findIndex((it) => it.productVariationId === selected.id && !it.stockUnitId);
