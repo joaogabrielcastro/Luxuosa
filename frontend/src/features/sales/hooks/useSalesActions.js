@@ -60,16 +60,11 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
           const selectedVariation = variations.find((variation) => variation.id === value);
           const productPrice = Number(selectedVariation?.product?.price || 0);
           next.unitPrice = productPrice > 0 ? maskCurrencyInput(String(Math.round(productPrice * 100))) : "";
-          next.stockUnitId = "";
         }
         if (key === "unitPrice") {
           next.unitPrice = maskCurrencyInput(value);
         }
         if (key === "quantity") {
-          if (item.stockUnitId) {
-            next = { ...next, quantity: "1" };
-            return next;
-          }
           const vid = item.productVariationId;
           const maxQ = ceilingForVariation(vid);
           let q = parseQuantity(value);
@@ -86,51 +81,10 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
     );
   }
 
-  /** Bip: primeiro codigo de unidade; senao SKU do produto (sem rastreio por peca). */
+  /** Bip ou digitacao: corresponde ao SKU do produto e adiciona/atualiza linha. */
   async function addItemByBarcode(code) {
     const raw = String(code ?? "").trim();
     if (!raw) return;
-
-    try {
-      const resolved = await apiClient(
-        `/stock-units/resolve?barcode=${encodeURIComponent(raw)}`,
-        { token }
-      );
-      const v = resolved.productVariation;
-      if (!v?.id) {
-        showToast("Resposta invalida da API.", "error");
-        return;
-      }
-      const inCart = items.some((it) => it.stockUnitId && it.stockUnitId === resolved.stockUnit?.id);
-      if (inCart) {
-        showToast("Esta peca ja esta na lista.", "error");
-        return;
-      }
-      if (remainingUnits(v.id, items) < 1) {
-        showToast("Sem estoque disponivel para esta peca.", "error");
-        return;
-      }
-      const productPrice = Number(v.product?.price || 0);
-      const maskedUnitPrice = productPrice > 0 ? maskCurrencyInput(String(Math.round(productPrice * 100))) : "";
-      setItems((prev) => [
-        ...prev,
-        {
-          categoryId: v.product?.categoryId || "",
-          brandId: v.product?.brandId || "",
-          productVariationId: v.id,
-          stockUnitId: resolved.stockUnit.id,
-          quantity: "1",
-          unitPrice: maskedUnitPrice
-        }
-      ]);
-      showToast(`Peca: ${resolved.stockUnit?.barcode || raw} · ${v.product?.name || "Produto"}.`);
-      return;
-    } catch (e) {
-      if (e.status && e.status !== 404) {
-        showToast(e.message, "error");
-        return;
-      }
-    }
 
     const candidates = variations.filter((v) => String(v.product?.sku || "").trim() === raw);
     if (!candidates.length) {
@@ -144,17 +98,7 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
       return;
     }
 
-    if (selected.product?.trackByUnit) {
-      showToast(
-        "Voce digitou o SKU do produto. Com 'por peca', cada etiqueta tem outro codigo — cadastre-o em Variacoes e bip aqui (nao use o SKU).",
-        "error"
-      );
-      return;
-    }
-
-    const existingIdx = items.findIndex(
-      (it) => it.productVariationId === selected.id && !it.stockUnitId
-    );
+    const existingIdx = items.findIndex((it) => it.productVariationId === selected.id);
     const productPrice = Number(selected.product?.price || 0);
     const maskedUnitPrice = productPrice > 0 ? maskCurrencyInput(String(Math.round(productPrice * 100))) : "";
 
@@ -206,14 +150,9 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
       return;
     }
 
-    if (selected.product?.trackByUnit) {
-      showToast("Use o leitor no campo de busca para bipar o codigo da peca.", "error");
-      return;
-    }
-
     const productPrice = Number(selected.product?.price || 0);
     const maskedUnitPrice = productPrice > 0 ? maskCurrencyInput(String(Math.round(productPrice * 100))) : "";
-    const existingIdx = items.findIndex((it) => it.productVariationId === selected.id && !it.stockUnitId);
+    const existingIdx = items.findIndex((it) => it.productVariationId === selected.id);
     const rem = remainingUnits(selected.id, items, existingIdx >= 0 ? existingIdx : -1);
     if (existingIdx >= 0) {
       if (qty > rem) {
@@ -249,14 +188,7 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
   function addItemByVariationId(variationId) {
     const selected = variations.find((v) => v.id === variationId);
     if (!selected) return;
-    if (selected.product?.trackByUnit) {
-      showToast(
-        "Este produto vende por peca: use o codigo da etiqueta (cadastrado em Variacoes), nao o SKU nem a lista. Bip esse codigo neste mesmo campo.",
-        "error"
-      );
-      return;
-    }
-    const existingIdx = items.findIndex((it) => it.productVariationId === selected.id && !it.stockUnitId);
+    const existingIdx = items.findIndex((it) => it.productVariationId === selected.id);
     const productPrice = Number(selected.product?.price || 0);
     const maskedUnitPrice = productPrice > 0 ? maskCurrencyInput(String(Math.round(productPrice * 100))) : "";
 
@@ -398,8 +330,7 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
         items: items.map((item) => ({
           productVariationId: item.productVariationId,
           quantity: parseQuantity(item.quantity),
-          unitPrice: parseCurrencyInput(item.unitPrice),
-          ...(item.stockUnitId ? { stockUnitId: item.stockUnitId } : {})
+          unitPrice: parseCurrencyInput(item.unitPrice)
         }))
       };
       /** `Boolean(undefined)` vira false e quebrava o padrao; `!== false` reflete desmarcado e omissao corretamente. */
@@ -457,7 +388,6 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
             categoryId,
             brandId,
             productVariationId: item.productVariationId,
-            stockUnitId: item.stockUnitId || "",
             quantity: String(item.quantity),
             unitPrice: maskCurrencyInput(String(Math.round(Number(item.unitPrice) * 100)))
           };

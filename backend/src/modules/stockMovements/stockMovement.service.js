@@ -38,14 +38,6 @@ export const stockMovementService = {
         throw err;
       }
 
-      if (variation.product.trackByUnit) {
-        const err = new Error(
-          "Este produto rastreia estoque por peca. Use cadastro de codigos na variacao em vez de movimento manual."
-        );
-        err.statusCode = 400;
-        throw err;
-      }
-
       if (type === StockMovementType.EXIT && variation.stock < qty) {
         const err = new Error(`Estoque insuficiente. Disponivel: ${variation.stock}.`);
         err.statusCode = 400;

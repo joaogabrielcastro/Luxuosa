@@ -11,7 +11,6 @@ import { invoiceRoutes } from "./modules/invoices/invoice.routes.js";
 import { stockMovementRoutes } from "./modules/stockMovements/stockMovement.routes.js";
 import { reportsRoutes } from "./modules/reports/reports.routes.js";
 import { crediarioRoutes } from "./modules/crediario/crediario.routes.js";
-import { stockUnitRoutes } from "./modules/stockUnits/stockUnit.routes.js";
 
 const router = Router();
 
@@ -28,6 +27,5 @@ router.use("/invoices", invoiceRoutes);
 router.use("/stock-movements", stockMovementRoutes);
 router.use("/reports", reportsRoutes);
 router.use("/crediario", crediarioRoutes);
-router.use("/stock-units", stockUnitRoutes);
 
 export { router };

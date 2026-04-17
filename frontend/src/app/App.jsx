@@ -5,7 +5,6 @@ import { AdminDashboardPage } from "../features/dashboard/AdminDashboardPage.jsx
 import { CategoriesPage } from "../features/catalog/CategoriesPage.jsx";
 import { BrandsPage } from "../features/catalog/BrandsPage.jsx";
 import { ProductsPage } from "../features/catalog/ProductsPage.jsx";
-import { VariationsPage } from "../features/catalog/VariationsPage.jsx";
 import { SalesPage } from "../features/sales/NfceSalesPage.jsx";
 import { StockMovementsPage } from "../features/stock/StockMovementsPage.jsx";
 import { ReportsPage } from "../features/reports/ReportsPage.jsx";
@@ -37,7 +36,7 @@ function AppRoutes() {
       <Route path="/catalog/categories" element={<PrivateShell><CategoriesPage /></PrivateShell>} />
       <Route path="/catalog/brands" element={<PrivateShell><BrandsPage /></PrivateShell>} />
       <Route path="/catalog/products" element={<PrivateShell><ProductsPage /></PrivateShell>} />
-      <Route path="/catalog/variations" element={<PrivateShell><VariationsPage /></PrivateShell>} />
+      <Route path="/catalog/variations" element={<Navigate to="/catalog/products" replace />} />
       <Route path="/sales" element={<Navigate to="/vendas" replace />} />
       <Route path="/stock" element={<Navigate to="/estoque/movimentos" replace />} />
       <Route path="/reports" element={<Navigate to="/relatorios" replace />} />

@@ -12,6 +12,7 @@ import { Select } from "../../shared/components/ui/Select.jsx";
 import { Textarea } from "../../shared/components/ui/Textarea.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
 import { Alert } from "../../shared/components/ui/Alert.jsx";
+import { ProductVariationsSection } from "./ProductVariationsSection.jsx";
 
 const AUTO_VARIATION_SIZE = "AUTO";
 const AUTO_VARIATION_COLOR = "ESTOQUE";
@@ -38,8 +39,7 @@ const EMPTY_PRODUCT_FORM = {
   categoryId: "",
   brandId: "",
   sku: "",
-  minStock: "",
-  trackByUnit: false
+  minStock: ""
 };
 
 export function ProductsPage() {
@@ -130,7 +130,9 @@ export function ProductsPage() {
 
     const decrement = current - desired;
     if (!autoVariation || Number(autoVariation.stock) < decrement) {
-      throw new Error("Nao foi possivel reduzir o estoque atual por aqui. Ajuste as variacoes em 'Variacoes'.");
+      throw new Error(
+        "Nao foi possivel reduzir o estoque atual por aqui. Ajuste as linhas na secao Variacoes abaixo ou o estoque da variacao automatica (AUTO/ESTOQUE)."
+      );
     }
 
     await apiClient(`/product-variations/${autoVariation.id}`, {
@@ -152,22 +154,30 @@ export function ProductsPage() {
           ...form,
           price: parseCurrencyInput(form.price),
           cost: parseCurrencyInput(form.cost),
-          minStock: Number(form.minStock || 0),
-          trackByUnit: Boolean(form.trackByUnit)
+          minStock: Number(form.minStock || 0)
         }
       });
       const productId = editingId || response?.id;
-      if (productId && !form.trackByUnit) {
+      if (productId) {
         const skipStockAdjust = Boolean(editingId) && currentStockPreview === "";
         if (!skipStockAdjust) {
           await syncProductStock(productId, currentStockPreview);
         }
       }
-      showToast(editingId ? "Produto atualizado." : "Produto criado.");
-      setEditingId("");
-      setForm(EMPTY_PRODUCT_FORM);
-      setCurrentStockPreview("");
-      await load();
+
+      if (editingId) {
+        showToast("Produto atualizado.");
+        await load();
+        const full = await apiClient(`/products/${editingId}`, { token });
+        startEdit(full);
+      } else if (response?.id) {
+        showToast("Produto criado.");
+        await load();
+        const full = await apiClient(`/products/${response.id}`, { token });
+        startEdit(full);
+      } else {
+        await load();
+      }
     } catch (err) {
       setError(err.message);
       showToast(err.message, "error");
@@ -186,6 +196,11 @@ export function ProductsPage() {
       });
       if (!confirmed) return;
       await apiClient(`/products/${id}`, { method: "DELETE", token });
+      if (id === editingId) {
+        setEditingId("");
+        setForm(EMPTY_PRODUCT_FORM);
+        setCurrentStockPreview("");
+      }
       await load();
       showToast("Produto excluido.");
     } catch (err) {
@@ -204,8 +219,7 @@ export function ProductsPage() {
       categoryId: item.categoryId || "",
       brandId: item.brandId || "",
       sku: item.sku || "",
-      minStock: Number(item.minStock || 0),
-      trackByUnit: item.trackByUnit === true
+      minStock: Number(item.minStock || 0)
     });
     const stockSum = productCurrentStock(item);
     setCurrentStockPreview(stockSum > 0 ? String(stockSum) : "");
@@ -221,7 +235,10 @@ export function ProductsPage() {
 
   return (
     <div className="ui-page">
-      <PageHeader title="Produtos" description="Cadastre e mantenha seu catalogo principal." />
+      <PageHeader
+        title="Produtos"
+        description="Cadastre o produto e, no mesmo lugar, as variacoes (tamanho, cor e estoque por combinacao)."
+      />
       <SectionCard title={editingId ? "Editar produto" : "Novo produto"}>
         <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs text-slate-600">
@@ -267,26 +284,15 @@ export function ProductsPage() {
           />
           <div>
             <Input
-              placeholder={form.trackByUnit ? "Estoque por codigos (ver Variacoes)" : "Quantidade atual"}
+              placeholder="Quantidade atual (total)"
               type="number"
               inputMode="numeric"
               min="0"
-              value={form.trackByUnit ? (Number(currentStockPreview) > 0 ? currentStockPreview : "") : currentStockPreview}
-              disabled={form.trackByUnit}
+              value={currentStockPreview}
               onChange={(e) => setCurrentStockPreview(e.target.value)}
             />
-          </div>
-          <div>
-            <label className="mb-1 flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={Boolean(form.trackByUnit)}
-                onChange={(e) => setForm((prev) => ({ ...prev, trackByUnit: e.target.checked }))}
-              />
-              Rastrear estoque por peca (codigo de barras por unidade)
-            </label>
-            <p className="text-xs text-slate-500">
-              Ative para pecas unicas; o estoque sera a soma dos codigos cadastrados em Variacoes.
+            <p className="mt-1 text-xs text-slate-500">
+              Atalho: ajusta uma variacao automatica (AUTO/ESTOQUE). Para grade (P/M, cores), use a secao abaixo.
             </p>
           </div>
           <div>
@@ -348,6 +354,13 @@ export function ProductsPage() {
         {error ? <Alert className="mt-2" variant="danger">{error}</Alert> : null}
       </SectionCard>
 
+      <ProductVariationsSection
+        token={token}
+        productId={editingId}
+        productName={form.name?.trim() || ""}
+        onChanged={() => load().catch(() => {})}
+      />
+
       <SectionCard title="Lista de produtos">
         <div className="mb-3 flex items-center justify-between text-xs text-slate-600">
           <span>{listLoading ? "Carregando..." : `Mostrando ${products.length} de ${totalProducts} produtos`}</span>
@@ -377,7 +390,7 @@ export function ProductsPage() {
           getRowClassName={productLowStockClass}
           columns={[
             { key: "name", label: "Nome" },
-            { key: "sku", label: "SKU / tipo" },
+            { key: "sku", label: "SKU" },
             { key: "category", label: "Categoria" },
             { key: "brand", label: "Marca" },
             { key: "min", label: "Min" },
@@ -424,14 +437,7 @@ export function ProductsPage() {
             return (
             <>
               <td className="py-2">{item.name}</td>
-              <td className="py-2">
-                {item.sku}
-                {item.trackByUnit ? (
-                  <span className="ml-2 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-800">
-                    Por peca
-                  </span>
-                ) : null}
-              </td>
+              <td className="py-2">{item.sku}</td>
               <td className="py-2">{item.category?.name}</td>
               <td className="py-2">{item.brand?.name}</td>
               <td className="py-2">{item.minStock}</td>

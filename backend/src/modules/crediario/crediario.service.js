@@ -3,7 +3,6 @@ import { prisma } from "../../config/prisma.js";
 import { pagedResult } from "../../shared/pagination.js";
 import {
   applyStockExitForLine,
-  assertStockUnitsAvailable,
   buildAndValidateSaleLineItems,
   restoreStockForLine
 } from "../../shared/saleStockLineItems.js";
@@ -153,7 +152,6 @@ export const crediarioService = {
 
       const variationMap = new Map(variations.map((item) => [item.id, item]));
       const saleItems = buildAndValidateSaleLineItems(payload.items, variationMap);
-      await assertStockUnitsAvailable(tx, tenantId, saleItems);
 
       const grossTotal = saleItems.reduce((acc, item) => acc + item.quantity * item.unitPrice, 0);
       const discountValue = toNumber(payload.discountValue, 0);
@@ -178,8 +176,7 @@ export const crediarioService = {
               tenantId,
               productVariationId: item.productVariationId,
               quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              ...(item.stockUnitId ? { stockUnitId: item.stockUnitId } : {})
+              unitPrice: item.unitPrice
             }))
           }
         },

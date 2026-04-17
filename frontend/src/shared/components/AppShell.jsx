@@ -6,7 +6,6 @@ import { Button } from "./ui/Button.jsx";
 import {
   BarChart3,
   Boxes,
-  ClipboardList,
   LayoutGrid,
   PackageSearch,
   ReceiptText,
@@ -21,7 +20,6 @@ const navItems = [
   { to: "/catalog/categories", label: "Categorias", icon: Tags },
   { to: "/catalog/brands", label: "Marcas", icon: Boxes },
   { to: "/catalog/products", label: "Produtos", icon: PackageSearch },
-  { to: "/catalog/variations", label: "Variacoes", icon: ClipboardList },
   { to: "/vendas", label: "Vendas", icon: ShoppingCart },
   { to: "/crediario", label: "Crediario", icon: WalletCards },
   { to: "/clientes", label: "Clientes", icon: Users },

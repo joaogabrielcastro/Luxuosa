@@ -51,12 +51,6 @@ enum NfceIssueJobStatus {
   FAILED
 }
 
-/** Unidade fisica (codigo de barras) para produtos com rastreio por peca. */
-enum StockUnitStatus {
-  AVAILABLE
-  SOLD
-}
-
 enum CreditSaleStatus {
   OPEN
   PAID
@@ -88,7 +82,6 @@ model Tenant {
   creditSales    CreditSale[]
   creditSaleItems CreditSaleItem[]
   creditPayments CreditPayment[]
-  stockUnits     StockUnit[]
 }
 
 model User {
@@ -173,8 +166,6 @@ model Product {
   cfop          String   @default("5102")
   icmsOrig      Int      @default(0)
   icmsCsosn     String   @default("102")
-  /** Se true, estoque da variacao e por unidades (codigo de barras); o campo stock espelha unidades disponiveis. */
-  trackByUnit   Boolean  @default(false)
   createdAt     DateTime @default(now())
 
   tenant        Tenant   @relation(fields: [tenantId], references: [id])
@@ -202,31 +193,10 @@ model ProductVariation {
   stockMoves    StockMovement[]
   saleItems     SaleItem[]
   creditSaleItems CreditSaleItem[]
-  stockUnits    StockUnit[]
 
   @@index([tenantId])
   @@index([tenantId, productId])
   @@unique([tenantId, productId, size, color])
-}
-
-model StockUnit {
-  id                 String           @id @default(cuid())
-  tenantId           String
-  productVariationId String
-  barcode            String
-  notes              String?
-  status             StockUnitStatus  @default(AVAILABLE)
-  createdAt          DateTime         @default(now())
-
-  tenant             Tenant           @relation(fields: [tenantId], references: [id])
-  productVariation   ProductVariation @relation(fields: [productVariationId], references: [id], onDelete: Cascade)
-  saleItem           SaleItem?
-  creditSaleItem     CreditSaleItem?
-
-  @@index([tenantId])
-  @@index([tenantId, productVariationId])
-  @@index([tenantId, status])
-  @@unique([tenantId, barcode])
 }
 
 model StockMovement {
@@ -275,12 +245,10 @@ model SaleItem {
   productVariationId String
   quantity           Int
   unitPrice          Decimal           @db.Decimal(12, 2)
-  stockUnitId        String?           @unique
 
   tenant             Tenant            @relation(fields: [tenantId], references: [id])
   sale               Sale              @relation(fields: [saleId], references: [id])
   productVariation   ProductVariation  @relation(fields: [productVariationId], references: [id])
-  stockUnit          StockUnit?        @relation(fields: [stockUnitId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, saleId])
@@ -359,12 +327,10 @@ model CreditSaleItem {
   productVariationId String
   quantity           Int
   unitPrice          Decimal          @db.Decimal(12, 2)
-  stockUnitId        String?          @unique
 
   tenant             Tenant           @relation(fields: [tenantId], references: [id])
   creditSale         CreditSale       @relation(fields: [creditSaleId], references: [id], onDelete: Cascade)
   productVariation   ProductVariation @relation(fields: [productVariationId], references: [id])
-  stockUnit          StockUnit?       @relation(fields: [stockUnitId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, creditSaleId])
