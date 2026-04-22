@@ -10,6 +10,9 @@ COPY . .
 # Injeta a URL da API no build (Coolify: VITE_API_URL no buildtime)
 ARG VITE_API_URL=http://localhost:3001/api/v1
 ENV VITE_API_URL=$VITE_API_URL
+# Opcional: commit SHA — no Coolify passe como Build Argument para ver no rodape da app se o deploy e o codigo certo
+ARG VITE_GIT_SHA=
+ENV VITE_GIT_SHA=$VITE_GIT_SHA
 
 RUN npm run build
 

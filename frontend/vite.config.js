@@ -46,6 +46,10 @@ export default defineConfig({
   preview: {
     host: "0.0.0.0",
     port: Number(process.env.PORT || 3000),
-    strictPort: true
+    strictPort: true,
+    /** Evita o browser ficar com index.html ou assets antigos apos novo deploy. */
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"
+    }
   }
 });

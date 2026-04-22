@@ -98,6 +98,12 @@ export function AppShell({ children }) {
           {children ?? <Outlet />}
         </section>
       </div>
+
+      {import.meta.env.VITE_GIT_SHA ? (
+        <footer className="mx-auto max-w-[1400px] px-4 pb-3 text-center text-[10px] text-slate-400">
+          Build {String(import.meta.env.VITE_GIT_SHA).slice(0, 12)}
+        </footer>
+      ) : null}
     </div>
   );
 }
