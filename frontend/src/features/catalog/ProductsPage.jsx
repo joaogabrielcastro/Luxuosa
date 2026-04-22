@@ -291,9 +291,6 @@ export function ProductsPage() {
               value={currentStockPreview}
               onChange={(e) => setCurrentStockPreview(e.target.value)}
             />
-            <p className="mt-1 text-xs text-slate-500">
-              Atalho: ajusta uma variacao automatica (AUTO/ESTOQUE). Para grade (P/M, cores), use a secao abaixo.
-            </p>
           </div>
           <div>
             <Input
