@@ -1,0 +1,12 @@
+# API Node + Prisma. No Coolify: Base Directory = backend, ou use backend/Dockerfile.
+# DATABASE_URL e PORT vêm das variáveis do serviço.
+# migrate deploy aplica migrações pendentes antes de subir o servidor.
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npx prisma generate"]
+
+[start]
+cmd = "npx prisma migrate deploy && node src/server.js"

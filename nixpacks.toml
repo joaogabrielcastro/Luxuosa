@@ -2,7 +2,7 @@
 # e o build do Vite em frontend/ quebra (sem node_modules).
 #
 # Use para o serviço do SPA no Coolify com diretório de build = raiz do repositório.
-# API: crie outro serviço com "Base Directory" = backend (ou use backend/Dockerfile).
+# API: serviço separado com Base Directory = backend (Dockerfile ou backend/nixpacks.toml).
 
 [phases.install]
 cmds = ["npm ci --prefix frontend"]
