@@ -390,8 +390,8 @@ export function ProductsPage() {
             { key: "sku", label: "SKU" },
             { key: "category", label: "Categoria" },
             { key: "brand", label: "Marca" },
+            { key: "stock", label: "Qtd atual" },
             { key: "min", label: "Min" },
-            { key: "stock", label: "Atual" },
             { key: "price", label: "Preco" },
             { key: "actions", label: "Acoes" }
           ]}
@@ -437,8 +437,8 @@ export function ProductsPage() {
               <td className="py-2">{item.sku}</td>
               <td className="py-2">{item.category?.name}</td>
               <td className="py-2">{item.brand?.name}</td>
-              <td className="py-2">{item.minStock}</td>
               <td className={`py-2 ${stockClass}`}>{current}</td>
+              <td className="py-2">{item.minStock}</td>
               <td className="py-2">{formatCurrencyBRL(item.price)}</td>
               <td className="py-2">
                 <Button variant="secondary" className="mr-2 px-2 py-1 text-xs" onClick={() => startEdit(item)}>
