@@ -1,6 +1,7 @@
 /** @typedef {{ endereco: { logradouro: string; numero?: string; complemento?: string; bairro: string; codigo_municipio: string; cidade: string; uf: string; cep: string }; cpf_cnpj: string; nome_razao_social: string; nome_fantasia?: string; inscricao_estadual?: string; fone?: string }} EmpresaNuvem */
 
 import crypto from "node:crypto";
+import { isAutoStockVariation } from "../autoVariation.js";
 
 const UF_CUF = {
   RO: 11,
@@ -232,14 +233,17 @@ function buildDetItem(item, nItem) {
   const qCom = item.quantity;
   const vUnCom = round2(Number(item.unitPrice));
   const vProd = round2(qCom * vUnCom);
-  const xProd = `${p.name} ${v.size} ${v.color}`.trim().slice(0, 120);
+  const xProd = isAutoStockVariation(v)
+    ? String(p.name || "").trim().slice(0, 120)
+    : `${p.name} ${v.size} ${v.color}`.trim().slice(0, 120);
   const ncm = digitsOnly(p.ncm).slice(0, 8).padStart(8, "0");
   const cfop = digitsOnly(p.cfop).slice(0, 4).padStart(4, "0");
+  const skuOrFallback = (p.sku && String(p.sku).trim()) || `ID-${p.id.slice(0, 12)}`;
 
   return {
     nItem,
     prod: {
-      cProd: p.sku.slice(0, 60),
+      cProd: skuOrFallback.slice(0, 60),
       cEAN: "SEM GTIN",
       xProd,
       NCM: ncm,

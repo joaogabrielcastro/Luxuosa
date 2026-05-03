@@ -13,9 +13,11 @@ import { Textarea } from "../../shared/components/ui/Textarea.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
 import { Alert } from "../../shared/components/ui/Alert.jsx";
 import { ProductVariationsSection } from "./ProductVariationsSection.jsx";
-
-const AUTO_VARIATION_SIZE = "AUTO";
-const AUTO_VARIATION_COLOR = "ESTOQUE";
+import {
+  AUTO_VARIATION_COLOR,
+  AUTO_VARIATION_SIZE,
+  isAutoStockVariation
+} from "./catalogConstants.js";
 function productCurrentStock(item) {
   return (item.variations || []).reduce((acc, v) => acc + Number(v.stock || 0), 0);
 }
@@ -63,6 +65,9 @@ export function ProductsPage() {
   const [form, setForm] = useState(EMPTY_PRODUCT_FORM);
   /** String vazia = mostrar placeholder (como minima); nao exibir 0 no campo. */
   const [currentStockPreview, setCurrentStockPreview] = useState("");
+  /** Se ambos preenchidos junto com quantidade, o estoque aplica-se so a esta variacao. */
+  const [variationSize, setVariationSize] = useState("");
+  const [variationColor, setVariationColor] = useState("");
 
   async function load() {
     setListLoading(true);
@@ -95,11 +100,63 @@ export function ProductsPage() {
     setProductSkip(0);
   }, [query, categoryFilter, brandFilter]);
 
-  async function syncProductStock(productId, desiredStock) {
+  async function syncProductStock(productId, desiredStock, { variationSize: sizeArg = "", variationColor: colorArg = "" } = {}) {
+    const sizeTrim = String(sizeArg || "").trim();
+    const colorTrim = String(colorArg || "").trim();
+    const useExplicit = Boolean(sizeTrim && colorTrim);
+    if ((sizeTrim && !colorTrim) || (!sizeTrim && colorTrim)) {
+      throw new Error("Preencha Tamanho e Cor juntos, ou deixe os dois em branco.");
+    }
+
     const product = await apiClient(`/products/${productId}`, { token });
+    const variations = product.variations || [];
+
+    if (useExplicit) {
+      const desired = Number(desiredStock || 0);
+      const row = variations.find((v) => v.size === sizeTrim && v.color === colorTrim);
+      const autoVariation = variations.find(
+        (variation) => variation.size === AUTO_VARIATION_SIZE && variation.color === AUTO_VARIATION_COLOR
+      );
+      const otherLines = variations.filter(
+        (v) =>
+          !(v.size === sizeTrim && v.color === colorTrim) &&
+          !(v.size === AUTO_VARIATION_SIZE && v.color === AUTO_VARIATION_COLOR)
+      );
+
+      if (!row && autoVariation && otherLines.length === 0) {
+        await apiClient(`/product-variations/${autoVariation.id}`, {
+          method: "PUT",
+          token,
+          body: { size: sizeTrim, color: colorTrim, stock: desired }
+        });
+        return;
+      }
+
+      const currentRow = row ? Number(row.stock) : 0;
+      if (desired === currentRow) return;
+
+      if (!row && desired > 0) {
+        await apiClient("/product-variations", {
+          method: "POST",
+          token,
+          body: { productId, size: sizeTrim, color: colorTrim, stock: desired }
+        });
+        return;
+      }
+
+      if (row) {
+        await apiClient(`/product-variations/${row.id}`, {
+          method: "PUT",
+          token,
+          body: { stock: desired }
+        });
+      }
+      return;
+    }
+
     const desired = Number(desiredStock || 0);
-    const current = (product.variations || []).reduce((acc, variation) => acc + Number(variation.stock || 0), 0);
-    const autoVariation = (product.variations || []).find(
+    const current = variations.reduce((acc, variation) => acc + Number(variation.stock || 0), 0);
+    const autoVariation = variations.find(
       (variation) => variation.size === AUTO_VARIATION_SIZE && variation.color === AUTO_VARIATION_COLOR
     );
 
@@ -131,7 +188,7 @@ export function ProductsPage() {
     const decrement = current - desired;
     if (!autoVariation || Number(autoVariation.stock) < decrement) {
       throw new Error(
-        "Nao foi possivel reduzir o estoque atual por aqui. Ajuste as linhas na secao Variacoes abaixo ou o estoque da variacao automatica (AUTO/ESTOQUE)."
+        "Nao foi possivel reduzir o estoque atual por aqui. Ajuste as linhas na secao Variacoes abaixo ou use Tamanho/Cor no cadastro para esta variacao."
       );
     }
 
@@ -147,11 +204,13 @@ export function ProductsPage() {
     setError("");
     setLoading(true);
     try {
+      const skuTrim = String(form.sku || "").trim();
       const response = await apiClient(editingId ? `/products/${editingId}` : "/products", {
         method: editingId ? "PUT" : "POST",
         token,
         body: {
           ...form,
+          sku: skuTrim === "" ? null : skuTrim,
           price: parseCurrencyInput(form.price),
           cost: parseCurrencyInput(form.cost),
           minStock: Number(form.minStock || 0)
@@ -161,7 +220,10 @@ export function ProductsPage() {
       if (productId) {
         const skipStockAdjust = Boolean(editingId) && currentStockPreview === "";
         if (!skipStockAdjust) {
-          await syncProductStock(productId, currentStockPreview);
+          await syncProductStock(productId, currentStockPreview, {
+            variationSize,
+            variationColor
+          });
         }
       }
 
@@ -200,6 +262,8 @@ export function ProductsPage() {
         setEditingId("");
         setForm(EMPTY_PRODUCT_FORM);
         setCurrentStockPreview("");
+        setVariationSize("");
+        setVariationColor("");
       }
       await load();
       showToast("Produto excluido.");
@@ -221,8 +285,23 @@ export function ProductsPage() {
       sku: item.sku || "",
       minStock: Number(item.minStock || 0)
     });
-    const stockSum = productCurrentStock(item);
-    setCurrentStockPreview(stockSum > 0 ? String(stockSum) : "");
+    const vars = item.variations || [];
+    if (vars.length === 1) {
+      const v0 = vars[0];
+      if (isAutoStockVariation(v0)) {
+        setVariationSize("");
+        setVariationColor("");
+      } else {
+        setVariationSize(v0.size || "");
+        setVariationColor(v0.color || "");
+      }
+      setCurrentStockPreview(String(Number(v0.stock ?? 0)));
+    } else {
+      setVariationSize("");
+      setVariationColor("");
+      const stockSum = productCurrentStock(item);
+      setCurrentStockPreview(stockSum > 0 ? String(stockSum) : "");
+    }
   }
 
   function applyScannedSku() {
@@ -262,13 +341,27 @@ export function ProductsPage() {
           </div>
         </div>
         <form className="mt-3 grid gap-2 md:grid-cols-2" onSubmit={createProduct}>
+          <p className="text-xs text-slate-600 md:col-span-2">
+            Tamanho e Cor (opcionais): se ambos forem preenchidos, a quantidade abaixo vale apenas para essa combinacao.
+            Se os dois ficarem em branco, a quantidade e o total geral do produto (como antes).
+          </p>
+          <Input
+            placeholder="Tamanho (opcional)"
+            value={variationSize}
+            onChange={(e) => setVariationSize(e.target.value)}
+          />
+          <Input
+            placeholder="Cor (opcional)"
+            value={variationColor}
+            onChange={(e) => setVariationColor(e.target.value)}
+          />
           <Input
             placeholder="Nome"
             value={form.name}
             onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
           />
           <Input
-            placeholder="SKU"
+            placeholder="SKU (opcional)"
             value={form.sku}
             onChange={(e) => setForm((prev) => ({ ...prev, sku: e.target.value }))}
           />
@@ -284,7 +377,11 @@ export function ProductsPage() {
           />
           <div>
             <Input
-              placeholder="Quantidade atual (total)"
+              placeholder={
+                String(variationSize || "").trim() && String(variationColor || "").trim()
+                  ? "Quantidade nesta variacao (tamanho/cor)"
+                  : "Quantidade atual (total do produto)"
+              }
               type="number"
               inputMode="numeric"
               min="0"
@@ -341,6 +438,8 @@ export function ProductsPage() {
                   setEditingId("");
                   setForm(EMPTY_PRODUCT_FORM);
                   setCurrentStockPreview("");
+                  setVariationSize("");
+                  setVariationColor("");
                 }}
               >
                 Cancelar
@@ -434,7 +533,7 @@ export function ProductsPage() {
             return (
             <>
               <td className="py-2">{item.name}</td>
-              <td className="py-2">{item.sku}</td>
+              <td className="py-2">{item.sku?.trim() ? item.sku : "—"}</td>
               <td className="py-2">{item.category?.name}</td>
               <td className="py-2">{item.brand?.name}</td>
               <td className={`py-2 ${stockClass}`}>{current}</td>

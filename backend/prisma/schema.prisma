@@ -160,7 +160,7 @@ model Product {
   cost          Decimal  @db.Decimal(12, 2)
   categoryId    String
   brandId       String
-  sku           String
+  sku           String?
   minStock      Int
   ncm           String   @default("61091000")
   cfop          String   @default("5102")

@@ -6,6 +6,7 @@ import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
 import { Input } from "../../shared/components/ui/Input.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
 import { Alert } from "../../shared/components/ui/Alert.jsx";
+import { isAutoStockVariation } from "./catalogConstants.js";
 
 const EMPTY_FORM = { size: "", color: "", stock: "" };
 
@@ -115,7 +116,11 @@ export function ProductVariationsSection({ token, productId, productName, onChan
   return (
     <SectionCard
       title="Variacoes (tamanho, cor, estoque)"
-      description={productName ? `Produto: ${productName}` : undefined}
+      description={
+        productName
+          ? `Produto: ${productName}. A linha "Estoque total" e interna: aparece quando voce informa quantidade no cadastro sem criar tamanho/cor.`
+          : `A linha "Estoque total" e interna: aparece quando voce informa quantidade no cadastro sem criar tamanho/cor.`
+      }
     >
       <form className="mt-3 grid gap-2 md:grid-cols-3" onSubmit={submitVariation}>
         <Input
@@ -163,6 +168,7 @@ export function ProductVariationsSection({ token, productId, productName, onChan
         <table className="w-full min-w-[480px] text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs font-medium text-slate-600">
             <tr>
+              <th className="px-3 py-2">Tipo</th>
               <th className="px-3 py-2">Tamanho</th>
               <th className="px-3 py-2">Cor</th>
               <th className="px-3 py-2">Estoque</th>
@@ -172,22 +178,33 @@ export function ProductVariationsSection({ token, productId, productName, onChan
           <tbody>
             {listLoading ? (
               <tr>
-                <td colSpan={4} className="px-3 py-4 text-slate-500">
+                <td colSpan={5} className="px-3 py-4 text-slate-500">
                   Carregando...
                 </td>
               </tr>
             ) : variations.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-3 py-4 text-slate-500">
+                <td colSpan={5} className="px-3 py-4 text-slate-500">
                   Nenhuma variacao. Use o formulario acima ou ajuste a quantidade atual no bloco principal (gera estoque
                   automatico).
                 </td>
               </tr>
             ) : (
-              variations.map((row) => (
+              variations.map((row) => {
+                const auto = isAutoStockVariation(row);
+                return (
                 <tr key={row.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-3 py-2">{row.size}</td>
-                  <td className="px-3 py-2">{row.color}</td>
+                  <td className="px-3 py-2 text-slate-600">
+                    {auto ? (
+                      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                        Estoque total
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-500">Variacao</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">{auto ? "—" : row.size}</td>
+                  <td className="px-3 py-2">{auto ? "—" : row.color}</td>
                   <td className="px-3 py-2">{row.stock}</td>
                   <td className="px-3 py-2">
                     <Button type="button" variant="secondary" className="mr-2 px-2 py-0.5 text-xs" onClick={() => startEdit(row)}>
@@ -198,7 +215,8 @@ export function ProductVariationsSection({ token, productId, productName, onChan
                     </Button>
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>

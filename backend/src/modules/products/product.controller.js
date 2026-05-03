@@ -2,20 +2,54 @@ import { z } from "zod";
 import { parsePageQuery } from "../../shared/pagination.js";
 import { productService } from "./product.service.js";
 
-const productSchema = z.object({
+function preprocessSkuCreate(value) {
+  if (value === undefined || value === null) return null;
+  const trimmed = String(value).trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+function preprocessSkuUpdate(value) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const trimmed = String(value).trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+const skuForCreate = z.preprocess(
+  preprocessSkuCreate,
+  z.union([z.null(), z.string().min(2).max(80)])
+);
+
+const skuForUpdate = z.preprocess(
+  preprocessSkuUpdate,
+  z.union([z.undefined(), z.null(), z.string().min(2).max(80)])
+);
+
+const productFields = {
   name: z.string().min(2),
   description: z.string().optional(),
   price: z.coerce.number().nonnegative(),
   cost: z.coerce.number().nonnegative(),
   categoryId: z.string().min(1),
   brandId: z.string().min(1),
-  sku: z.string().min(2),
   minStock: z.coerce.number().int().nonnegative(),
   ncm: z.string().regex(/^\d{8}$/).optional(),
   cfop: z.string().regex(/^\d{4}$/).optional(),
   icmsOrig: z.coerce.number().int().min(0).max(8).optional(),
   icmsCsosn: z.string().min(3).max(4).optional()
+};
+
+const productSchema = z.object({
+  ...productFields,
+  sku: skuForCreate
 });
+
+const productUpdateSchema = z
+  .object(productFields)
+  .partial()
+  .extend({
+    sku: skuForUpdate.optional()
+  });
 
 export const productController = {
   async list(req, res, next) {
@@ -59,7 +93,7 @@ export const productController = {
 
   async update(req, res, next) {
     try {
-      const payload = productSchema.partial().parse(req.body);
+      const payload = productUpdateSchema.parse(req.body);
       await productService.update(req.tenantId, req.params.id, payload);
       return res.status(204).send();
     } catch (error) {
