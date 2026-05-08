@@ -1,6 +1,18 @@
 import { prisma } from "../../config/prisma.js";
 import { productVariationRepository } from "./productVariation.repository.js";
 
+function assertSizeColorCoherence({ size, color }) {
+  const s = String(size ?? "").trim();
+  const c = String(color ?? "").trim();
+  // Ambos vazios = variacao padrao do produto (estoque sem tamanho/cor).
+  // Ambos preenchidos = variacao real. Inconsistente em qualquer outro caso.
+  if ((s === "" && c !== "") || (s !== "" && c === "")) {
+    const err = new Error("Preencha Tamanho e Cor juntos, ou deixe ambos em branco para a variacao padrao.");
+    err.statusCode = 400;
+    throw err;
+  }
+}
+
 export const productVariationService = {
   list(tenantId) {
     return productVariationRepository.list(tenantId);
@@ -15,6 +27,7 @@ export const productVariationService = {
   },
 
   async create(tenantId, payload) {
+    assertSizeColorCoherence(payload);
     const product = await prisma.product.findFirst({
       where: { id: payload.productId, tenantId }
     });
@@ -29,12 +42,19 @@ export const productVariationService = {
   async update(tenantId, id, payload) {
     const existing = await prisma.productVariation.findFirst({
       where: { tenantId, id },
-      include: { product: true }
+      select: { size: true, color: true }
     });
     if (!existing) {
       const err = new Error("Variacao nao encontrada.");
       err.statusCode = 404;
       throw err;
+    }
+
+    if (payload.size !== undefined || payload.color !== undefined) {
+      assertSizeColorCoherence({
+        size: payload.size ?? existing.size,
+        color: payload.color ?? existing.color
+      });
     }
 
     if (payload.productId) {

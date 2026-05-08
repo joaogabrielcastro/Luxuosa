@@ -6,7 +6,7 @@ import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
 import { Input } from "../../shared/components/ui/Input.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
 import { Alert } from "../../shared/components/ui/Alert.jsx";
-import { isAutoStockVariation } from "./catalogConstants.js";
+import { isDefaultVariation } from "./catalogConstants.js";
 
 const EMPTY_FORM = { size: "", color: "", stock: "" };
 
@@ -54,13 +54,20 @@ export function ProductVariationsSection({ token, productId, productName, onChan
       if (!Number.isFinite(stockNum) || stockNum < 0) {
         throw new Error("Informe um estoque valido (0 ou mais).");
       }
+      const sizeTrim = String(form.size || "").trim();
+      const colorTrim = String(form.color || "").trim();
+      // Esta secao e para variacoes reais. A variacao padrao (estoque sem
+      // tamanho/cor) so e criada pela tela de cadastro do produto.
+      if (sizeTrim === "" || colorTrim === "") {
+        throw new Error("Informe Tamanho e Cor para criar uma variacao.");
+      }
       await apiClient(editingId ? `/product-variations/${editingId}` : "/product-variations", {
         method: editingId ? "PUT" : "POST",
         token,
         body: {
           productId,
-          size: String(form.size || "").trim(),
-          color: String(form.color || "").trim(),
+          size: sizeTrim,
+          color: colorTrim,
           stock: stockNum
         }
       });
@@ -118,8 +125,8 @@ export function ProductVariationsSection({ token, productId, productName, onChan
       title="Variacoes (tamanho, cor, estoque)"
       description={
         productName
-          ? `Produto: ${productName}. A linha "Estoque total" e interna: aparece quando voce informa quantidade no cadastro sem criar tamanho/cor.`
-          : `A linha "Estoque total" e interna: aparece quando voce informa quantidade no cadastro sem criar tamanho/cor.`
+          ? `Produto: ${productName}. A linha "Estoque" sem tamanho/cor representa o estoque do produto quando ele nao tem variacoes.`
+          : `A linha "Estoque" sem tamanho/cor representa o estoque do produto quando ele nao tem variacoes.`
       }
     >
       <form className="mt-3 grid gap-2 md:grid-cols-3" onSubmit={submitVariation}>
@@ -191,28 +198,36 @@ export function ProductVariationsSection({ token, productId, productName, onChan
               </tr>
             ) : (
               variations.map((row) => {
-                const auto = isAutoStockVariation(row);
+                const isDefault = isDefaultVariation(row);
                 return (
                 <tr key={row.id} className="border-b border-slate-100 last:border-0">
                   <td className="px-3 py-2 text-slate-600">
-                    {auto ? (
+                    {isDefault ? (
                       <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
-                        Estoque total
+                        Estoque
                       </span>
                     ) : (
                       <span className="text-xs text-slate-500">Variacao</span>
                     )}
                   </td>
-                  <td className="px-3 py-2">{auto ? "—" : row.size}</td>
-                  <td className="px-3 py-2">{auto ? "—" : row.color}</td>
+                  <td className="px-3 py-2">{isDefault ? "—" : row.size}</td>
+                  <td className="px-3 py-2">{isDefault ? "—" : row.color}</td>
                   <td className="px-3 py-2">{row.stock}</td>
                   <td className="px-3 py-2">
-                    <Button type="button" variant="secondary" className="mr-2 px-2 py-0.5 text-xs" onClick={() => startEdit(row)}>
-                      Editar
-                    </Button>
-                    <Button type="button" variant="danger" className="px-2 py-0.5 text-xs" onClick={() => removeVariation(row.id)}>
-                      Excluir
-                    </Button>
+                    {isDefault ? (
+                      <span className="text-xs text-slate-400">
+                        Ajuste pela tela do produto.
+                      </span>
+                    ) : (
+                      <>
+                        <Button type="button" variant="secondary" className="mr-2 px-2 py-0.5 text-xs" onClick={() => startEdit(row)}>
+                          Editar
+                        </Button>
+                        <Button type="button" variant="danger" className="px-2 py-0.5 text-xs" onClick={() => removeVariation(row.id)}>
+                          Excluir
+                        </Button>
+                      </>
+                    )}
                   </td>
                 </tr>
                 );

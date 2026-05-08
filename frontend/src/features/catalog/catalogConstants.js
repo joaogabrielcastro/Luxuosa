@@ -1,7 +1,13 @@
-/** Alinhado ao backend: variacao interna para quantidade total sem tamanho/cor. */
-export const AUTO_VARIATION_SIZE = "AUTO";
-export const AUTO_VARIATION_COLOR = "ESTOQUE";
+/**
+ * Convencao do dominio (alinhada com backend/src/shared/autoVariation.js):
+ * a "variacao padrao" do produto e a linha de estoque sem tamanho/cor,
+ * representada por size = "" e color = "".
+ *
+ * Para criar a variacao padrao via API, envie size: "" e color: "".
+ * Para criar uma variacao real, envie size e color preenchidos.
+ */
 
-export function isAutoStockVariation(row) {
-  return row?.size === AUTO_VARIATION_SIZE && row?.color === AUTO_VARIATION_COLOR;
+export function isDefaultVariation(row) {
+  if (!row) return false;
+  return String(row.size || "").trim() === "" && String(row.color || "").trim() === "";
 }

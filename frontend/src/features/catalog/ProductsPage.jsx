@@ -13,11 +13,7 @@ import { Textarea } from "../../shared/components/ui/Textarea.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
 import { Alert } from "../../shared/components/ui/Alert.jsx";
 import { ProductVariationsSection } from "./ProductVariationsSection.jsx";
-import {
-  AUTO_VARIATION_COLOR,
-  AUTO_VARIATION_SIZE,
-  isAutoStockVariation
-} from "./catalogConstants.js";
+import { isDefaultVariation } from "./catalogConstants.js";
 function productCurrentStock(item) {
   return (item.variations || []).reduce((acc, v) => acc + Number(v.stock || 0), 0);
 }
@@ -110,21 +106,16 @@ export function ProductsPage() {
 
     const product = await apiClient(`/products/${productId}`, { token });
     const variations = product.variations || [];
+    const defaultVariation = variations.find(isDefaultVariation);
+    const realVariations = variations.filter((v) => !isDefaultVariation(v));
+    const desired = Number(desiredStock || 0);
 
     if (useExplicit) {
-      const desired = Number(desiredStock || 0);
-      const row = variations.find((v) => v.size === sizeTrim && v.color === colorTrim);
-      const autoVariation = variations.find(
-        (variation) => variation.size === AUTO_VARIATION_SIZE && variation.color === AUTO_VARIATION_COLOR
-      );
-      const otherLines = variations.filter(
-        (v) =>
-          !(v.size === sizeTrim && v.color === colorTrim) &&
-          !(v.size === AUTO_VARIATION_SIZE && v.color === AUTO_VARIATION_COLOR)
-      );
+      const row = realVariations.find((v) => v.size === sizeTrim && v.color === colorTrim);
 
-      if (!row && autoVariation && otherLines.length === 0) {
-        await apiClient(`/product-variations/${autoVariation.id}`, {
+      // Produto sem variacoes reais: promover a variacao padrao para tamanho/cor.
+      if (!row && defaultVariation && realVariations.length === 0) {
+        await apiClient(`/product-variations/${defaultVariation.id}`, {
           method: "PUT",
           token,
           body: { size: sizeTrim, color: colorTrim, stock: desired }
@@ -154,48 +145,39 @@ export function ProductsPage() {
       return;
     }
 
-    const desired = Number(desiredStock || 0);
-    const current = variations.reduce((acc, variation) => acc + Number(variation.stock || 0), 0);
-    const autoVariation = variations.find(
-      (variation) => variation.size === AUTO_VARIATION_SIZE && variation.color === AUTO_VARIATION_COLOR
-    );
-
+    // Sem tamanho/cor: ajustar a variacao padrao do produto.
+    const current = variations.reduce((acc, v) => acc + Number(v.stock || 0), 0);
     if (desired === current) return;
 
     if (desired > current) {
       const increment = desired - current;
-      if (autoVariation) {
-        await apiClient(`/product-variations/${autoVariation.id}`, {
+      if (defaultVariation) {
+        await apiClient(`/product-variations/${defaultVariation.id}`, {
           method: "PUT",
           token,
-          body: { stock: Number(autoVariation.stock) + increment }
+          body: { stock: Number(defaultVariation.stock) + increment }
         });
       } else {
         await apiClient("/product-variations", {
           method: "POST",
           token,
-          body: {
-            productId,
-            size: AUTO_VARIATION_SIZE,
-            color: AUTO_VARIATION_COLOR,
-            stock: increment
-          }
+          body: { productId, size: "", color: "", stock: increment }
         });
       }
       return;
     }
 
     const decrement = current - desired;
-    if (!autoVariation || Number(autoVariation.stock) < decrement) {
+    if (!defaultVariation || Number(defaultVariation.stock) < decrement) {
       throw new Error(
         "Nao foi possivel reduzir o estoque atual por aqui. Ajuste as linhas na secao Variacoes abaixo ou use Tamanho/Cor no cadastro para esta variacao."
       );
     }
 
-    await apiClient(`/product-variations/${autoVariation.id}`, {
+    await apiClient(`/product-variations/${defaultVariation.id}`, {
       method: "PUT",
       token,
-      body: { stock: Number(autoVariation.stock) - decrement }
+      body: { stock: Number(defaultVariation.stock) - decrement }
     });
   }
 
@@ -288,7 +270,7 @@ export function ProductsPage() {
     const vars = item.variations || [];
     if (vars.length === 1) {
       const v0 = vars[0];
-      if (isAutoStockVariation(v0)) {
+      if (isDefaultVariation(v0)) {
         setVariationSize("");
         setVariationColor("");
       } else {
