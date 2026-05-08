@@ -1,4 +1,13 @@
 node_modules
-npm-debug.log
+dist
+.vite
+.cache
+.coverage
+coverage
 .git
+.gitignore
 .DS_Store
+npm-debug.log
+.env
+.env.*
+!.env.example

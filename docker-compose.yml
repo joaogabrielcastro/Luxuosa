@@ -43,6 +43,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: builder
       args:
         VITE_API_URL: http://localhost:3001/api/v1
     container_name: luxuosa_frontend
