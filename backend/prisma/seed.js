@@ -28,6 +28,14 @@ async function main() {
       phone: "11922222222",
       enableNfceEmission: false,
       users: [{ name: "Marisa Fernandes", email: "marisafernandes@admin.com" }]
+    },
+    {
+      name: "Fernando Store",
+      cnpj: "33333333000191",
+      email: "fernando@admin.com",
+      phone: "11933333333",
+      enableNfceEmission: false,
+      users: [{ name: "Fernando", email: "fernando@admin.com" }]
     }
   ];
   const adminPasswordPlain = "123456";
