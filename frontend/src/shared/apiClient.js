@@ -32,6 +32,7 @@ function humanizeErrorText(raw, status) {
 }
 
 function extractErrorMessage(data, status) {
+  if (status === 401) return defaultMessageForStatus(401);
   if (data == null) return defaultMessageForStatus(status);
   let raw = null;
   if (typeof data.error === "string" && data.error.trim()) raw = data.error;
@@ -41,6 +42,15 @@ function extractErrorMessage(data, status) {
   }
   if (raw == null) return defaultMessageForStatus(status);
   return humanizeErrorText(raw, status);
+}
+
+/** Disparado em 401 para limpar sessao (useAuth escuta). */
+export const AUTH_UNAUTHORIZED_EVENT = "luxuosa:unauthorized";
+
+function notifyUnauthorized() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(AUTH_UNAUTHORIZED_EVENT));
+  }
 }
 
 export async function apiClient(path, { method = "GET", body, token } = {}) {
@@ -55,6 +65,7 @@ export async function apiClient(path, { method = "GET", body, token } = {}) {
 
   if (!response.ok) {
     const data = await response.json().catch(() => null);
+    if (response.status === 401) notifyUnauthorized();
     const message = extractErrorMessage(data, response.status);
     const err = new Error(message);
     err.status = response.status;

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { apiClient } from "../../shared/apiClient.js";
+import { apiClient, AUTH_UNAUTHORIZED_EVENT } from "../../shared/apiClient.js";
 
 const AuthContext = createContext(null);
 
@@ -8,6 +8,15 @@ export function AuthProvider({ children }) {
     const raw = localStorage.getItem("luxuosa_session");
     return raw ? JSON.parse(raw) : null;
   });
+
+  useEffect(() => {
+    function onUnauthorized() {
+      setSession(null);
+      localStorage.removeItem("luxuosa_session");
+    }
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, onUnauthorized);
+    return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, onUnauthorized);
+  }, []);
 
   useEffect(() => {
     const t = session?.token;

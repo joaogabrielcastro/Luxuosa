@@ -184,6 +184,14 @@ export function ProductsPage() {
   async function createProduct(event) {
     event.preventDefault();
     setError("");
+    if (!token) {
+      setError("Sessao expirada. Faca login novamente.");
+      return;
+    }
+    if (!form.categoryId || !form.brandId) {
+      setError("Selecione categoria e marca antes de salvar o produto.");
+      return;
+    }
     setLoading(true);
     try {
       const skuTrim = String(form.sku || "").trim();
