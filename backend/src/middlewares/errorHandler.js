@@ -1,60 +1,89 @@
 import { Prisma } from "@prisma/client";
+import { buildErrorResponse, ERROR_CODES, isOperationalError, mapPrismaError } from "../utils/appErrors.js";
 import { logger } from "../utils/logger.js";
-import { formatZodError, isZodError } from "../utils/zodError.js";
+import { formatZodError, formatZodErrorDetails, isZodError } from "../utils/zodError.js";
+
+const GENERIC_SERVER_ERROR =
+  "Ocorreu um erro no servidor. Tente novamente em instantes. Se persistir, contacte o suporte.";
 
 export function errorHandler(err, req, res, _next) {
   if (isZodError(err)) {
-    const message = formatZodError(err) || "Dados invalidos.";
+    const message = formatZodError(err) || "Revise os campos do formulario.";
+    const details = formatZodErrorDetails(err);
     logger.warn("Validacao rejeitada", {
       path: req.path,
       method: req.method,
       tenant_id: req.tenantId || null
     });
-    return res.status(400).json({ error: message });
-  }
-
-  if (err?.code === "P2002") {
-    return res.status(409).json({ error: "Ja existe um registro com estes dados (duplicado)." });
+    return res.status(400).json(
+      buildErrorResponse({
+        error: message,
+        code: ERROR_CODES.VALIDATION,
+        details
+      })
+    );
   }
 
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
-    if (err.code === "P2003") {
-      return res.status(409).json({
-        error:
-          "Nao e possivel excluir: ainda ha dados ligados a este item (por exemplo movimentos de estoque ou vendas). Remova os vinculos ou use outra acao."
+    const mapped = mapPrismaError(err);
+    if (mapped.status >= 500) {
+      logger.error("Prisma", {
+        path: req.path,
+        method: req.method,
+        code: err.code,
+        meta: err.meta || null
+      });
+    } else {
+      logger.warn("Prisma", {
+        path: req.path,
+        method: req.method,
+        code: err.code,
+        meta: err.meta || null
       });
     }
-    if (err.code === "P2025") {
-      return res.status(404).json({ error: "Registro nao encontrado." });
-    }
-    logger.warn("Prisma", {
-      path: req.path,
-      method: req.method,
-      code: err.code,
-      meta: err.meta || null
-    });
-    return res.status(400).json({
-      error: "Nao foi possivel concluir a operacao. Verifique os dados e tente novamente."
-    });
+    return res.status(mapped.status).json(
+      buildErrorResponse({ error: mapped.error, code: mapped.code })
+    );
   }
 
   if (err instanceof Prisma.PrismaClientValidationError) {
-    return res.status(400).json({ error: "Dados invalidos para esta operacao." });
+    return res.status(400).json(
+      buildErrorResponse({
+        error: "Dados incompletos ou invalidos. Verifique todos os campos obrigatorios.",
+        code: ERROR_CODES.VALIDATION
+      })
+    );
+  }
+
+  const status = Number(err.statusCode) || 500;
+
+  if (isOperationalError(err)) {
+    logger.warn("Erro operacional", {
+      path: req.path,
+      method: req.method,
+      status,
+      error: err.message
+    });
+    return res.status(status).json(
+      buildErrorResponse({
+        error: err.message,
+        code: err.code || undefined
+      })
+    );
   }
 
   logger.error("Unhandled error", {
     path: req.path,
     method: req.method,
     tenant_id: req.tenantId || null,
-    error: err.message
+    error: err.message,
+    code: err.code || null
   });
 
-  const status = err.statusCode || 500;
-  const payload = {
-    error: err.message || "Erro interno no servidor"
-  };
-  if (err.code && typeof err.code === "string") {
-    payload.code = err.code;
-  }
-  res.status(status).json(payload);
+  return res.status(500).json(
+    buildErrorResponse({
+      error: GENERIC_SERVER_ERROR,
+      code: "INTERNAL_ERROR"
+    })
+  );
 }

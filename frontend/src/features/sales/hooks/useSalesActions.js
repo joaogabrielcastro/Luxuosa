@@ -353,7 +353,7 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
       setItems([]);
       await load();
     } catch (err) {
-      setError(err.message);
+      setError(err);
       showToast(err.message, "error");
     } finally {
       setLoading(false);
@@ -425,7 +425,7 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
       await load();
       showToast("Venda cancelada.");
     } catch (err) {
-      setError(err.message);
+      setError(err);
       showToast(err.message, "error");
     }
   }

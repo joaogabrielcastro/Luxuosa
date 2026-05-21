@@ -11,7 +11,7 @@ import { Input } from "../../shared/components/ui/Input.jsx";
 import { Select } from "../../shared/components/ui/Select.jsx";
 import { Textarea } from "../../shared/components/ui/Textarea.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
-import { Alert } from "../../shared/components/ui/Alert.jsx";
+import { FormErrorSummary } from "../../shared/components/FormErrorSummary.jsx";
 import { ProductVariationsSection } from "./ProductVariationsSection.jsx";
 import { isDefaultVariation } from "./catalogConstants.js";
 function productCurrentStock(item) {
@@ -88,7 +88,7 @@ export function ProductsPage() {
   useEffect(() => {
     load().catch((err) => {
       setListLoading(false);
-      setError(err.message);
+      setError(err);
     });
   }, [productSkip, token, query, categoryFilter, brandFilter]);
 
@@ -231,7 +231,7 @@ export function ProductsPage() {
         await load();
       }
     } catch (err) {
-      setError(err.message);
+      setError(err);
       showToast(err.message, "error");
     } finally {
       setLoading(false);
@@ -258,7 +258,7 @@ export function ProductsPage() {
       await load();
       showToast("Produto excluido.");
     } catch (err) {
-      setError(err.message);
+      setError(err);
       showToast(err.message, "error");
     }
   }
@@ -437,7 +437,7 @@ export function ProductsPage() {
             ) : null}
           </div>
         </form>
-        {error ? <Alert className="mt-2" variant="danger">{error}</Alert> : null}
+        <FormErrorSummary error={error} className="mt-2" />
       </SectionCard>
 
       <ProductVariationsSection

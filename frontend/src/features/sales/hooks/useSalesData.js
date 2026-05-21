@@ -65,7 +65,7 @@ export function useSalesData(token, { search = "", paymentFilter = "", nfceFilte
   useEffect(() => {
     if (!token) return undefined;
     setError("");
-    load().catch((err) => setError(err.message));
+    load().catch((err) => setError(err));
     return undefined;
   }, [token, load]);
 

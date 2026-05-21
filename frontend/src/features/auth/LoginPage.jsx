@@ -28,7 +28,7 @@ export function LoginPage() {
       await login(email, password);
       navigate("/vendas", { replace: true });
     } catch (err) {
-      setError(err.message);
+      setError(err);
     } finally {
       setLoading(false);
     }
@@ -128,7 +128,7 @@ export function LoginPage() {
           </form>
           {error ? (
             <Alert className="mt-4" variant="danger" title="Nao foi possivel entrar">
-              {error}
+              {typeof error === "string" ? error : error.message}
             </Alert>
           ) : null}
         </div>

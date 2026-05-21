@@ -8,7 +8,7 @@ import { Input } from "../../shared/components/ui/Input.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
 import { StatCard } from "../../shared/components/ui/StatCard.jsx";
 import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
-import { Alert } from "../../shared/components/ui/Alert.jsx";
+import { FormErrorSummary } from "../../shared/components/FormErrorSummary.jsx";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 function defaultFromTo() {
@@ -36,7 +36,7 @@ export function ReportsPage() {
   }
 
   useEffect(() => {
-    load().catch((err) => setError(err.message));
+    load().catch((err) => setError(err));
   }, [token]);
 
   async function applyRange(e) {
@@ -44,7 +44,7 @@ export function ReportsPage() {
     try {
       await load();
     } catch (err) {
-      setError(err.message);
+      setError(err);
     }
   }
 
@@ -137,7 +137,7 @@ export function ReportsPage() {
         )}
       </SectionCard>
 
-      {error ? <Alert variant="danger">{error}</Alert> : null}
+      <FormErrorSummary error={error} />
     </div>
   );
 }

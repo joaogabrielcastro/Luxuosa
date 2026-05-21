@@ -47,7 +47,7 @@ export function AdminDashboardPage() {
     setLoading(true);
     apiClient("/dashboard/admin", { token })
       .then(setData)
-      .catch((err) => setError(err.message))
+      .catch((err) => setError(err))
       .finally(() => setLoading(false));
   }, [token]);
 
@@ -283,7 +283,11 @@ export function AdminDashboardPage() {
         )}
       </SectionCard>
       {loading ? <Alert variant="info">Atualizando indicadores...</Alert> : null}
-      {error ? <Alert variant="danger">{error}</Alert> : null}
+      {error ? (
+        <Alert variant="danger">
+          {typeof error === "string" ? error : error.message}
+        </Alert>
+      ) : null}
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
 import { Input } from "../../shared/components/ui/Input.jsx";
 import { Select } from "../../shared/components/ui/Select.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
-import { Alert } from "../../shared/components/ui/Alert.jsx";
+import { FormErrorSummary } from "../../shared/components/FormErrorSummary.jsx";
 import { StatCard } from "../../shared/components/ui/StatCard.jsx";
 import { Users } from "lucide-react";
 
@@ -105,7 +105,7 @@ export function CustomersPage() {
   }
 
   useEffect(() => {
-    load().catch((err) => setError(err.message));
+    load().catch((err) => setError(err));
   }, []);
 
   function startEdit(c) {
@@ -152,7 +152,7 @@ export function CustomersPage() {
       cancelEdit();
       await load();
     } catch (err) {
-      setError(err.message);
+      setError(err);
       showToast(err.message, "error");
     } finally {
       setLoading(false);
@@ -173,7 +173,7 @@ export function CustomersPage() {
       showToast("Cliente excluido.");
       if (editingId === id) cancelEdit();
     } catch (err) {
-      setError(err.message);
+      setError(err);
       showToast(err.message, "error");
     }
   }
@@ -273,7 +273,7 @@ export function CustomersPage() {
             ) : null}
           </div>
         </form>
-        {error ? <Alert className="mt-3" variant="danger">{error}</Alert> : null}
+        <FormErrorSummary error={error} />
       </SectionCard>
 
       <DataTable

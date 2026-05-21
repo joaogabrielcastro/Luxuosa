@@ -8,7 +8,7 @@ import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
 import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
 import { Input } from "../../shared/components/ui/Input.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
-import { Alert } from "../../shared/components/ui/Alert.jsx";
+import { FormErrorSummary } from "../../shared/components/FormErrorSummary.jsx";
 import { StatCard } from "../../shared/components/ui/StatCard.jsx";
 
 /**
@@ -56,7 +56,7 @@ export function SimpleNamedCrudPage({
   }
 
   useEffect(() => {
-    load().catch((err) => setError(err.message));
+    load().catch((err) => setError(err));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -76,7 +76,7 @@ export function SimpleNamedCrudPage({
       setName("");
       await load();
     } catch (err) {
-      setError(err.message);
+      setError(err);
     } finally {
       setLoading(false);
     }
@@ -94,7 +94,7 @@ export function SimpleNamedCrudPage({
       await load();
       showToast(deletedMsg);
     } catch (err) {
-      setError(err.message);
+      setError(err);
       showToast(err.message, "error");
     }
   }
@@ -131,7 +131,7 @@ export function SimpleNamedCrudPage({
             </Button>
           ) : null}
         </form>
-        {error ? <Alert className="mt-3" variant="danger">{error}</Alert> : null}
+        <FormErrorSummary error={error} />
       </SectionCard>
 
       <DataTable

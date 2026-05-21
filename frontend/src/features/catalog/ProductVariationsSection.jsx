@@ -5,7 +5,7 @@ import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
 import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
 import { Input } from "../../shared/components/ui/Input.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
-import { Alert } from "../../shared/components/ui/Alert.jsx";
+import { FormErrorSummary } from "../../shared/components/FormErrorSummary.jsx";
 import { isDefaultVariation } from "./catalogConstants.js";
 
 const EMPTY_FORM = { size: "", color: "", stock: "" };
@@ -32,7 +32,7 @@ export function ProductVariationsSection({ token, productId, productName, onChan
       const data = await apiClient(`/product-variations?${params.toString()}`, { token });
       setVariations(data.items || []);
     } catch (err) {
-      setError(err.message);
+      setError(err);
     } finally {
       setListLoading(false);
     }
@@ -77,7 +77,7 @@ export function ProductVariationsSection({ token, productId, productName, onChan
       await load();
       onChanged?.();
     } catch (err) {
-      setError(err.message);
+      setError(err);
       showToast(err.message, "error");
     } finally {
       setLoading(false);
@@ -98,7 +98,7 @@ export function ProductVariationsSection({ token, productId, productName, onChan
       await load();
       onChanged?.();
     } catch (err) {
-      setError(err.message);
+      setError(err);
       showToast(err.message, "error");
     }
   }
@@ -165,11 +165,7 @@ export function ProductVariationsSection({ token, productId, productName, onChan
           ) : null}
         </div>
       </form>
-      {error ? (
-        <Alert className="mt-2" variant="danger">
-          {error}
-        </Alert>
-      ) : null}
+      <FormErrorSummary error={error} className="mt-2" />
 
       <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
         <table className="w-full min-w-[480px] text-left text-sm">

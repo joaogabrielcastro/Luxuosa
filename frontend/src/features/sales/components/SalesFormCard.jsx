@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { brandIdsForCategory, variationsForCategoryAndBrand } from "../sales.utils.js";
 import { SectionCard } from "../../../shared/components/ui/SectionCard.jsx";
-import { Alert } from "../../../shared/components/ui/Alert.jsx";
+import { FormErrorSummary } from "../../../shared/components/FormErrorSummary.jsx";
 import { Input } from "../../../shared/components/ui/Input.jsx";
 import { Select } from "../../../shared/components/ui/Select.jsx";
 import { Button } from "../../../shared/components/ui/Button.jsx";
@@ -473,7 +473,7 @@ export function SalesFormCard({
           ) : null}
         </div>
       </form>
-      {error ? <Alert className="mt-3" variant="danger">{error}</Alert> : null}
+      <FormErrorSummary error={error} className="mt-3" />
     </SectionCard>
   );
 }
