@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { apiBaseUrl, apiClient } from "../../../shared/apiClient.js";
-import { maskCurrencyInput, parseCurrencyInput } from "../../../shared/formatters.js";
+import {
+  amountToCurrencyInput,
+  formatCurrencyInputValue,
+  parseCurrencyInput
+} from "../../../shared/formatters.js";
 import { DEFAULT_SALE_FORM } from "../sales.constants.js";
 
 export function useSalesActions({ token, variations, load, setError, showToast, confirm }) {
@@ -59,10 +63,10 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
         if (key === "productVariationId") {
           const selectedVariation = variations.find((variation) => variation.id === value);
           const productPrice = Number(selectedVariation?.product?.price || 0);
-          next.unitPrice = productPrice > 0 ? maskCurrencyInput(String(Math.round(productPrice * 100))) : "";
+          next.unitPrice = amountToCurrencyInput(productPrice);
         }
         if (key === "unitPrice") {
-          next.unitPrice = maskCurrencyInput(value);
+          next.unitPrice = value;
         }
         if (key === "quantity") {
           const vid = item.productVariationId;
@@ -100,7 +104,7 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
 
     const existingIdx = items.findIndex((it) => it.productVariationId === selected.id);
     const productPrice = Number(selected.product?.price || 0);
-    const maskedUnitPrice = productPrice > 0 ? maskCurrencyInput(String(Math.round(productPrice * 100))) : "";
+    const maskedUnitPrice = amountToCurrencyInput(productPrice);
 
     if (existingIdx >= 0) {
       const canAdd = remainingUnits(selected.id, items, existingIdx);
@@ -151,7 +155,7 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
     }
 
     const productPrice = Number(selected.product?.price || 0);
-    const maskedUnitPrice = productPrice > 0 ? maskCurrencyInput(String(Math.round(productPrice * 100))) : "";
+    const maskedUnitPrice = amountToCurrencyInput(productPrice);
     const existingIdx = items.findIndex((it) => it.productVariationId === selected.id);
     const rem = remainingUnits(selected.id, items, existingIdx >= 0 ? existingIdx : -1);
     if (existingIdx >= 0) {
@@ -190,7 +194,7 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
     if (!selected) return;
     const existingIdx = items.findIndex((it) => it.productVariationId === selected.id);
     const productPrice = Number(selected.product?.price || 0);
-    const maskedUnitPrice = productPrice > 0 ? maskCurrencyInput(String(Math.round(productPrice * 100))) : "";
+    const maskedUnitPrice = amountToCurrencyInput(productPrice);
 
     if (existingIdx >= 0) {
       const canAdd = remainingUnits(selected.id, items, existingIdx);
@@ -325,7 +329,7 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
       const body = {
         paymentMethod: form.paymentMethod,
         installments,
-        discountValue: form.discountValue === "" ? 0 : Number(form.discountValue),
+        discountValue: form.discountValue === "" ? 0 : parseCurrencyInput(form.discountValue),
         discountPercent: form.discountPercent === "" ? 0 : Number(form.discountPercent),
         items: items.map((item) => ({
           productVariationId: item.productVariationId,
@@ -368,7 +372,7 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
       setForm({
         paymentMethod: fullSale.paymentMethod,
         installments: Math.max(1, Number(fullSale.installments || 1)),
-        discountValue: dv !== 0 ? dv : "",
+        discountValue: dv !== 0 ? formatCurrencyInputValue(dv) : "",
         discountPercent: dp !== 0 ? dp : "",
         emitNfce: DEFAULT_SALE_FORM.emitNfce
       });
@@ -389,7 +393,7 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
             brandId,
             productVariationId: item.productVariationId,
             quantity: String(item.quantity),
-            unitPrice: maskCurrencyInput(String(Math.round(Number(item.unitPrice) * 100)))
+            unitPrice: formatCurrencyInputValue(item.unitPrice)
           };
         })
       );

@@ -6,19 +6,21 @@ import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
 import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
 import { Input } from "../../shared/components/ui/Input.jsx";
+import { CurrencyInput } from "../../shared/components/ui/CurrencyInput.jsx";
 import { Select } from "../../shared/components/ui/Select.jsx";
 import { Modal } from "../../shared/components/ui/Modal.jsx";
 import { paymentLabel } from "../sales/sales.utils.js";
+import {
+  amountToCurrencyInput,
+  formatCurrencyBRL,
+  parseCurrencyInput
+} from "../../shared/formatters.js";
 
 const CREDIT_STATUS_LABEL = {
   OPEN: "Em aberto",
   PAID: "Quitado",
   CANCELED: "Cancelado"
 };
-
-function formatBrl(n) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(n || 0));
-}
 
 function formatDt(iso) {
   if (!iso) return "";
@@ -171,7 +173,7 @@ export function CrediarioPage() {
       .map((it) => ({
         productVariationId: it.productVariationId,
         quantity: Number(it.quantity),
-        unitPrice: Number(it.unitPrice)
+        unitPrice: parseCurrencyInput(it.unitPrice)
       }));
     if (!items.length) {
       showToast("Inclua ao menos um item.", "error");
@@ -190,7 +192,8 @@ export function CrediarioPage() {
         body: {
           customerId: createForm.customerId,
           items,
-          discountValue: createForm.discountValue === "" ? undefined : Number(createForm.discountValue),
+          discountValue:
+            createForm.discountValue === "" ? undefined : parseCurrencyInput(createForm.discountValue),
           discountPercent: createForm.discountPercent === "" ? undefined : Number(createForm.discountPercent),
           notes: createForm.notes || undefined
         }
@@ -209,7 +212,7 @@ export function CrediarioPage() {
     const rem = Number(row.remaining ?? 0);
     setPaySaleId(row.id);
     setPayForm({
-      amount: rem > 0 ? rem.toFixed(2) : "",
+      amount: rem > 0 ? amountToCurrencyInput(rem) : "",
       paymentMethod: "dinheiro",
       note: ""
     });
@@ -217,8 +220,7 @@ export function CrediarioPage() {
   }
 
   async function submitPay() {
-    const raw = String(payForm.amount).replace(",", ".");
-    const amount = Number(raw);
+    const amount = parseCurrencyInput(payForm.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       showToast("Informe um valor valido.", "error");
       return;
@@ -363,9 +365,9 @@ export function CrediarioPage() {
                       <div className="font-medium text-slate-800">{row.customer?.name}</div>
                       <div className="text-xs text-slate-500">{row.customer?.cpfCnpj || "Sem CPF/CNPJ"}</div>
                     </td>
-                    <td className="py-2 pr-2">{formatBrl(row.totalValue)}</td>
-                    <td className="py-2 pr-2">{formatBrl(row.paidTotal)}</td>
-                    <td className="py-2 pr-2 font-medium text-amber-800">{formatBrl(row.remaining)}</td>
+                    <td className="py-2 pr-2">{formatCurrencyBRL(row.totalValue)}</td>
+                    <td className="py-2 pr-2">{formatCurrencyBRL(row.paidTotal)}</td>
+                    <td className="py-2 pr-2 font-medium text-amber-800">{formatCurrencyBRL(row.remaining)}</td>
                     <td className="py-2 pr-2">{CREDIT_STATUS_LABEL[row.status] || row.status}</td>
                     <td className="py-2 text-right">
                       <div className="flex flex-wrap justify-end gap-1">
@@ -455,10 +457,10 @@ export function CrediarioPage() {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Desconto R$</label>
-              <Input
+              <CurrencyInput
                 className="text-sm"
                 value={createForm.discountValue}
-                onChange={(e) => setCreateForm((f) => ({ ...f, discountValue: e.target.value }))}
+                onChange={(discountValue) => setCreateForm((f) => ({ ...f, discountValue }))}
               />
             </div>
             <div>
@@ -486,10 +488,10 @@ export function CrediarioPage() {
                     onChange={(e) => {
                       const vid = e.target.value;
                       const v = variations.find((x) => x.id === vid);
-                      const price = v?.product?.price != null ? Number(v.product.price) : "";
+                      const price = v?.product?.price;
                       updateLine(i, {
                         productVariationId: vid,
-                        unitPrice: price === "" ? "" : String(price)
+                        unitPrice: price != null ? amountToCurrencyInput(price) : ""
                       });
                     }}
                   >
@@ -512,13 +514,11 @@ export function CrediarioPage() {
                   />
                 </div>
                 <div className="md:col-span-3">
-                  <Input
+                  <CurrencyInput
                     className="text-sm"
-                    type="number"
-                    step="0.01"
                     placeholder="Preco unit."
                     value={line.unitPrice}
-                    onChange={(e) => updateLine(i, { unitPrice: e.target.value })}
+                    onChange={(unitPrice) => updateLine(i, { unitPrice })}
                   />
                 </div>
                 <div className="flex items-end md:col-span-2">
@@ -551,11 +551,11 @@ export function CrediarioPage() {
               </div>
               <div>
                 <span className="text-slate-500">Total</span>
-                <p>{formatBrl(detail.totalValue)}</p>
+                <p>{formatCurrencyBRL(detail.totalValue)}</p>
               </div>
               <div>
                 <span className="text-slate-500">Saldo</span>
-                <p className="font-semibold text-amber-800">{formatBrl(detail.remaining)}</p>
+                <p className="font-semibold text-amber-800">{formatCurrencyBRL(detail.remaining)}</p>
               </div>
             </div>
             <div>
@@ -567,7 +567,7 @@ export function CrediarioPage() {
                       {it.productVariation?.product?.name} — {it.productVariation?.size}/{it.productVariation?.color}
                     </span>
                     <span>
-                      {it.quantity} x {formatBrl(it.unitPrice)}
+                      {it.quantity} x {formatCurrencyBRL(it.unitPrice)}
                     </span>
                   </li>
                 ))}
@@ -581,7 +581,7 @@ export function CrediarioPage() {
                     <li key={p.id} className="flex flex-wrap justify-between gap-2 px-2 py-1">
                       <span>{formatDt(p.paidAt)}</span>
                       <span>{paymentLabel(p.paymentMethod)}</span>
-                      <span className="font-medium">{formatBrl(p.amount)}</span>
+                      <span className="font-medium">{formatCurrencyBRL(p.amount)}</span>
                     </li>
                   ))}
                 </ul>
@@ -606,7 +606,11 @@ export function CrediarioPage() {
         <div className="grid gap-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Valor</label>
-            <Input className="text-sm" value={payForm.amount} onChange={(e) => setPayForm((f) => ({ ...f, amount: e.target.value }))} />
+            <CurrencyInput
+              className="text-sm"
+              value={payForm.amount}
+              onChange={(amount) => setPayForm((f) => ({ ...f, amount }))}
+            />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Forma</label>

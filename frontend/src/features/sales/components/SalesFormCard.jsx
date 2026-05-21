@@ -3,6 +3,7 @@ import { brandIdsForCategory, variationsForCategoryAndBrand } from "../sales.uti
 import { SectionCard } from "../../../shared/components/ui/SectionCard.jsx";
 import { FormErrorSummary } from "../../../shared/components/FormErrorSummary.jsx";
 import { Input } from "../../../shared/components/ui/Input.jsx";
+import { CurrencyInput } from "../../../shared/components/ui/CurrencyInput.jsx";
 import { Select } from "../../../shared/components/ui/Select.jsx";
 import { Button } from "../../../shared/components/ui/Button.jsx";
 import { formatCurrencyBRL, parseCurrencyInput } from "../../../shared/formatters.js";
@@ -65,7 +66,7 @@ export function SalesFormCard({
         gross += qty * unit;
       }
     }
-    const dv = form.discountValue === "" ? 0 : Number(form.discountValue);
+    const dv = form.discountValue === "" ? 0 : parseCurrencyInput(form.discountValue);
     const dp = form.discountPercent === "" ? 0 : Number(form.discountPercent);
     const discountFromPercent = Number.isFinite(dp) && dp > 0 ? (gross * dp) / 100 : 0;
     const discountFromValue = Number.isFinite(dv) && dv > 0 ? dv : 0;
@@ -314,11 +315,10 @@ export function SalesFormCard({
                           />
                         </td>
                         <td className="px-2 py-2 align-top">
-                          <Input
+                          <CurrencyInput
                             className="text-sm"
-                            inputMode="decimal"
                             value={item.unitPrice}
-                            onChange={(e) => updateItem(index, "unitPrice", e.target.value)}
+                            onChange={(unitPrice) => updateItem(index, "unitPrice", unitPrice)}
                           />
                         </td>
                         <td className="px-2 py-2 align-top font-medium text-slate-800">{sub}</td>
@@ -347,13 +347,10 @@ export function SalesFormCard({
           <div className="grid gap-3 md:grid-cols-2">
             <label className="flex flex-col gap-1">
               <span className="text-xs font-medium text-slate-600">Desconto em reais (R$)</span>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
+              <CurrencyInput
                 placeholder="Ex.: 10,00"
                 value={form.discountValue}
-                onChange={(e) => setForm((prev) => ({ ...prev, discountValue: e.target.value }))}
+                onChange={(discountValue) => setForm((prev) => ({ ...prev, discountValue }))}
               />
             </label>
             <label className="flex flex-col gap-1">

@@ -44,6 +44,14 @@ export function formatCurrencyInputValue(value) {
   });
 }
 
+/** Valor numerico da API → texto do input (nunca use maskCurrencyInput aqui). */
+export function amountToCurrencyInput(amount) {
+  if (amount === "" || amount === null || amount === undefined) return "";
+  const n = Number(amount);
+  if (!Number.isFinite(n) || n < 0) return "";
+  return formatCurrencyInputValue(n);
+}
+
 /**
  * Mascara digitacao no campo de moeda: cada tecla entra como centavo (ex.: 7,0,0,0 -> 70,00).
  * Use apenas no onChange, nao ao preencher valor vindo do banco.

@@ -2,17 +2,13 @@ import { useEffect, useState } from "react";
 import { apiClient } from "../../shared/apiClient.js";
 import { useAuth } from "../auth/useAuth.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
-import {
-  formatCurrencyBRL,
-  formatCurrencyInputValue,
-  maskCurrencyInput,
-  parseCurrencyInput
-} from "../../shared/formatters.js";
+import { amountToCurrencyInput, formatCurrencyBRL, parseCurrencyInput } from "../../shared/formatters.js";
 import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
 import { DataTable } from "../../shared/components/DataTable.jsx";
 import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
 import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
 import { Input } from "../../shared/components/ui/Input.jsx";
+import { CurrencyInput } from "../../shared/components/ui/CurrencyInput.jsx";
 import { Select } from "../../shared/components/ui/Select.jsx";
 import { Textarea } from "../../shared/components/ui/Textarea.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
@@ -273,8 +269,8 @@ export function ProductsPage() {
     setForm({
       name: item.name || "",
       description: item.description || "",
-      price: formatCurrencyInputValue(item.price),
-      cost: formatCurrencyInputValue(item.cost),
+      price: amountToCurrencyInput(item.price),
+      cost: amountToCurrencyInput(item.cost),
       categoryId: item.categoryId || "",
       brandId: item.brandId || "",
       sku: item.sku || "",
@@ -360,15 +356,15 @@ export function ProductsPage() {
             value={form.sku}
             onChange={(e) => setForm((prev) => ({ ...prev, sku: e.target.value }))}
           />
-          <Input
+          <CurrencyInput
             placeholder="Preco"
             value={form.price}
-            onChange={(e) => setForm((prev) => ({ ...prev, price: maskCurrencyInput(e.target.value) }))}
+            onChange={(price) => setForm((prev) => ({ ...prev, price }))}
           />
-          <Input
+          <CurrencyInput
             placeholder="Custo"
             value={form.cost}
-            onChange={(e) => setForm((prev) => ({ ...prev, cost: maskCurrencyInput(e.target.value) }))}
+            onChange={(cost) => setForm((prev) => ({ ...prev, cost }))}
           />
           <div>
             <Input
