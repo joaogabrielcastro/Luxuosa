@@ -30,6 +30,24 @@ export function formatDateBR(iso) {
   });
 }
 
+/**
+ * Formata valor monetario ja numerico (ex.: vindo da API) para exibir no input.
+ * Nao divide por 100 — use ao carregar formulario de edicao.
+ */
+export function formatCurrencyInputValue(value) {
+  if (value === "" || value === null || value === undefined) return "";
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "";
+  return num.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+/**
+ * Mascara digitacao no campo de moeda: cada tecla entra como centavo (ex.: 7,0,0,0 -> 70,00).
+ * Use apenas no onChange, nao ao preencher valor vindo do banco.
+ */
 export function maskCurrencyInput(raw) {
   const digits = String(raw || "").replace(/\D/g, "");
   if (digits === "") return "";

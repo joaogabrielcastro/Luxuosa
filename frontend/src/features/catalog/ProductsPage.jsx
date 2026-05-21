@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import { apiClient } from "../../shared/apiClient.js";
 import { useAuth } from "../auth/useAuth.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
-import { formatCurrencyBRL, maskCurrencyInput, parseCurrencyInput } from "../../shared/formatters.js";
+import {
+  formatCurrencyBRL,
+  formatCurrencyInputValue,
+  maskCurrencyInput,
+  parseCurrencyInput
+} from "../../shared/formatters.js";
 import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
 import { DataTable } from "../../shared/components/DataTable.jsx";
 import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
@@ -268,8 +273,8 @@ export function ProductsPage() {
     setForm({
       name: item.name || "",
       description: item.description || "",
-      price: maskCurrencyInput(item.price),
-      cost: maskCurrencyInput(item.cost),
+      price: formatCurrencyInputValue(item.price),
+      cost: formatCurrencyInputValue(item.cost),
       categoryId: item.categoryId || "",
       brandId: item.brandId || "",
       sku: item.sku || "",
