@@ -1,9 +1,9 @@
 import { invoiceService } from "./invoice.service.js";
 
 export const invoiceController = {
-  async connectionTest(_req, res, next) {
+  async connectionTest(req, res, next) {
     try {
-      const data = await invoiceService.connectionTest();
+      const data = await invoiceService.connectionTest(req.tenantId);
       return res.json(data);
     } catch (error) {
       return next(error);

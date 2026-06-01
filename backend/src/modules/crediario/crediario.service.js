@@ -1,6 +1,7 @@
 import { CreditSaleStatus, PaymentMethod } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
 import { pagedResult } from "../../shared/pagination.js";
+import { normalizePaymentMethod, assertNoDuplicateVariationLines } from "../../shared/salePayload.js";
 import {
   applyStockExitForLine,
   buildAndValidateSaleLineItems,
@@ -10,17 +11,6 @@ import {
 function toNumber(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function normalizePaymentMethod(method) {
-  const map = {
-    dinheiro: PaymentMethod.CASH,
-    cartao_credito: PaymentMethod.CREDIT_CARD,
-    cartao_debito: PaymentMethod.DEBIT_CARD,
-    pix: PaymentMethod.PIX,
-    parcelamento: PaymentMethod.INSTALLMENT
-  };
-  return map[method] || method;
 }
 
 function assertDiscountPolicy(userType, discountValue, discountPercent, grossTotal) {
@@ -138,6 +128,8 @@ export const crediarioService = {
         err.statusCode = 404;
         throw err;
       }
+
+      assertNoDuplicateVariationLines(payload.items);
 
       const variationIds = payload.items.map((item) => item.productVariationId);
       const variations = await tx.productVariation.findMany({

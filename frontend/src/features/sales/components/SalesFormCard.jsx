@@ -15,6 +15,18 @@ function parseQty(raw) {
   return Number.isFinite(n) ? n : NaN;
 }
 
+function StepHeading({ step, title, description }) {
+  return (
+    <div className="ui-step">
+      <span className="ui-step-num">{step}</span>
+      <div>
+        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+        {description ? <p className="mt-1 text-xs leading-relaxed text-slate-600">{description}</p> : null}
+      </div>
+    </div>
+  );
+}
+
 function variationLabel(v) {
   if (!v) return "—";
   return `${v.product?.name || "Produto"} · ${v.size}/${v.color}`;
@@ -144,12 +156,11 @@ export function SalesFormCard({
       <form className="mt-4 space-y-8" onSubmit={createSale}>
         {/* 1 — Adicionar produtos */}
         <section className="space-y-4">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">1. Adicionar produtos</h3>
-            <p className="mt-1 text-xs text-slate-500">
-              Busca por nome, SKU, tamanho ou cor. Para adicionar pelo SKU, digite o codigo exato e confirme com Enter.
-            </p>
-          </div>
+          <StepHeading
+            step="1"
+            title="Adicionar produtos"
+            description="Busque por nome, SKU, tamanho ou cor. Para bipar, digite o código e pressione Enter."
+          />
 
           <div className="space-y-2">
             <label className="text-xs font-medium text-slate-600" htmlFor="sale-unified-search">
@@ -269,7 +280,7 @@ export function SalesFormCard({
 
         {/* 2 — Itens da venda */}
         <section className="space-y-3">
-          <h3 className="text-sm font-semibold text-slate-900">2. Itens da venda</h3>
+          <StepHeading step="2" title="Itens da venda" description="Confira quantidades e preços antes de finalizar." />
           {items.length === 0 ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-6 text-center text-sm text-amber-900">
               Nenhum produto na lista. Use o campo acima ou o catalogo.
@@ -343,7 +354,7 @@ export function SalesFormCard({
 
         {/* 3 — Desconto */}
         <section className="space-y-3">
-          <h3 className="text-sm font-semibold text-slate-900">3. Desconto (opcional)</h3>
+          <StepHeading step="3" title="Desconto (opcional)" />
           <div className="grid gap-3 md:grid-cols-2">
             <label className="flex flex-col gap-1">
               <span className="text-xs font-medium text-slate-600">Desconto em reais (R$)</span>
@@ -370,7 +381,7 @@ export function SalesFormCard({
 
         {/* 4 — Resumo */}
         <div className="rounded-lg border border-indigo-100 bg-indigo-50/30 p-4">
-          <h3 className="text-sm font-semibold text-slate-900">4. Resumo da venda</h3>
+          <StepHeading step="4" title="Resumo da venda" />
           <dl className="mt-3 space-y-1.5 text-sm">
             <div className="flex justify-between gap-4">
               <dt className="text-slate-600">Subtotal (itens)</dt>
@@ -397,7 +408,7 @@ export function SalesFormCard({
 
         {/* 5 — Pagamento */}
         <section className="space-y-4">
-          <h3 className="text-sm font-semibold text-slate-900">5. Pagamento</h3>
+          <StepHeading step="5" title="Pagamento" description="Escolha a forma e confirme a venda." />
           <div className="grid gap-3 md:grid-cols-2">
             <label className="flex flex-col gap-1 md:max-w-xs">
               <span className="text-xs font-medium text-slate-600">Forma de pagamento</span>

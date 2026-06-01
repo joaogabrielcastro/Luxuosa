@@ -21,14 +21,14 @@ SaaS multi-tenant para gestão de loja de roupa: catálogo, vendas, estoque, rel
 - **Movimentações de estoque manuais:** entrada e saída sem venda (`POST /stock-movements`), com histórico (`GET /stock-movements`). Saída não pode ultrapassar o estoque da variação.
 - **Relatórios (API):** vendas pagas por intervalo de datas (`GET /reports/sales?from=&to=`) e lista de produtos abaixo do mínimo (`GET /reports/low-stock`). O **dashboard admin** continua com visão mais rica (só admin).
 - **Dashboard (admin):** métricas agregadas (receita, ticket, vendas por período/atendente, lucro por produto, estoque consolidado, produtos sem venda recente, etc.).
-- **NFC-e (Nuvem Fiscal):** após registrar a venda, o backend enfileira emissão **modelo 65** em fila persistida no banco (`NfceIssueJob`) com serialização por `tenantId`; consulta SEFAZ e grava `Invoice`. **PDF (DANFE):** `GET /invoices/sale/:saleId/pdf`. Reemissão/forçar emissão: `POST /invoices/issue/:saleId` (qualquer usuário autenticado da loja). Status do job por venda: `GET /invoices/sale/:saleId/job`. Teste de conexão OAuth: `GET /invoices/connection-test` (só admin). OAuth com scope `empresa nfe nfce`. Simples Nacional (CSOSN 102).
+- **NFC-e (Nuvem Fiscal):** após registrar a venda, o backend enfileira emissão **modelo 65** em fila persistida no banco (`NfceIssueJob`) com serialização por `tenantId`; consulta SEFAZ e grava `Invoice`. **PDF (DANFE):** `GET /invoices/sale/:saleId/pdf`. Reemissão/forçar emissão: `POST /invoices/issue/:saleId` (só admin). Status do job por venda: `GET /invoices/sale/:saleId/job`. Teste de conexão OAuth: `GET /invoices/connection-test` (só admin). OAuth com scope `empresa nfe nfce`. Simples Nacional (CSOSN 102).
 
 ## O que ainda é esboço ou não existe
 
 - **NF-e na UI** e refinamentos fiscais avançados (outros CST/CFOP, download automático de XML em massa).
 - **Gestão de usuários** do tenant (criar atendentes), **onboarding** de novos tenants.
-- **Fila externa dedicada** (Redis/Bull) para NFC-e em cenários de alto volume/múltiplas instâncias (atualmente já há persistência no Postgres via `NfceIssueJob`).
-- **Testes automatizados** em volume.
+- **Fila externa dedicada** (Redis/Bull) para NFC-e em cenários de alto volume/múltiplas instâncias (há worker `nfce-worker` no Docker; Redis/Bull ainda não).
+- **Testes automatizados** em volume (há testes unitários básicos em `salePayload`; falta cobertura de integração).
 
 ## Estrutura do repositório
 
@@ -78,7 +78,7 @@ Copie `backend/.env.example` para `backend/.env`. Principais chaves:
 | `NUVEM_FISCAL_API_BASE` | Sandbox: `https://api.sandbox.nuvemfiscal.com.br` |
 | `NUVEM_FISCAL_OAUTH_SCOPE` | Padrão: `empresa nfe nfce` |
 | `NUVEM_FISCAL_AMBIENTE` | `homologacao` ou `producao` (igual à empresa no console Nuvem) |
-| `NUVEM_FISCAL_EMITENTE_CNPJ` | Opcional; 14 dígitos. Se vazio, usa `Tenant.cnpj` |
+| `NUVEM_FISCAL_EMITENTE_CNPJ` | Opcional; fallback só se `Tenant.cnpj` inválido. **Multi-tenant: sempre usa o CNPJ da loja logada** |
 | `NUVEM_FISCAL_EMITENTE_IE` | Opcional; IE só dígitos. Sobrescreve a IE vinda da Nuvem se a SEFAZ rejeitar vínculo CNPJ/IE |
 | `NUVEM_FISCAL_RESP_TEC_CNPJ` | CNPJ do responsável técnico (infRespTec), quando exigido pela SEFAZ |
 | `NUVEM_FISCAL_RESP_TEC_CONTATO` | Nome do contato técnico |
@@ -86,8 +86,18 @@ Copie `backend/.env.example` para `backend/.env`. Principais chaves:
 | `NUVEM_FISCAL_RESP_TEC_FONE` | Telefone (somente dígitos) do responsável técnico |
 | `NUVEM_FISCAL_RESP_TEC_ID_CSRT` | Identificador do CSRT na SEFAZ (ex.: PR); usado com `NUVEM_FISCAL_CSRT` |
 | `NUVEM_FISCAL_CSRT` | Segredo CSRT (SEFAZ); o backend calcula `hashCSRT` por nota (NT 2018.005) |
+| `NFCE_PROCESS_IN_API` | `false` na API e worker separado (`npm run worker:nfce`); `true` (padrão) processa fila no mesmo processo |
+| `NFCE_WORKER_POLL_MS` | Intervalo do worker NFC-e (padrão 5000 ms) |
+| `LOGIN_RATE_LIMIT_MAX` / `LOGIN_RATE_LIMIT_WINDOW_MS` | Limite de tentativas no `POST /auth/login` |
 
-No fluxo com Docker deste repositório, o `backend` lê essas variáveis via `env_file` em `docker-compose.yml` (arquivo `/.env.compose`).
+No fluxo com Docker deste repositório, o `backend` lê essas variáveis via `env_file` em `docker-compose.yml` (arquivo `/.env.compose`). O `docker-compose.yml` inclui o serviço **`nfce-worker`** com `NFCE_PROCESS_IN_API=true`; a API usa `NFCE_PROCESS_IN_API=false`.
+
+### Segurança e RBAC (resumo)
+
+- **Admin:** cancelar/editar venda, emitir NFC-e manual, CRUD de catálogo, estoque manual, crediário (criar/cancelar).
+- **Atendente:** criar venda, listar catálogo, receber crediário.
+- Vendas com NFC-e **emitida** ou job **em processamento** não podem ser editadas/canceladas.
+- `GET /customers` e `GET /product-variations` retornam `{ items, total, take, skip }` (paginação obrigatória).
 
 ## API REST
 
@@ -118,14 +128,14 @@ Prefixo global: **`/api/v1`**.
 | `POST /crediario/:id/cancel` | Cancelar crediário |
 | `GET /sales/summary` | Lista enxuta para telas de operação (mesmos filtros de `GET /sales`) |
 | `GET /sales/:id` | Detalhe completo da venda |
-| `PUT /sales/:id` | |
-| `POST /sales/:id/cancel` | |
+| `PUT /sales/:id` | Só admin; bloqueado se NFC-e emitida |
+| `POST /sales/:id/cancel` | Só admin; bloqueado se NFC-e emitida |
 | `GET /stock-movements` | Lista movimentações; aceita `take` e `skip` |
 | `POST /stock-movements` | Body: `productVariationId`, `type` (`ENTRY` \| `EXIT`), `quantity` |
 | `GET /reports/sales?from=YYYY-MM-DD&to=YYYY-MM-DD` | Vendas pagas no intervalo (totais e por dia) |
 | `GET /reports/low-stock` | Produtos com estoque total ≤ mínimo cadastrado |
 | `GET /invoices/connection-test` | Só admin; testa OAuth + `GET /empresas` na Nuvem Fiscal |
-| `POST /invoices/issue/:saleId` | Reemite/força NFC-e (venda paga); JWT da loja |
+| `POST /invoices/issue/:saleId` | Só admin; reemite/força NFC-e (venda paga) |
 | `GET /invoices/sale/:saleId/pdf` | PDF (DANFE) da NFC-e autorizada |
 | `GET /invoices/sale/:saleId/job` | Status da fila de emissão NFC-e para a venda |
 
@@ -165,9 +175,28 @@ Prefixo global: **`/api/v1`**.
 
 Documentação oficial: [Autenticação](https://dev.nuvemfiscal.com.br/docs/autenticacao).
 
-**NFC-e automática:** ao criar uma venda (`POST /sales`), o backend enfileira emissão na Nuvem Fiscal. No fluxo atual do app, a venda **não** vincula cliente (`customerId` nulo), então a nota é **CONSUMIDOR FINAL**. Se `customerId` for enviado pela API e o cliente tiver dados fiscais completos, o destinatário pode usar CPF/CNPJ do cadastro. **PDF:** `GET /api/v1/invoices/sale/:saleId/pdf` (JWT). Produtos: `ncm`, `cfop`, `icmsOrig`, `icmsCsosn` (padrões: `61091000`, `5102`, `0`, `102`). CNPJ emitente: `Tenant.cnpj` ou `NUVEM_FISCAL_EMITENTE_CNPJ`; certificado e ambiente na Nuvem alinhados a `NUVEM_FISCAL_AMBIENTE`. OAuth **scope** `empresa nfe nfce`.
+**NFC-e automática:** ao criar uma venda (`POST /sales`), o backend enfileira emissão na Nuvem Fiscal. No fluxo atual do app, a venda **não** vincula cliente (`customerId` nulo), então a nota é **CONSUMIDOR FINAL**. Se `customerId` for enviado pela API e o cliente tiver dados fiscais completos, o destinatário pode usar CPF/CNPJ do cadastro. **PDF:** `GET /api/v1/invoices/sale/:saleId/pdf` (JWT). Produtos: `ncm`, `cfop`, `icmsOrig`, `icmsCsosn` (padrões: `61091000`, `5102`, `0`, `102`). CNPJ emitente: **`Tenant.cnpj` da loja** (cadastre a mesma empresa na conta Nuvem Fiscal do `CLIENT_ID`/`SECRET`). `NUVEM_FISCAL_EMITENTE_CNPJ` só se o tenant não tiver CNPJ válido. Ambiente na Nuvem = `NUVEM_FISCAL_AMBIENTE`. OAuth **scope** `empresa nfe nfce`.
 
 Nunca commite `Client Secret`. Se exposto, revogue e gere novas credenciais.
+
+### Várias lojas (multi-tenant) — cada cliente com CNPJ diferente
+
+Cada **login** está ligado a um `Tenant` no banco. Na emissão de NFC-e o sistema usa **sempre o `Tenant.cnpj` da loja logada** (não mistura com outra loja).
+
+| Como conferir | O que fazer |
+|---------------|-------------|
+| **No app** | Faça login em cada cliente: no topo das páginas aparece o banner **“NFC-e desta loja: XX.XXX.XXX/XXXX-XX”**. |
+| **Dashboard** | Admin → **Verificar configuração fiscal** (valida se aquele CNPJ existe na conta Nuvem). |
+| **No servidor** | `cd backend && npm run fiscal:list-tenants` — tabela com todas as lojas e o CNPJ que cada uma usaria. |
+
+**Cadastro de cada cliente:**
+
+1. `Tenant.cnpj` no PostgreSQL = CNPJ real da loja (14 dígitos).
+2. Mesma empresa cadastrada na **Nuvem Fiscal** (conta das credenciais `NUVEM_FISCAL_*`).
+3. `enableNfceEmission = true` só nas lojas que emitem nota; as outras ficam sem fila NFC-e.
+4. **Não** use `NUVEM_FISCAL_EMITENTE_CNPJ` em produção multi-tenant (forçaria um único CNPJ para todos).
+
+Se o mesmo e-mail existir em mais de uma loja, o login pede o **CNPJ da loja** para escolher o tenant certo.
 
 ## Credenciais demo (seed)
 
@@ -218,6 +247,8 @@ Na raiz do repositório:
 
 ```bash
 npm run check
+
+Backend — testes unitários: `cd backend && npm test`. Com Postgres (ex. Docker): `DATABASE_URL=... npm run test:integration`
 ```
 
 Isso gera o build do frontend e valida o carregamento das rotas do backend. Com banco novo ou após puxar migrações: `npm run prisma:deploy` (aplica migrações em `backend/prisma/migrations`).

@@ -1,8 +1,31 @@
+import { prisma } from "../../config/prisma.js";
+import { pagedResult } from "../../shared/pagination.js";
 import { customerRepository } from "./customer.repository.js";
 
 export const customerService = {
+  async listPaged(tenantId, { take = 50, skip = 0, q } = {}) {
+    const where = { tenantId };
+    if (q) {
+      where.OR = [
+        { name: { contains: q, mode: "insensitive" } },
+        { cpfCnpj: { contains: q.replace(/\D/g, "") } },
+        { email: { contains: q, mode: "insensitive" } }
+      ];
+    }
+    const [items, total] = await Promise.all([
+      prisma.customer.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take
+      }),
+      prisma.customer.count({ where })
+    ]);
+    return pagedResult(items, { total, take, skip });
+  },
+
   list(tenantId) {
-    return customerRepository.findMany(tenantId, {}, { orderBy: { createdAt: "desc" } });
+    return this.listPaged(tenantId, { take: 200, skip: 0 });
   },
 
   getById(tenantId, id) {

@@ -1,113 +1,137 @@
-import bcrypt from "bcryptjs";
-import { PrismaClient, Plan, UserType } from "@prisma/client";
-
-const prisma = new PrismaClient();
-
-async function main() {
-  const tenantsSeed = [
-    {
-      name: "Luxuosa Loja",
-      cnpj: "12345678000199",
-      email: "contato@luxuosa.com",
-      phone: "11999999999",
-      enableNfceEmission: true,
-      users: [{ name: "Administrador", email: "admin@luxuosa.com" }]
-    },
-    {
-      name: "Mariana Pavin Store",
-      cnpj: "11111111000191",
-      email: "marianapavin@admin.com",
-      phone: "11911111111",
-      enableNfceEmission: false,
-      users: [{ name: "Mariana Pavin", email: "marianapavin@admin.com" }]
-    },
-    {
-      name: "Marisa Fernandes Store",
-      cnpj: "22222222000191",
-      email: "marisafernandes@admin.com",
-      phone: "11922222222",
-      enableNfceEmission: false,
-      users: [{ name: "Marisa Fernandes", email: "marisafernandes@admin.com" }]
-    },
-    {
-      name: "Fernando Store",
-      cnpj: "33333333000191",
-      email: "fernando@admin.com",
-      phone: "11933333333",
-      enableNfceEmission: false,
-      users: [{ name: "Fernando", email: "fernando@admin.com" }]
-    }
-  ];
-  const adminPasswordPlain = "123456";
-  const passwordHash = await bcrypt.hash(adminPasswordPlain, 10);
-
-  for (const tenantCfg of tenantsSeed) {
-    const tenant = await prisma.tenant.upsert({
-      where: { cnpj: tenantCfg.cnpj },
-      update: {
-        name: tenantCfg.name,
-        email: tenantCfg.email,
-        phone: tenantCfg.phone,
-        plan: Plan.BASIC,
-        enableNfceEmission: Boolean(tenantCfg.enableNfceEmission)
-      },
-      create: {
-        name: tenantCfg.name,
-        cnpj: tenantCfg.cnpj,
-        email: tenantCfg.email,
-        phone: tenantCfg.phone,
-        plan: Plan.BASIC,
-        enableNfceEmission: Boolean(tenantCfg.enableNfceEmission)
-      }
-    });
-
-    for (const adminUser of tenantCfg.users) {
-      // Garante isolamento sem ambiguidade de login por email.
-      await prisma.user.deleteMany({
-        where: {
-          email: adminUser.email,
-          tenantId: { not: tenant.id }
-        }
-      });
-
-      await prisma.user.upsert({
-        where: {
-          tenantId_email: {
-            tenantId: tenant.id,
-            email: adminUser.email
-          }
-        },
-        update: {
-          name: adminUser.name,
-          password: passwordHash,
-          tenantId: tenant.id,
-          type: UserType.ADMIN
-        },
-        create: {
-          name: adminUser.name,
-          email: adminUser.email,
-          password: passwordHash,
-          tenantId: tenant.id,
-          type: UserType.ADMIN
-        }
-      });
-    }
-  }
-
-  console.log("Seed concluido com sucesso.");
-  console.log(
-    `Emails: ${tenantsSeed
-      .flatMap((t) => t.users.map((u) => u.email))
-      .join(", ")}`
-  );
-  console.log(`Senha: ${adminPasswordPlain}`);
-}
-
-main()
-  .catch((error) => {
-    console.error("Erro ao executar seed:", error);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+import bcrypt from "bcryptjs";
+import { PrismaClient, Plan, UserType } from "@prisma/client";
+
+const prisma = new PrismaClient();
+
+/** CNPJ ficticio do seed antigo — migrado para o CNPJ real na Nuvem Fiscal. */
+const LEGACY_LUXUOSA_CNPJ = "12345678000199";
+/** LUXUOSA PRESENTES LTDA — cadastro na Nuvem Fiscal (sandbox/producao conforme console). */
+const LUXUOSA_CNPJ = "12440489000100";
+
+async function migrateLegacyLuxuosaTenant() {
+  const legacy = await prisma.tenant.findUnique({ where: { cnpj: LEGACY_LUXUOSA_CNPJ } });
+  if (!legacy) return;
+
+  const realExists = await prisma.tenant.findUnique({ where: { cnpj: LUXUOSA_CNPJ } });
+  if (realExists && realExists.id !== legacy.id) {
+    console.warn(
+      "Seed: ja existe tenant com CNPJ real; mantendo ambos. Ajuste manualmente se necessario."
+    );
+    return;
+  }
+
+  await prisma.tenant.update({
+    where: { id: legacy.id },
+    data: {
+      cnpj: LUXUOSA_CNPJ,
+      name: "Luxuosa Presentes",
+      email: "transguilucas1@hotmail.com",
+      phone: "4136562090",
+      enableNfceEmission: true
+    }
+  });
+  console.log("Tenant Luxuosa atualizado para CNPJ", LUXUOSA_CNPJ);
+}
+
+async function main() {
+  await migrateLegacyLuxuosaTenant();
+
+  const tenantsSeed = [
+    {
+      name: "Luxuosa Presentes",
+      cnpj: LUXUOSA_CNPJ,
+      email: "transguilucas1@hotmail.com",
+      phone: "4136562090",
+      enableNfceEmission: true,
+      users: [{ name: "Administrador", email: "admin@luxuosa.com" }]
+    },
+    {
+      name: "Mariana Pavin Store",
+      cnpj: "11111111000191",
+      email: "marianapavin@admin.com",
+      phone: "11911111111",
+      enableNfceEmission: false,
+      users: [{ name: "Mariana Pavin", email: "marianapavin@admin.com" }]
+    },
+    {
+      name: "Marisa Fernandes Store",
+      cnpj: "22222222000191",
+      email: "marisafernandes@admin.com",
+      phone: "11922222222",
+      enableNfceEmission: false,
+      users: [{ name: "Marisa Fernandes", email: "marisafernandes@admin.com" }]
+    }
+  ];
+  const adminPasswordPlain = "123456";
+  const passwordHash = await bcrypt.hash(adminPasswordPlain, 10);
+
+  for (const tenantCfg of tenantsSeed) {
+    const tenant = await prisma.tenant.upsert({
+      where: { cnpj: tenantCfg.cnpj },
+      update: {
+        name: tenantCfg.name,
+        email: tenantCfg.email,
+        phone: tenantCfg.phone,
+        plan: Plan.BASIC,
+        enableNfceEmission: Boolean(tenantCfg.enableNfceEmission)
+      },
+      create: {
+        name: tenantCfg.name,
+        cnpj: tenantCfg.cnpj,
+        email: tenantCfg.email,
+        phone: tenantCfg.phone,
+        plan: Plan.BASIC,
+        enableNfceEmission: Boolean(tenantCfg.enableNfceEmission)
+      }
+    });
+
+    for (const adminUser of tenantCfg.users) {
+      await prisma.user.deleteMany({
+        where: {
+          email: adminUser.email,
+          tenantId: { not: tenant.id }
+        }
+      });
+
+      await prisma.user.upsert({
+        where: {
+          tenantId_email: {
+            tenantId: tenant.id,
+            email: adminUser.email
+          }
+        },
+        update: {
+          name: adminUser.name,
+          password: passwordHash,
+          tenantId: tenant.id,
+          type: UserType.ADMIN
+        },
+        create: {
+          name: adminUser.name,
+          email: adminUser.email,
+          password: passwordHash,
+          tenantId: tenant.id,
+          type: UserType.ADMIN
+        }
+      });
+    }
+  }
+
+  console.log("Seed concluido com sucesso.");
+  console.log(
+    `Emails: ${tenantsSeed
+      .flatMap((t) => t.users.map((u) => u.email))
+      .join(", ")}`
+  );
+  console.log(`Senha: ${adminPasswordPlain}`);
+  console.log(`Luxuosa CNPJ (Nuvem Fiscal): ${LUXUOSA_CNPJ}`);
+}
+
+main()
+  .catch((error) => {
+    console.error("Erro ao executar seed:", error);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

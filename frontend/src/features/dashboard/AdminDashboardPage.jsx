@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { apiClient } from "../../shared/apiClient.js";
+import { useApiQuery } from "../../shared/hooks/useApiQuery.js";
 import { formatCurrencyBRL, formatDateBR } from "../../shared/formatters.js";
 import { useAuth } from "../auth/useAuth.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
@@ -9,7 +10,8 @@ import { StatCard } from "../../shared/components/ui/StatCard.jsx";
 import { Alert } from "../../shared/components/ui/Alert.jsx";
 import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
-import { AlertTriangle, DollarSign, Plug, ShoppingCart, Wallet } from "lucide-react";
+import { AlertTriangle, CheckCircle2, DollarSign, Plug, ShoppingCart, Wallet, XCircle } from "lucide-react";
+import { Badge } from "../../shared/components/ui/Badge.jsx";
 import {
   Bar,
   BarChart,
@@ -22,42 +24,45 @@ import {
   YAxis
 } from "recharts";
 
+const EMPTY_DASHBOARD = {
+  monthlyRevenue: 0,
+  daySales: 0,
+  ticketAverage: 0,
+  lowStockCount: 0,
+  lowStockItems: [],
+  lastSales: [],
+  salesByPeriod: [],
+  salesByAttendant: [],
+  profitByProduct: [],
+  productsWithoutSales: [],
+  stockConsolidated: []
+};
+
 export function AdminDashboardPage() {
   const { token, user, tenant } = useAuth();
   const { showToast } = useToast();
   const [nfceConn, setNfceConn] = useState(null);
   const [nfceConnLoading, setNfceConnLoading] = useState(false);
-  const [data, setData] = useState({
-    monthlyRevenue: 0,
-    daySales: 0,
-    ticketAverage: 0,
-    lowStockCount: 0,
-    lowStockItems: [],
-    lastSales: [],
-    salesByPeriod: [],
-    salesByAttendant: [],
-    profitByProduct: [],
-    productsWithoutSales: [],
-    stockConsolidated: []
-  });
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setLoading(true);
-    apiClient("/dashboard/admin", { token })
-      .then(setData)
-      .catch((err) => setError(err))
-      .finally(() => setLoading(false));
-  }, [token]);
+  const {
+    data = EMPTY_DASHBOARD,
+    error: dashboardError,
+    isLoading: loading,
+    isFetching,
+    refetch
+  } = useApiQuery(["dashboard", "admin"], "/dashboard/admin", { token });
 
   async function runNfceConnectionTest() {
     setNfceConnLoading(true);
     setNfceConn(null);
     try {
       const data = await apiClient("/invoices/connection-test", { token });
-      setNfceConn({ ok: true, data });
-      showToast(`Nuvem Fiscal OK (${data?.environment || "—"}).`);
+      setNfceConn({ ok: data?.ok === true, data });
+      if (data?.ok) {
+        showToast(`Nuvem Fiscal OK — emitente ${data.emitente?.cnpjFormatado || "—"}.`);
+      } else {
+        showToast("Conexão OK, mas há pendências na configuração fiscal.", "error");
+      }
     } catch (err) {
       setNfceConn({
         ok: false,
@@ -99,16 +104,14 @@ export function AdminDashboardPage() {
 
   return (
     <div className="ui-page">
-      <PageHeader title="Dashboard" description="Visao geral operacional da loja." />
+      <PageHeader title="Dashboard" description="Visão geral do desempenho da loja: vendas, ticket médio e alertas de estoque." />
       {user?.type === "ADMIN" ? (
         <div className="mb-4">
-        <SectionCard title="Fiscal — Nuvem Fiscal">
-          <p className="text-xs text-slate-600">
-            Testa OAuth e listagem de empresas na API da Nuvem (mesma rota que{" "}
-            <code className="rounded bg-slate-100 px-1">GET /invoices/connection-test</code>). Depois finalize uma venda
-            de teste na pagina Vendas (com NFC-e ligada para o tenant, se aplicavel) e confira o job na lista de vendas.
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+        <SectionCard
+          title="Fiscal — Nuvem Fiscal"
+          description="Verifica se o CNPJ desta loja está na conta Nuvem e pronto para emitir NFC-e. Outras empresas na mesma conta sandbox não são usadas aqui."
+        >
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               variant="secondary"
@@ -117,29 +120,85 @@ export function AdminDashboardPage() {
               onClick={runNfceConnectionTest}
             >
               <Plug className="h-4 w-4" />
-              {nfceConnLoading ? "Testando..." : "Testar conexao Nuvem Fiscal"}
+              {nfceConnLoading ? "Verificando…" : "Verificar configuração fiscal"}
             </Button>
             {tenant?.enableNfceEmission ? (
-              <span className="text-xs text-emerald-700">NFC-e habilitada para este tenant.</span>
+              <Badge variant="success">NFC-e ativa nesta loja</Badge>
             ) : (
-              <span className="text-xs text-slate-500">NFC-e desligada nesta loja (vendas sem fila de nota).</span>
+              <Badge variant="neutral">NFC-e desligada</Badge>
             )}
           </div>
-          {nfceConn?.ok ? (
-            <pre className="mt-3 max-h-48 overflow-auto rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800">
-              {JSON.stringify(nfceConn.data, null, 2)}
-            </pre>
+
+          {tenant?.cnpj ? (
+            <p className="mt-3 text-sm text-slate-600">
+              CNPJ cadastrado nesta loja:{" "}
+              <span className="font-semibold text-slate-900">{tenant.cnpj.replace(/\D/g, "").replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")}</span>
+            </p>
           ) : null}
-          {nfceConn && !nfceConn.ok ? (
-            <Alert className="mt-3" variant="danger">
-              {nfceConn.message}
-              {nfceConn.details ? (
-                <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs">
-                  {typeof nfceConn.details === "string"
-                    ? nfceConn.details
-                    : JSON.stringify(nfceConn.details, null, 2)}
-                </pre>
+
+          {nfceConn?.data ? (
+            <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {nfceConn.data.ok ? (
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600" aria-hidden />
+                ) : (
+                  <XCircle className="h-5 w-5 text-amber-600" aria-hidden />
+                )}
+                <span className="text-sm font-semibold text-slate-900">
+                  {nfceConn.data.ok ? "Pronto para emitir" : "Configuração incompleta"}
+                </span>
+                <Badge variant={nfceConn.data.environment === "sandbox" ? "warning" : "info"}>
+                  {nfceConn.data.environment === "sandbox" ? "Sandbox" : "Produção"}
+                </Badge>
+              </div>
+
+              <dl className="grid gap-2 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="text-slate-500">Emitente na NFC-e</dt>
+                  <dd className="font-medium text-slate-900">
+                    {nfceConn.data.emitente?.cnpjFormatado || "—"}
+                    {nfceConn.data.emitente?.nomeFantasia || nfceConn.data.emitente?.razaoSocial
+                      ? ` — ${nfceConn.data.emitente.nomeFantasia || nfceConn.data.emitente.razaoSocial}`
+                      : null}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">Cadastro na Nuvem</dt>
+                  <dd className="font-medium text-slate-900">
+                    {nfceConn.data.emitente?.cadastradoNaNuvem ? "Sim" : "Não — cadastre este CNPJ no console"}
+                  </dd>
+                </div>
+                {nfceConn.data.nfce?.ambiente ? (
+                  <div>
+                    <dt className="text-slate-500">Ambiente NFC-e (Nuvem)</dt>
+                    <dd className="font-medium capitalize text-slate-900">{nfceConn.data.nfce.ambiente}</dd>
+                  </div>
+                ) : null}
+              </dl>
+
+              {nfceConn.data.warnings?.length ? (
+                <ul className="space-y-2 border-t border-slate-200 pt-3">
+                  {nfceConn.data.warnings.map((w) => (
+                    <li key={w} className="flex gap-2 text-xs leading-relaxed text-amber-900">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+                      {w}
+                    </li>
+                  ))}
+                </ul>
               ) : null}
+
+              {nfceConn.data.otherEmpresasInAccountCount > 0 ? (
+                <p className="border-t border-slate-200 pt-3 text-xs text-slate-500">
+                  Esta conta Nuvem tem mais {nfceConn.data.otherEmpresasInAccountCount} empresa(s)
+                  cadastrada(s). Esta loja usa apenas o CNPJ acima.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {nfceConn && !nfceConn.ok && nfceConn.message ? (
+            <Alert className="mt-3" variant="danger" title="Falha na verificação">
+              {nfceConn.message}
             </Alert>
           ) : null}
         </SectionCard>
@@ -149,7 +208,7 @@ export function AdminDashboardPage() {
         <StatCard
           label="Faturamento do mes"
           value={formatCurrencyBRL(data.monthlyRevenue)}
-          hint="+12% vs periodo recente"
+          hint="Total de vendas no mês atual"
           icon={<DollarSign className="h-4 w-4 text-violet-600" />}
         />
         <StatCard
@@ -282,10 +341,13 @@ export function AdminDashboardPage() {
           <EmptyState description="Sem alertas no momento." />
         )}
       </SectionCard>
-      {loading ? <Alert variant="info">Atualizando indicadores...</Alert> : null}
-      {error ? (
+      {loading || isFetching ? <Alert variant="info">Atualizando indicadores...</Alert> : null}
+      {dashboardError ? (
         <Alert variant="danger">
-          {typeof error === "string" ? error : error.message}
+          {dashboardError.message}
+          <button type="button" className="ml-2 underline" onClick={() => refetch()}>
+            Tentar novamente
+          </button>
         </Alert>
       ) : null}
     </div>

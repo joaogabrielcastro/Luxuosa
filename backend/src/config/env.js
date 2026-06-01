@@ -20,6 +20,10 @@ export const env = {
   jwtSecret: process.env.JWT_SECRET || "",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "1d",
   corsOrigins: parseCorsOrigins(process.env.CORS_ORIGINS),
+  /** false = API so enfileira jobs; processar em worker (NFCE_PROCESS_IN_API=false). */
+  nfceProcessInApi: process.env.NFCE_PROCESS_IN_API !== "false",
+  loginRateLimitMax: Math.max(5, Number(process.env.LOGIN_RATE_LIMIT_MAX || 30)),
+  loginRateLimitWindowMs: Math.max(60_000, Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || 900_000)),
   nuvemFiscal: {
     clientId: trimEnv(process.env.NUVEM_FISCAL_CLIENT_ID),
     clientSecret: trimEnv(process.env.NUVEM_FISCAL_CLIENT_SECRET),
@@ -27,7 +31,7 @@ export const env = {
     oauthScope: trimEnv(process.env.NUVEM_FISCAL_OAUTH_SCOPE || "empresa nfe nfce"),
     /** homologacao | producao — deve coincidir com a configuração da empresa na Nuvem Fiscal */
     ambiente: trimEnv(process.env.NUVEM_FISCAL_AMBIENTE || "homologacao"),
-    /** CNPJ só dígitos; se vazio, usa Tenant.cnpj na emissão */
+    /** CNPJ só dígitos — fallback se Tenant.cnpj inválido; em multi-tenant a loja logada tem prioridade */
     emitenteCnpj: trimEnv(process.env.NUVEM_FISCAL_EMITENTE_CNPJ || ""),
     /** IE só dígitos; se vazio, usa inscricao_estadual retornada pela Nuvem (GET empresa). */
     emitenteIe: trimEnv(process.env.NUVEM_FISCAL_EMITENTE_IE || ""),

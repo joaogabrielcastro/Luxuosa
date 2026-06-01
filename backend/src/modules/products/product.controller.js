@@ -54,17 +54,12 @@ const productUpdateSchema = z
 export const productController = {
   async list(req, res, next) {
     try {
-      const hasPaging = req.query.take !== undefined || req.query.skip !== undefined;
-      if (hasPaging) {
-        const { take, skip } = parsePageQuery(req.query, { defaultTake: 50, maxTake: 200 });
-        const q = req.query.q ? String(req.query.q).trim() : undefined;
-        const categoryId = req.query.categoryId ? String(req.query.categoryId) : undefined;
-        const brandId = req.query.brandId ? String(req.query.brandId) : undefined;
-        const paged = await productService.listPaged(req.tenantId, { take, skip, q, categoryId, brandId });
-        return res.json(paged);
-      }
-      const products = await productService.list(req.tenantId);
-      return res.json(products);
+      const { take, skip } = parsePageQuery(req.query, { defaultTake: 50, maxTake: 200 });
+      const q = req.query.q ? String(req.query.q).trim() : undefined;
+      const categoryId = req.query.categoryId ? String(req.query.categoryId) : undefined;
+      const brandId = req.query.brandId ? String(req.query.brandId) : undefined;
+      const paged = await productService.listPaged(req.tenantId, { take, skip, q, categoryId, brandId });
+      return res.json(paged);
     } catch (error) {
       return next(error);
     }

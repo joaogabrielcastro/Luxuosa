@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../shared/apiClient.js";
 import { useAuth } from "../auth/useAuth.jsx";
 import { formatCurrencyBRL, formatDateBR } from "../../shared/formatters.js";
+import { queryKeys } from "../../shared/queryKeys.js";
 import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
 import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
 import { Input } from "../../shared/components/ui/Input.jsx";
@@ -21,36 +23,38 @@ function defaultFromTo() {
 export function ReportsPage() {
   const { token } = useAuth();
   const [{ from, to }, setRange] = useState(() => defaultFromTo());
-  const [salesReport, setSalesReport] = useState(null);
-  const [lowStock, setLowStock] = useState(null);
-  const [error, setError] = useState("");
+  const [appliedRange, setAppliedRange] = useState(() => defaultFromTo());
 
-  async function load() {
-    setError("");
-    const [s, l] = await Promise.all([
-      apiClient(`/reports/sales?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { token }),
-      apiClient("/reports/low-stock", { token })
-    ]);
-    setSalesReport(s);
-    setLowStock(l);
-  }
+  const salesQuery = useQuery({
+    queryKey: queryKeys.reports.sales(token, appliedRange),
+    enabled: Boolean(token),
+    queryFn: () =>
+      apiClient(
+        `/reports/sales?from=${encodeURIComponent(appliedRange.from)}&to=${encodeURIComponent(appliedRange.to)}`,
+        { token }
+      )
+  });
 
-  useEffect(() => {
-    load().catch((err) => setError(err));
-  }, [token]);
+  const lowStockQuery = useQuery({
+    queryKey: queryKeys.reports.lowStock(token),
+    enabled: Boolean(token),
+    staleTime: 60_000,
+    queryFn: () => apiClient("/reports/low-stock", { token })
+  });
+
+  const salesReport = salesQuery.data ?? null;
+  const lowStock = lowStockQuery.data ?? null;
+  const error = salesQuery.error || lowStockQuery.error;
+  const loading = salesQuery.isFetching || lowStockQuery.isFetching;
 
   async function applyRange(e) {
     e.preventDefault();
-    try {
-      await load();
-    } catch (err) {
-      setError(err);
-    }
+    setAppliedRange({ from, to });
   }
 
   return (
     <div className="ui-page">
-      <PageHeader title="Relatorios" description="Acompanhe vendas e alertas de estoque." />
+      <PageHeader title="Relatórios" description="Analise vendas por período e produtos com estoque baixo." />
       <SectionCard title="Vendas por periodo">
         <form className="mt-3 flex flex-wrap items-end gap-3" onSubmit={applyRange}>
           <label className="flex flex-col gap-1">
@@ -69,8 +73,8 @@ export function ReportsPage() {
               onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
             />
           </label>
-          <Button type="submit" className="text-sm">
-            Atualizar
+          <Button type="submit" className="text-sm" disabled={loading}>
+            {loading ? "Atualizando…" : "Atualizar"}
           </Button>
         </form>
         {salesReport ? (

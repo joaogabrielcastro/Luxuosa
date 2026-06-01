@@ -20,13 +20,13 @@ export function SalesPage() {
   const [nfceFilter, setNfceFilter] = useState("");
   const [search, setSearch] = useState("");
   const [nfceErrorDetail, setNfceErrorDetail] = useState(null);
+  const [formError, setFormError] = useState("");
   const {
     sales,
     variations,
     sortedCategories,
     sortedBrands,
-    error,
-    setError,
+    error: dataError,
     load,
     salesSkip,
     setSalesSkip,
@@ -51,7 +51,9 @@ export function SalesPage() {
     retryNfce,
     downloadNfcePdf,
     getRemainingUnits
-  } = useSalesActions({ token, variations, load, setError, showToast, confirm });
+  } = useSalesActions({ token, variations, load, setError: setFormError, showToast, confirm });
+
+  const error = formError || dataError?.message || "";
 
   useEffect(() => {
     setSalesSkip(0);
@@ -59,7 +61,10 @@ export function SalesPage() {
 
   return (
     <div className="ui-page">
-      <PageHeader title="Vendas" description="Nota como consumidor final (sem cliente na tela)." />
+      <PageHeader
+        title="Vendas"
+        description="Registre vendas, aplique descontos e acompanhe a emissão de NFC-e quando habilitada para sua loja."
+      />
       <SalesFormCard
         editingSaleId={editingSaleId}
         form={form}

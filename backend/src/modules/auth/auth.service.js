@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import { env } from "../../config/env.js";
 import { prisma } from "../../config/prisma.js";
 import { authRepository } from "./auth.repository.js";
+import { buildTenantFiscalContext } from "../../shared/nuvemFiscal/nuvemFiscalEmitente.js";
 
 function digitsOnly(value) {
   return String(value ?? "").replace(/\D/g, "");
@@ -69,7 +70,8 @@ export const authService = {
         name: user.tenant.name,
         cnpj: user.tenant.cnpj,
         plan: user.tenant.plan,
-        enableNfceEmission: user.tenant.enableNfceEmission
+        enableNfceEmission: user.tenant.enableNfceEmission,
+        fiscal: buildTenantFiscalContext(user.tenant)
       }
     };
   },
@@ -96,6 +98,14 @@ export const authService = {
       err.statusCode = 401;
       throw err;
     }
-    return { tenant, profile };
+    if (profile.tenantId !== tenantId) {
+      const err = new Error("Sessao invalida.");
+      err.statusCode = 401;
+      throw err;
+    }
+    return {
+      tenant: { ...tenant, fiscal: buildTenantFiscalContext(tenant) },
+      user: profile
+    };
   }
 };

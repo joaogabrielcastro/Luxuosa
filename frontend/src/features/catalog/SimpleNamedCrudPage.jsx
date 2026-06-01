@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../shared/apiClient.js";
+import { useApiQuery } from "../../shared/hooks/useApiQuery.js";
+import { queryKeys } from "../../shared/queryKeys.js";
 import { useAuth } from "../auth/useAuth.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
 import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
@@ -43,22 +46,21 @@ export function SimpleNamedCrudPage({
     ? `${capitalize(entityNoun)} excluida.`
     : `${capitalize(entityNoun)} excluido.`;
 
-  const [items, setItems] = useState([]);
+  const queryClient = useQueryClient();
+  const listQuery = useApiQuery(queryKeys.namedResource(resource, token), `/${resource}`, { token });
+  const items = listQuery.data ?? [];
   const [name, setName] = useState("");
   const [editingId, setEditingId] = useState("");
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function load() {
-    const data = await apiClient(`/${resource}`, { token });
-    setItems(data);
+  async function refreshList() {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.namedResource(resource, token) });
+    if (resource === "categories" || resource === "brands") {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.catalog.all(token) });
+    }
   }
-
-  useEffect(() => {
-    load().catch((err) => setError(err));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   async function submit(event) {
     event.preventDefault();
@@ -74,7 +76,7 @@ export function SimpleNamedCrudPage({
       }
       setEditingId("");
       setName("");
-      await load();
+      await refreshList();
     } catch (err) {
       setError(err);
     } finally {
@@ -91,7 +93,7 @@ export function SimpleNamedCrudPage({
       });
       if (!confirmed) return;
       await apiClient(`/${resource}/${id}`, { method: "DELETE", token });
-      await load();
+      await refreshList();
       showToast(deletedMsg);
     } catch (err) {
       setError(err);

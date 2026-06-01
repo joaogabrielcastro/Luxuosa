@@ -1,3 +1,9 @@
+export function formatCnpjBr(value) {
+  const d = String(value ?? "").replace(/\D/g, "");
+  if (d.length !== 14) return d || "";
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+}
+
 export function formatCurrencyBRL(value) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value || 0));
 }

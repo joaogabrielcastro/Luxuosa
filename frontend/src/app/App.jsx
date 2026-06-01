@@ -1,18 +1,40 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "../features/auth/useAuth.jsx";
 import { LoginPage } from "../features/auth/LoginPage.jsx";
-import { AdminDashboardPage } from "../features/dashboard/AdminDashboardPage.jsx";
-import { CategoriesPage } from "../features/catalog/CategoriesPage.jsx";
-import { BrandsPage } from "../features/catalog/BrandsPage.jsx";
-import { ProductsPage } from "../features/catalog/ProductsPage.jsx";
-import { SalesPage } from "../features/sales/NfceSalesPage.jsx";
-import { StockMovementsPage } from "../features/stock/StockMovementsPage.jsx";
-import { ReportsPage } from "../features/reports/ReportsPage.jsx";
-import { CrediarioPage } from "../features/crediario/CrediarioPage.jsx";
-import { CustomersPage } from "../features/customers/CustomersPage.jsx";
 import { AppShell } from "../shared/components/AppShell.jsx";
+import { PageLoader } from "../shared/components/PageLoader.jsx";
 import { ToastProvider } from "../shared/components/ToastProvider.jsx";
 import { ConfirmProvider } from "../shared/components/ConfirmProvider.jsx";
+import { QueryProvider } from "../shared/QueryProvider.jsx";
+
+const AdminDashboardPage = lazy(() =>
+  import("../features/dashboard/AdminDashboardPage.jsx").then((m) => ({ default: m.AdminDashboardPage }))
+);
+const CategoriesPage = lazy(() =>
+  import("../features/catalog/CategoriesPage.jsx").then((m) => ({ default: m.CategoriesPage }))
+);
+const BrandsPage = lazy(() =>
+  import("../features/catalog/BrandsPage.jsx").then((m) => ({ default: m.BrandsPage }))
+);
+const ProductsPage = lazy(() =>
+  import("../features/catalog/ProductsPage.jsx").then((m) => ({ default: m.ProductsPage }))
+);
+const SalesPage = lazy(() =>
+  import("../features/sales/NfceSalesPage.jsx").then((m) => ({ default: m.SalesPage }))
+);
+const StockMovementsPage = lazy(() =>
+  import("../features/stock/StockMovementsPage.jsx").then((m) => ({ default: m.StockMovementsPage }))
+);
+const ReportsPage = lazy(() =>
+  import("../features/reports/ReportsPage.jsx").then((m) => ({ default: m.ReportsPage }))
+);
+const CrediarioPage = lazy(() =>
+  import("../features/crediario/CrediarioPage.jsx").then((m) => ({ default: m.CrediarioPage }))
+);
+const CustomersPage = lazy(() =>
+  import("../features/customers/CustomersPage.jsx").then((m) => ({ default: m.CustomersPage }))
+);
 
 function PrivateRoute({ children }) {
   const { token } = useAuth();
@@ -23,7 +45,9 @@ function PrivateRoute({ children }) {
 function PrivateShell({ children }) {
   return (
     <PrivateRoute>
-      <AppShell>{children}</AppShell>
+      <AppShell>
+        <Suspense fallback={<PageLoader />}>{children}</Suspense>
+      </AppShell>
     </PrivateRoute>
   );
 }
@@ -51,12 +75,14 @@ function AppRoutes() {
 
 export function App() {
   return (
-    <AuthProvider>
-      <ToastProvider>
-        <ConfirmProvider>
-          <AppRoutes />
-        </ConfirmProvider>
-      </ToastProvider>
-    </AuthProvider>
+    <QueryProvider>
+      <AuthProvider>
+        <ToastProvider>
+          <ConfirmProvider>
+            <AppRoutes />
+          </ConfirmProvider>
+        </ToastProvider>
+      </AuthProvider>
+    </QueryProvider>
   );
 }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parsePageQuery } from "../../shared/pagination.js";
 import { customerService } from "./customer.service.js";
 
 function digitsOnly(value) {
@@ -30,8 +31,10 @@ const customerSchema = z.object({
 export const customerController = {
   async list(req, res, next) {
     try {
-      const customers = await customerService.list(req.tenantId);
-      return res.json(customers);
+      const { take, skip } = parsePageQuery(req.query, { defaultTake: 50, maxTake: 200 });
+      const q = req.query.q ? String(req.query.q).trim() : undefined;
+      const data = await customerService.listPaged(req.tenantId, { take, skip, q });
+      return res.json(data);
     } catch (error) {
       return next(error);
     }

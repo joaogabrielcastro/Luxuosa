@@ -1,5 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../shared/apiClient.js";
+import { queryKeys } from "../../shared/queryKeys.js";
+import { useCatalogTaxonomies } from "../../shared/hooks/useCatalogTaxonomies.js";
+import { useInvalidateLuxuosa } from "../../shared/hooks/useInvalidateLuxuosa.js";
 import { useAuth } from "../auth/useAuth.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
 import { amountToCurrencyInput, formatCurrencyBRL, parseCurrencyInput } from "../../shared/formatters.js";
@@ -45,14 +49,11 @@ export function ProductsPage() {
   const { token } = useAuth();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [brands, setBrands] = useState([]);
   const [editingId, setEditingId] = useState("");
   const [loading, setLoading] = useState(false);
-  const [listLoading, setListLoading] = useState(false);
+  const { invalidateProducts, invalidateCatalog } = useInvalidateLuxuosa(token);
+  const { categories, brands } = useCatalogTaxonomies(token);
   const [productSkip, setProductSkip] = useState(0);
-  const [totalProducts, setTotalProducts] = useState(0);
   const productTake = 50;
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -66,36 +67,46 @@ export function ProductsPage() {
   const [variationSize, setVariationSize] = useState("");
   const [variationColor, setVariationColor] = useState("");
 
-  async function load() {
-    setListLoading(true);
-    const params = new URLSearchParams();
-    params.set("take", String(productTake));
-    params.set("skip", String(productSkip));
-    if (query.trim()) params.set("q", query.trim());
-    if (categoryFilter) params.set("categoryId", categoryFilter);
-    if (brandFilter) params.set("brandId", brandFilter);
-    const [productsData, categoriesData, brandsData] = await Promise.all([
-      apiClient(`/products?${params.toString()}`, { token }),
-      apiClient("/categories", { token }),
-      apiClient("/brands", { token })
-    ]);
-    setProducts(productsData.items || []);
-    setTotalProducts(Number(productsData.total || 0));
-    setCategories(categoriesData);
-    setBrands(brandsData);
-    setListLoading(false);
-  }
+  const listParams = useMemo(
+    () => ({
+      take: productTake,
+      skip: productSkip,
+      q: query.trim(),
+      categoryId: categoryFilter,
+      brandId: brandFilter
+    }),
+    [productTake, productSkip, query, categoryFilter, brandFilter]
+  );
+
+  const productsQuery = useQuery({
+    queryKey: queryKeys.products.list(token, listParams),
+    enabled: Boolean(token),
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("take", String(productTake));
+      params.set("skip", String(productSkip));
+      if (listParams.q) params.set("q", listParams.q);
+      if (categoryFilter) params.set("categoryId", categoryFilter);
+      if (brandFilter) params.set("brandId", brandFilter);
+      return apiClient(`/products?${params.toString()}`, { token });
+    }
+  });
+
+  const products = productsQuery.data?.items ?? [];
+  const totalProducts = Number(productsQuery.data?.total ?? 0);
+  const listLoading = productsQuery.isLoading || productsQuery.isFetching;
 
   useEffect(() => {
-    load().catch((err) => {
-      setListLoading(false);
-      setError(err);
-    });
-  }, [productSkip, token, query, categoryFilter, brandFilter]);
+    if (productsQuery.error) setError(productsQuery.error);
+  }, [productsQuery.error]);
 
   useEffect(() => {
     setProductSkip(0);
   }, [query, categoryFilter, brandFilter]);
+
+  async function refreshProducts() {
+    await Promise.all([invalidateProducts(), invalidateCatalog()]);
+  }
 
   async function syncProductStock(productId, desiredStock, { variationSize: sizeArg = "", variationColor: colorArg = "" } = {}) {
     const sizeTrim = String(sizeArg || "").trim();
@@ -220,16 +231,16 @@ export function ProductsPage() {
 
       if (editingId) {
         showToast("Produto atualizado.");
-        await load();
+        await refreshProducts();
         const full = await apiClient(`/products/${editingId}`, { token });
         startEdit(full);
       } else if (response?.id) {
         showToast("Produto criado.");
-        await load();
+        await refreshProducts();
         const full = await apiClient(`/products/${response.id}`, { token });
         startEdit(full);
       } else {
-        await load();
+        await refreshProducts();
       }
     } catch (err) {
       setError(err);
@@ -256,7 +267,7 @@ export function ProductsPage() {
         setVariationSize("");
         setVariationColor("");
       }
-      await load();
+      await refreshProducts();
       showToast("Produto excluido.");
     } catch (err) {
       setError(err);
@@ -445,7 +456,7 @@ export function ProductsPage() {
         token={token}
         productId={editingId}
         productName={form.name?.trim() || ""}
-        onChanged={() => load().catch(() => {})}
+        onChanged={() => refreshProducts().catch(() => {})}
       />
 
       <SectionCard title="Lista de produtos">

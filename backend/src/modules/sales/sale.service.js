@@ -1,23 +1,18 @@
 import { PaymentMethod, SaleStatus } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
 import { enqueueNfceIssue } from "../../jobs/enqueueNfceIssue.js";
+import { assertSaleMutable } from "../../shared/saleGuards.js";
+import {
+  assertCustomerBelongsToTenant,
+  assertNoDuplicateVariationLines,
+  normalizePaymentMethod
+} from "../../shared/salePayload.js";
 import {
   applyStockExitForLine,
   buildAndValidateSaleLineItems,
   restoreStockForLine
 } from "../../shared/saleStockLineItems.js";
 import { saleRepository } from "./sale.repository.js";
-
-function normalizePaymentMethod(method) {
-  const map = {
-    dinheiro: PaymentMethod.CASH,
-    cartao_credito: PaymentMethod.CREDIT_CARD,
-    cartao_debito: PaymentMethod.DEBIT_CARD,
-    pix: PaymentMethod.PIX,
-    parcelamento: PaymentMethod.INSTALLMENT
-  };
-  return map[method] || method;
-}
 
 function toNumber(value, fallback = 0) {
   const parsed = Number(value);
@@ -110,6 +105,9 @@ export const saleService = {
 
   async create(tenantId, userId, userType, payload) {
     return prisma.$transaction(async (tx) => {
+      assertNoDuplicateVariationLines(payload.items);
+      await assertCustomerBelongsToTenant(tx, tenantId, payload.customerId);
+
       const variationIds = payload.items.map((item) => item.productVariationId);
       const variations = await tx.productVariation.findMany({
         where: { tenantId, id: { in: variationIds } },
@@ -165,8 +163,6 @@ export const saleService = {
         });
       }
 
-      return sale;
-    }).then(async (sale) => {
       const wantsNfce = payload.emitNfce === undefined ? true : payload.emitNfce === true;
       const tenant = await prisma.tenant.findUnique({
         where: { id: tenantId },
@@ -183,17 +179,15 @@ export const saleService = {
 
   async update(tenantId, saleId, userId, userType, payload) {
     return prisma.$transaction(async (tx) => {
-      const currentSale = await saleRepository.findById(tx, tenantId, saleId);
-      if (!currentSale) {
-        const err = new Error("Venda nao encontrada.");
-        err.statusCode = 404;
-        throw err;
-      }
+      const currentSale = await assertSaleMutable(tx, tenantId, saleId);
       if (currentSale.status === SaleStatus.CANCELED) {
         const err = new Error("Nao e possivel editar venda cancelada.");
         err.statusCode = 409;
         throw err;
       }
+
+      assertNoDuplicateVariationLines(payload.items);
+      await assertCustomerBelongsToTenant(tx, tenantId, payload.customerId);
 
       await restoreSaleEffects(tx, tenantId, currentSale);
 
@@ -258,12 +252,7 @@ export const saleService = {
 
   async cancel(tenantId, saleId) {
     return prisma.$transaction(async (tx) => {
-      const currentSale = await saleRepository.findById(tx, tenantId, saleId);
-      if (!currentSale) {
-        const err = new Error("Venda nao encontrada.");
-        err.statusCode = 404;
-        throw err;
-      }
+      const currentSale = await assertSaleMutable(tx, tenantId, saleId);
       if (currentSale.status === SaleStatus.CANCELED) {
         return currentSale;
       }
@@ -271,7 +260,7 @@ export const saleService = {
       await restoreSaleEffects(tx, tenantId, currentSale);
 
       return tx.sale.update({
-        where: { id: currentSale.id },
+        where: { id: currentSale.id, tenantId },
         data: { status: SaleStatus.CANCELED }
       });
     });

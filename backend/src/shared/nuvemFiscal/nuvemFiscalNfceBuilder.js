@@ -49,6 +49,21 @@ function round2(n) {
   return Math.round(Number(n) * 100) / 100;
 }
 
+/** Numero da nota: prioriza config Nuvem; fallback estavel por venda (evita Date.now()). */
+function resolveNnfNumber({ sale, empresaNfce }) {
+  const fromConfig = Number(
+    empresaNfce?.numero ?? empresaNfce?.numero_inicial ?? empresaNfce?.proximo_numero
+  );
+  if (Number.isFinite(fromConfig) && fromConfig > 0) return Math.floor(fromConfig);
+
+  const saleId = String(sale?.id || "");
+  let hash = 0;
+  for (let i = 0; i < saleId.length; i += 1) {
+    hash = (hash * 31 + saleId.charCodeAt(i)) >>> 0;
+  }
+  return (hash % 999_999_999) + 1;
+}
+
 function allocateItemDiscounts(det, targetVDesc) {
   const totalCents = Math.max(0, Math.round(round2(targetVDesc) * 100));
   if (totalCents <= 0 || !det.length) return;
@@ -287,13 +302,14 @@ export function buildNfceRequestBody({ sale, empresa, empresaNfce, ambiente, ref
   const cUF = UF_CUF[emitUF] ?? 41;
   const dhEmi = new Date(sale.occurredAt).toISOString();
   const cNF = randomCNF();
-  const nNF = Number(String(Date.now()).slice(-9));
+  const serie = Math.max(1, Number(empresaNfce?.serie) || 1);
+  const nNF = resolveNnfNumber({ sale, empresaNfce });
   const idData = buildInfNfeId({
     cUF,
     dhEmi,
     cnpjEmit: emit.CNPJ,
     mod: 65,
-    serie: 1,
+    serie,
     nNF,
     tpEmis: 1,
     cNF
@@ -313,7 +329,7 @@ export function buildNfceRequestBody({ sale, empresa, empresaNfce, ambiente, ref
     cNF,
     natOp: "VENDA DE MERCADORIA",
     mod: 65,
-    serie: 1,
+    serie,
     nNF,
     dhEmi,
     tpNF: 1,

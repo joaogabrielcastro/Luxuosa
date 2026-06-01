@@ -28,25 +28,20 @@ const updateSchema = z
 export const productVariationController = {
   async list(req, res, next) {
     try {
-      const hasPaging = req.query.take !== undefined || req.query.skip !== undefined;
-      if (hasPaging) {
-        const { take, skip } = parsePageQuery(req.query, { defaultTake: 50, maxTake: 200 });
-        const q = req.query.q ? String(req.query.q).trim() : undefined;
-        const categoryId = req.query.categoryId ? String(req.query.categoryId) : undefined;
-        const brandId = req.query.brandId ? String(req.query.brandId) : undefined;
-        const productId = req.query.productId ? String(req.query.productId) : undefined;
-        const paged = await productVariationService.listPaged(req.tenantId, {
-          take,
-          skip,
-          q,
-          categoryId,
-          brandId,
-          productId
-        });
-        return res.json(paged);
-      }
-      const variations = await productVariationService.list(req.tenantId);
-      return res.json(variations);
+      const { take, skip } = parsePageQuery(req.query, { defaultTake: 100, maxTake: 500 });
+      const q = req.query.q ? String(req.query.q).trim() : undefined;
+      const categoryId = req.query.categoryId ? String(req.query.categoryId) : undefined;
+      const brandId = req.query.brandId ? String(req.query.brandId) : undefined;
+      const productId = req.query.productId ? String(req.query.productId) : undefined;
+      const paged = await productVariationService.listPaged(req.tenantId, {
+        take,
+        skip,
+        q,
+        categoryId,
+        brandId,
+        productId
+      });
+      return res.json(paged);
     } catch (error) {
       return next(error);
     }

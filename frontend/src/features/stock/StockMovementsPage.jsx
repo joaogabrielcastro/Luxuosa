@@ -1,8 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../shared/apiClient.js";
 import { useAuth } from "../auth/useAuth.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
 import { formatDateTimeBR } from "../../shared/formatters.js";
+import { unwrapList } from "../../shared/apiList.js";
+import { queryKeys } from "../../shared/queryKeys.js";
+import { useCatalogTaxonomies } from "../../shared/hooks/useCatalogTaxonomies.js";
+import { useInvalidateLuxuosa } from "../../shared/hooks/useInvalidateLuxuosa.js";
 import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
 import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
 import { Input } from "../../shared/components/ui/Input.jsx";
@@ -15,10 +20,8 @@ import { StatCard } from "../../shared/components/ui/StatCard.jsx";
 export function StockMovementsPage() {
   const { token } = useAuth();
   const { showToast } = useToast();
-  const [movements, setMovements] = useState([]);
-  const [variations, setVariations] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [listLoading, setListLoading] = useState(false);
+  const { refreshAfterStockMutation } = useInvalidateLuxuosa(token);
+  const [submitting, setSubmitting] = useState(false);
   const [listSkip, setListSkip] = useState(0);
   const pageSize = 100;
   const [form, setForm] = useState({
@@ -26,6 +29,17 @@ export function StockMovementsPage() {
     type: "ENTRY",
     quantity: "1"
   });
+
+  const { variations } = useCatalogTaxonomies(token);
+
+  const movementsQuery = useQuery({
+    queryKey: queryKeys.stock.movements(token, { skip: listSkip, take: pageSize }),
+    enabled: Boolean(token),
+    queryFn: () => apiClient(`/stock-movements?take=${pageSize}&skip=${listSkip}`, { token })
+  });
+
+  const movements = useMemo(() => unwrapList(movementsQuery.data), [movementsQuery.data]);
+  const listLoading = movementsQuery.isLoading || movementsQuery.isFetching;
 
   const sortedVariations = useMemo(
     () =>
@@ -36,24 +50,6 @@ export function StockMovementsPage() {
       }),
     [variations]
   );
-
-  async function load() {
-    setListLoading(true);
-    const [m, v] = await Promise.all([
-      apiClient(`/stock-movements?take=${pageSize}&skip=${listSkip}`, { token }),
-      apiClient("/product-variations", { token })
-    ]);
-    setMovements(m);
-    setVariations(v);
-    setListLoading(false);
-  }
-
-  useEffect(() => {
-    load().catch((err) => {
-      setListLoading(false);
-      showToast(err.message, "error");
-    });
-  }, [token, listSkip]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -66,7 +62,7 @@ export function StockMovementsPage() {
       showToast("Informe uma quantidade inteira maior ou igual a 1.", "error");
       return;
     }
-    setLoading(true);
+    setSubmitting(true);
     try {
       await apiClient("/stock-movements", {
         method: "POST",
@@ -79,11 +75,11 @@ export function StockMovementsPage() {
       });
       showToast(form.type === "ENTRY" ? "Entrada registrada." : "Saida registrada.");
       setForm((prev) => ({ ...prev, quantity: "1" }));
-      await load();
+      await refreshAfterStockMutation();
     } catch (err) {
       showToast(err.message, "error");
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   }
 
@@ -137,12 +133,8 @@ export function StockMovementsPage() {
               />
             </label>
           </div>
-          <Button
-            type="submit"
-            className="max-w-xs text-sm"
-            disabled={loading}
-          >
-            {loading ? "Salvando..." : "Registrar"}
+          <Button type="submit" className="max-w-xs text-sm" disabled={submitting}>
+            {submitting ? "Salvando..." : "Registrar"}
           </Button>
         </form>
       </SectionCard>

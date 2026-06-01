@@ -7,8 +7,17 @@ import { StockMovementType } from "@prisma/client";
  */
 export function buildAndValidateSaleLineItems(payloadItems, variationMap) {
   const saleItems = [];
+  const seenVariation = new Set();
 
   for (const raw of payloadItems) {
+    if (seenVariation.has(raw.productVariationId)) {
+      const err = new Error(
+        "Nao e permitido repetir a mesma variacao na venda. Ajuste a quantidade na linha existente."
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+    seenVariation.add(raw.productVariationId);
     const variation = variationMap.get(raw.productVariationId);
     if (!variation) {
       const err = new Error("Variacao invalida.");

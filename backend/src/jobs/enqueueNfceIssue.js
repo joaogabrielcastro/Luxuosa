@@ -1,5 +1,6 @@
 import { InvoiceStatus, NfceIssueJobStatus } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
+import { env } from "../config/env.js";
 import { invoiceService } from "../modules/invoices/invoice.service.js";
 import { logger } from "../utils/logger.js";
 
@@ -199,6 +200,11 @@ export async function enqueueNfceIssue(tenantId, saleId) {
   }
   // FAILED / PROCESSING: nao altera aqui; drain ainda roda para demais jobs do tenant.
 
+  scheduleTenantDrain(tenantId);
+}
+
+function scheduleTenantDrain(tenantId) {
+  if (!env.nfceProcessInApi) return;
   const prev = chains.get(tenantId) || Promise.resolve();
   const next = prev
     .then(() => drainTenantQueue(tenantId))

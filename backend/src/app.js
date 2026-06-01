@@ -15,8 +15,10 @@ const corsMiddleware =
     : cors();
 
 app.use(corsMiddleware);
-app.use(express.json());
-app.use(morgan("dev"));
+app.use(express.json({ limit: "1mb" }));
+if (process.env.NODE_ENV !== "production") {
+  app.use(morgan("dev"));
+}
 
 app.use("/api/v1", router);
 app.use(errorHandler);

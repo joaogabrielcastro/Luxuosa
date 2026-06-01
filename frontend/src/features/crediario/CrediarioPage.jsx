@@ -1,15 +1,23 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../auth/useAuth.jsx";
 import { apiClient } from "../../shared/apiClient.js";
+import { queryKeys } from "../../shared/queryKeys.js";
+import { useApiQuery } from "../../shared/hooks/useApiQuery.js";
+import { useCatalogTaxonomies } from "../../shared/hooks/useCatalogTaxonomies.js";
+import { useInvalidateLuxuosa } from "../../shared/hooks/useInvalidateLuxuosa.js";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
 import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
 import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
+import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
 import { Input } from "../../shared/components/ui/Input.jsx";
+import { Search } from "lucide-react";
 import { CurrencyInput } from "../../shared/components/ui/CurrencyInput.jsx";
 import { Select } from "../../shared/components/ui/Select.jsx";
 import { Modal } from "../../shared/components/ui/Modal.jsx";
 import { paymentLabel } from "../sales/sales.utils.js";
+import { unwrapList } from "../../shared/apiList.js";
 import {
   amountToCurrencyInput,
   formatCurrencyBRL,
@@ -45,17 +53,18 @@ export function CrediarioPage() {
   const { showToast } = useToast();
   const { confirm } = useConfirm();
 
-  const [rows, setRows] = useState([]);
-  const [total, setTotal] = useState(0);
   const [skip, setSkip] = useState(0);
   const take = 20;
   const [searchDraft, setSearchDraft] = useState("");
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const [customers, setCustomers] = useState([]);
-  const [variations, setVariations] = useState([]);
+  const { invalidateCrediario, refreshAfterStockMutation } = useInvalidateLuxuosa(token);
+  const { variations } = useCatalogTaxonomies(token);
+  const customersQuery = useApiQuery(queryKeys.customers.list(token), "/customers?take=500&skip=0", {
+    token,
+    select: (data) => unwrapList(data)
+  });
+  const customers = customersQuery.data ?? [];
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState({
@@ -67,7 +76,6 @@ export function CrediarioPage() {
   });
 
   const [detailId, setDetailId] = useState(null);
-  const [detail, setDetail] = useState(null);
 
   const [payOpen, setPayOpen] = useState(false);
   const [paySaleId, setPaySaleId] = useState(null);
@@ -77,64 +85,54 @@ export function CrediarioPage() {
     note: ""
   });
 
-  const load = useCallback(async () => {
-    if (!token) return;
-    setLoading(true);
-    try {
+  const listParams = useMemo(
+    () => ({ take, skip, q: q.trim(), statusFilter }),
+    [take, skip, q, statusFilter]
+  );
+
+  const listQuery = useQuery({
+    queryKey: queryKeys.crediario.list(token, listParams),
+    enabled: Boolean(token),
+    queryFn: async () => {
       const params = new URLSearchParams();
       params.set("take", String(take));
       params.set("skip", String(skip));
-      if (q.trim()) params.set("q", q.trim());
+      if (listParams.q) params.set("q", listParams.q);
       if (statusFilter) params.set("status", statusFilter);
-      const data = await apiClient(`/crediario?${params.toString()}`, { token });
-      setRows(data.items || []);
-      setTotal(Number(data.total || 0));
-    } catch (err) {
-      showToast(err.message || "Erro ao carregar crediario.", "error");
-    } finally {
-      setLoading(false);
+      return apiClient(`/crediario?${params.toString()}`, { token });
     }
-  }, [token, skip, q, statusFilter, showToast]);
+  });
+
+  const rows = listQuery.data?.items ?? [];
+  const total = Number(listQuery.data?.total ?? 0);
+  const loading = listQuery.isFetching;
+
+  const detailQuery = useQuery({
+    queryKey: queryKeys.crediario.detail(token, detailId),
+    enabled: Boolean(token && detailId),
+    queryFn: () => apiClient(`/crediario/${detailId}`, { token })
+  });
+  const detail = detailQuery.data ?? null;
 
   useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    if (!token) return undefined;
-    (async () => {
-      try {
-        const [c, v] = await Promise.all([
-          apiClient("/customers", { token }),
-          apiClient("/product-variations", { token })
-        ]);
-        setCustomers(c || []);
-        setVariations(v || []);
-      } catch {
-        /* ignore */
-      }
-    })();
-    return undefined;
-  }, [token]);
-
-  useEffect(() => {
-    if (!detailId || !token) {
-      setDetail(null);
-      return undefined;
+    if (listQuery.error) {
+      showToast(listQuery.error.message || "Erro ao carregar crediario.", "error");
     }
-    let cancelled = false;
-    (async () => {
-      try {
-        const row = await apiClient(`/crediario/${detailId}`, { token });
-        if (!cancelled) setDetail(row);
-      } catch (err) {
-        if (!cancelled) showToast(err.message || "Erro ao abrir detalhe.", "error");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [detailId, token, showToast]);
+  }, [listQuery.error, showToast]);
+
+  useEffect(() => {
+    if (detailQuery.error) {
+      showToast(detailQuery.error.message || "Erro ao abrir detalhe.", "error");
+    }
+  }, [detailQuery.error, showToast]);
+
+  useEffect(() => {
+    setSkip(0);
+  }, [q, statusFilter]);
+
+  async function refreshCrediario() {
+    await Promise.all([invalidateCrediario(), refreshAfterStockMutation()]);
+  }
 
   const variationLabel = useMemo(() => {
     const map = new Map();
@@ -202,7 +200,7 @@ export function CrediarioPage() {
       setCreateOpen(false);
       setCreateForm({ customerId: "", discountValue: "", discountPercent: "", notes: "", items: [emptyLine()] });
       setSkip(0);
-      await load();
+      await refreshCrediario();
     } catch (err) {
       showToast(err.message || "Erro ao registrar.", "error");
     }
@@ -237,14 +235,9 @@ export function CrediarioPage() {
       });
       showToast("Pagamento registrado.", "success");
       setPayOpen(false);
-      await load();
+      await refreshCrediario();
       if (detailId === paySaleId) {
-        try {
-          const row = await apiClient(`/crediario/${paySaleId}`, { token });
-          setDetail(row);
-        } catch {
-          /* ignore */
-        }
+        await detailQuery.refetch();
       }
     } catch (err) {
       showToast(err.message || "Erro ao registrar pagamento.", "error");
@@ -262,10 +255,9 @@ export function CrediarioPage() {
     try {
       await apiClient(`/crediario/${row.id}/cancel`, { method: "POST", token });
       showToast("Venda cancelada.", "success");
-      await load();
+      await refreshCrediario();
       if (detailId === row.id) {
         setDetailId(null);
-        setDetail(null);
       }
     } catch (err) {
       showToast(err.message || "Nao foi possivel cancelar.", "error");
@@ -279,8 +271,8 @@ export function CrediarioPage() {
   return (
     <div className="ui-page">
       <PageHeader
-        title="Crediario"
-        description="Vendas a prazo por cliente, saldo em aberto e recebimentos parciais (sem NFC-e)."
+        title="Crediário"
+        description="Controle vendas a prazo, saldo em aberto e recebimentos parciais por cliente."
         actions={
           <Button type="button" onClick={() => setCreateOpen(true)}>
             Nova venda a prazo
@@ -288,20 +280,23 @@ export function CrediarioPage() {
         }
       />
 
-      <div className="ui-surface mt-4 p-4">
+      <SectionCard title="Consulta" description="Busque por nome do cliente ou documento. Pressione Enter para pesquisar.">
         <div className="mb-4 flex flex-wrap gap-2">
-          <Input
-            className="max-w-xs text-sm"
-            placeholder="Buscar por cliente ou CPF/CNPJ..."
-            value={searchDraft}
-            onChange={(e) => setSearchDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                setQ(searchDraft.trim());
-                setSkip(0);
-              }
-            }}
-          />
+          <div className="relative min-w-[200px] flex-1 max-w-md">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              className="pl-9 text-sm"
+              placeholder="Cliente ou CPF/CNPJ..."
+              value={searchDraft}
+              onChange={(e) => setSearchDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  setQ(searchDraft.trim());
+                  setSkip(0);
+                }
+              }}
+            />
+          </div>
           <Button
             variant="secondary"
             type="button"
@@ -326,22 +321,22 @@ export function CrediarioPage() {
             <option value="PAID">Quitado</option>
             <option value="CANCELED">Cancelado</option>
           </Select>
-          <Button variant="secondary" type="button" className="text-sm" onClick={() => load()}>
+          <Button variant="secondary" type="button" className="text-sm" onClick={() => listQuery.refetch()}>
             Atualizar
           </Button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto rounded-lg border border-slate-100">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-200 text-slate-500">
-                <th className="py-2 pr-2">Data</th>
+              <tr className="ui-table-head">
+                <th className="px-3 py-3 pr-2">Data</th>
                 <th className="py-2 pr-2">Cliente</th>
                 <th className="py-2 pr-2">Total</th>
                 <th className="py-2 pr-2">Pago</th>
                 <th className="py-2 pr-2">Saldo</th>
                 <th className="py-2 pr-2">Status</th>
-                <th className="py-2 text-right">Acoes</th>
+                <th className="px-3 py-3 text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -359,7 +354,7 @@ export function CrediarioPage() {
                 </tr>
               ) : (
                 rows.map((row) => (
-                  <tr key={row.id} className="border-b border-slate-100">
+                  <tr key={row.id} className="ui-table-row">
                     <td className="py-2 pr-2 whitespace-nowrap">{formatDt(row.occurredAt)}</td>
                     <td className="py-2 pr-2">
                       <div className="font-medium text-slate-800">{row.customer?.name}</div>
@@ -420,11 +415,11 @@ export function CrediarioPage() {
               disabled={!canNext}
               onClick={() => setSkip((s) => s + take)}
             >
-              Proxima
+              Próxima
             </Button>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
       <Modal
         open={createOpen}

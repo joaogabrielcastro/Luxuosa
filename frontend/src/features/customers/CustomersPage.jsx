@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { apiClient } from "../../shared/apiClient.js";
+import { useApiQuery } from "../../shared/hooks/useApiQuery.js";
+import { useInvalidateLuxuosa } from "../../shared/hooks/useInvalidateLuxuosa.js";
+import { queryKeys } from "../../shared/queryKeys.js";
 import { useAuth } from "../auth/useAuth.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
 import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
@@ -87,8 +90,13 @@ export function CustomersPage() {
   const { token } = useAuth();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
-  const [items, setItems] = useState([]);
   const [form, setForm] = useState(emptyForm);
+  const { invalidateCustomers } = useInvalidateLuxuosa(token);
+  const customersQuery = useApiQuery(queryKeys.customers.list(token), "/customers?take=500&skip=0", {
+    token,
+    select: (data) => data.items || []
+  });
+  const items = customersQuery.data ?? [];
   const [editingId, setEditingId] = useState("");
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
@@ -98,15 +106,6 @@ export function CustomersPage() {
     () => items.filter((c) => matchesCustomerQuery(c, query)).length,
     [items, query]
   );
-
-  async function load() {
-    const data = await apiClient("/customers", { token });
-    setItems(data);
-  }
-
-  useEffect(() => {
-    load().catch((err) => setError(err));
-  }, []);
 
   function startEdit(c) {
     setEditingId(c.id);
@@ -150,7 +149,7 @@ export function CustomersPage() {
         showToast("Cliente cadastrado.");
       }
       cancelEdit();
-      await load();
+      await invalidateCustomers();
     } catch (err) {
       setError(err);
       showToast(err.message, "error");
@@ -169,7 +168,7 @@ export function CustomersPage() {
       });
       if (!ok) return;
       await apiClient(`/customers/${id}`, { method: "DELETE", token });
-      await load();
+      await invalidateCustomers();
       showToast("Cliente excluido.");
       if (editingId === id) cancelEdit();
     } catch (err) {

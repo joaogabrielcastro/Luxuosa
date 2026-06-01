@@ -7,7 +7,7 @@ const router = Router();
 
 router.use(authMiddleware, tenantMiddleware);
 router.get("/connection-test", requireAdmin, invoiceController.connectionTest);
-router.post("/issue/:saleId", invoiceController.issue);
+router.post("/issue/:saleId", requireAdmin, invoiceController.issue);
 router.get("/sale/:saleId/pdf", invoiceController.downloadPdf);
 router.get("/sale/:saleId/job", invoiceController.issueJobStatus);
 
