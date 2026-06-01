@@ -109,7 +109,7 @@ export function AdminDashboardPage() {
         <div className="mb-4">
         <SectionCard
           title="Fiscal — Nuvem Fiscal"
-          description="Verifica se o CNPJ desta loja está na conta Nuvem e pronto para emitir NFC-e. Outras empresas na mesma conta sandbox não são usadas aqui."
+          description="Verifica se o CNPJ desta loja está na Nuvem Fiscal e pronto para emitir NFC-e."
         >
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -185,13 +185,6 @@ export function AdminDashboardPage() {
                     </li>
                   ))}
                 </ul>
-              ) : null}
-
-              {nfceConn.data.otherEmpresasInAccountCount > 0 ? (
-                <p className="border-t border-slate-200 pt-3 text-xs text-slate-500">
-                  Esta conta Nuvem tem mais {nfceConn.data.otherEmpresasInAccountCount} empresa(s)
-                  cadastrada(s). Esta loja usa apenas o CNPJ acima.
-                </p>
               ) : null}
             </div>
           ) : null}

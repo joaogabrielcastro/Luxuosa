@@ -11,7 +11,6 @@ import {
 import { buildNfceRequestBody, digitsOnly } from "../../shared/nuvemFiscal/nuvemFiscalNfceBuilder.js";
 import {
   formatCnpjBr,
-  listEmpresasFromApiBody,
   resolveEmitenteCnpj
 } from "../../shared/nuvemFiscal/nuvemFiscalEmitente.js";
 import { saleRepository } from "../sales/sale.repository.js";
@@ -156,22 +155,6 @@ async function connectionTest(tenantId) {
     throw err;
   }
 
-  const allEmpresas = listEmpresasFromApiBody(listBody);
-  const otherEmpresas = allEmpresas
-    .filter((e) => digitsOnly(e.cpf_cnpj) !== resolved.emitCnpj)
-    .map((e) => ({
-      cnpj: digitsOnly(e.cpf_cnpj),
-      cnpjFormatado: formatCnpjBr(e.cpf_cnpj),
-      razaoSocial: e.nome_razao_social || null,
-      nomeFantasia: e.nome_fantasia || null
-    }));
-
-  if (otherEmpresas.length && resolved.emitCnpj.length === 14) {
-    warnings.push(
-      `Esta conta Nuvem também tem ${otherEmpresas.length} outra(s) empresa(s) (ex.: ${otherEmpresas[0].nomeFantasia || otherEmpresas[0].razaoSocial}). Elas não são usadas nesta loja.`
-    );
-  }
-
   let empresa = null;
   let nfceConfig = null;
   let empresaFound = false;
@@ -229,8 +212,7 @@ async function connectionTest(tenantId) {
           serie: nfceConfig.serie ?? null
         }
       : null,
-    warnings,
-    otherEmpresasInAccountCount: otherEmpresas.length
+    warnings
   };
 }
 
