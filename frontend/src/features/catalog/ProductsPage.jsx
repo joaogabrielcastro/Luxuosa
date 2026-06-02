@@ -1,111 +1,218 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../shared/apiClient.js";
+import { queryKeys } from "../../shared/queryKeys.js";
+import { useCatalogTaxonomies } from "../../shared/hooks/useCatalogTaxonomies.js";
+import { useInvalidateLuxuosa } from "../../shared/hooks/useInvalidateLuxuosa.js";
 import { useAuth } from "../auth/useAuth.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
-import { formatCurrencyBRL, maskCurrencyInput, parseCurrencyInput } from "../../shared/formatters.js";
+import { amountToCurrencyInput, formatCurrencyBRL, parseCurrencyInput } from "../../shared/formatters.js";
 import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
 import { DataTable } from "../../shared/components/DataTable.jsx";
+import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
+import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
+import { Input } from "../../shared/components/ui/Input.jsx";
+import { CurrencyInput } from "../../shared/components/ui/CurrencyInput.jsx";
+import { Select } from "../../shared/components/ui/Select.jsx";
+import { Textarea } from "../../shared/components/ui/Textarea.jsx";
+import { Button } from "../../shared/components/ui/Button.jsx";
+import { FormErrorSummary } from "../../shared/components/FormErrorSummary.jsx";
+import { ProductVariationsSection } from "./ProductVariationsSection.jsx";
+import { isDefaultVariation } from "./catalogConstants.js";
+function productCurrentStock(item) {
+  return (item.variations || []).reduce((acc, v) => acc + Number(v.stock || 0), 0);
+}
 
-const AUTO_VARIATION_SIZE = "AUTO";
-const AUTO_VARIATION_COLOR = "ESTOQUE";
+function productLowStockClass(item) {
+  const min = Number(item.minStock ?? 0);
+  if (min <= 0) return "";
+  const current = productCurrentStock(item);
+  if (current > min) return "";
+  if (current === 0) {
+    return "border-l-4 border-l-rose-500 bg-rose-50/90 hover:bg-rose-50";
+  }
+  return "border-l-4 border-l-amber-500 bg-amber-50/80 hover:bg-amber-50/90";
+}
+
+const EMPTY_PRODUCT_FORM = {
+  name: "",
+  description: "",
+  price: "",
+  cost: "",
+  categoryId: "",
+  brandId: "",
+  sku: "",
+  minStock: ""
+};
 
 export function ProductsPage() {
   const { token } = useAuth();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [brands, setBrands] = useState([]);
   const [editingId, setEditingId] = useState("");
   const [loading, setLoading] = useState(false);
+  const { invalidateProducts, invalidateCatalog } = useInvalidateLuxuosa(token);
+  const { categories, brands } = useCatalogTaxonomies(token);
+  const [productSkip, setProductSkip] = useState(0);
+  const productTake = 50;
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [brandFilter, setBrandFilter] = useState("");
   const [error, setError] = useState("");
   const [scannerSku, setScannerSku] = useState("");
-  const [form, setForm] = useState({
-    name: "",
-    description: "",
-    price: "",
-    cost: "",
-    categoryId: "",
-    brandId: "",
-    sku: "",
-    minStock: ""
-  });
-  const [currentStockPreview, setCurrentStockPreview] = useState(0);
+  const [form, setForm] = useState(EMPTY_PRODUCT_FORM);
+  /** String vazia = mostrar placeholder (como minima); nao exibir 0 no campo. */
+  const [currentStockPreview, setCurrentStockPreview] = useState("");
+  /** Se ambos preenchidos junto com quantidade, o estoque aplica-se so a esta variacao. */
+  const [variationSize, setVariationSize] = useState("");
+  const [variationColor, setVariationColor] = useState("");
 
-  async function load() {
-    if (!token) return;
-    const [productsData, categoriesData, brandsData] = await Promise.all([
-      apiClient(`/products?_=${Date.now()}`, { token }),
-      apiClient("/categories", { token }),
-      apiClient("/brands", { token })
-    ]);
-    setProducts(productsData);
-    setCategories(categoriesData);
-    setBrands(brandsData);
-  }
+  const listParams = useMemo(
+    () => ({
+      take: productTake,
+      skip: productSkip,
+      q: query.trim(),
+      categoryId: categoryFilter,
+      brandId: brandFilter
+    }),
+    [productTake, productSkip, query, categoryFilter, brandFilter]
+  );
+
+  const productsQuery = useQuery({
+    queryKey: queryKeys.products.list(token, listParams),
+    enabled: Boolean(token),
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("take", String(productTake));
+      params.set("skip", String(productSkip));
+      if (listParams.q) params.set("q", listParams.q);
+      if (categoryFilter) params.set("categoryId", categoryFilter);
+      if (brandFilter) params.set("brandId", brandFilter);
+      return apiClient(`/products?${params.toString()}`, { token });
+    }
+  });
+
+  const products = productsQuery.data?.items ?? [];
+  const totalProducts = Number(productsQuery.data?.total ?? 0);
+  const listLoading = productsQuery.isLoading || productsQuery.isFetching;
 
   useEffect(() => {
-    load().catch((err) => setError(err.message));
-  }, [token]);
+    if (productsQuery.error) setError(productsQuery.error);
+  }, [productsQuery.error]);
 
-  async function syncProductStock(productId, desiredStock) {
+  useEffect(() => {
+    setProductSkip(0);
+  }, [query, categoryFilter, brandFilter]);
+
+  async function refreshProducts() {
+    await Promise.all([invalidateProducts(), invalidateCatalog()]);
+  }
+
+  async function syncProductStock(productId, desiredStock, { variationSize: sizeArg = "", variationColor: colorArg = "" } = {}) {
+    const sizeTrim = String(sizeArg || "").trim();
+    const colorTrim = String(colorArg || "").trim();
+    const useExplicit = Boolean(sizeTrim && colorTrim);
+    if ((sizeTrim && !colorTrim) || (!sizeTrim && colorTrim)) {
+      throw new Error("Preencha Tamanho e Cor juntos, ou deixe os dois em branco.");
+    }
+
     const product = await apiClient(`/products/${productId}`, { token });
+    const variations = product.variations || [];
+    const defaultVariation = variations.find(isDefaultVariation);
+    const realVariations = variations.filter((v) => !isDefaultVariation(v));
     const desired = Number(desiredStock || 0);
-    const current = (product.variations || []).reduce((acc, variation) => acc + Number(variation.stock || 0), 0);
-    const autoVariation = (product.variations || []).find(
-      (variation) => variation.size === AUTO_VARIATION_SIZE && variation.color === AUTO_VARIATION_COLOR
-    );
 
+    if (useExplicit) {
+      const row = realVariations.find((v) => v.size === sizeTrim && v.color === colorTrim);
+
+      // Produto sem variacoes reais: promover a variacao padrao para tamanho/cor.
+      if (!row && defaultVariation && realVariations.length === 0) {
+        await apiClient(`/product-variations/${defaultVariation.id}`, {
+          method: "PUT",
+          token,
+          body: { size: sizeTrim, color: colorTrim, stock: desired }
+        });
+        return;
+      }
+
+      const currentRow = row ? Number(row.stock) : 0;
+      if (desired === currentRow) return;
+
+      if (!row && desired > 0) {
+        await apiClient("/product-variations", {
+          method: "POST",
+          token,
+          body: { productId, size: sizeTrim, color: colorTrim, stock: desired }
+        });
+        return;
+      }
+
+      if (row) {
+        await apiClient(`/product-variations/${row.id}`, {
+          method: "PUT",
+          token,
+          body: { stock: desired }
+        });
+      }
+      return;
+    }
+
+    // Sem tamanho/cor: ajustar a variacao padrao do produto.
+    const current = variations.reduce((acc, v) => acc + Number(v.stock || 0), 0);
     if (desired === current) return;
 
     if (desired > current) {
       const increment = desired - current;
-      if (autoVariation) {
-        await apiClient(`/product-variations/${autoVariation.id}`, {
+      if (defaultVariation) {
+        await apiClient(`/product-variations/${defaultVariation.id}`, {
           method: "PUT",
           token,
-          body: { stock: Number(autoVariation.stock) + increment }
+          body: { stock: Number(defaultVariation.stock) + increment }
         });
       } else {
         await apiClient("/product-variations", {
           method: "POST",
           token,
-          body: {
-            productId,
-            size: AUTO_VARIATION_SIZE,
-            color: AUTO_VARIATION_COLOR,
-            stock: increment
-          }
+          body: { productId, size: "", color: "", stock: increment }
         });
       }
       return;
     }
 
     const decrement = current - desired;
-    if (!autoVariation || Number(autoVariation.stock) < decrement) {
-      throw new Error("Nao foi possivel reduzir o estoque atual por aqui. Ajuste as variacoes em 'Variacoes'.");
+    if (!defaultVariation || Number(defaultVariation.stock) < decrement) {
+      throw new Error(
+        "Nao foi possivel reduzir o estoque atual por aqui. Ajuste as linhas na secao Variacoes abaixo ou use Tamanho/Cor no cadastro para esta variacao."
+      );
     }
 
-    await apiClient(`/product-variations/${autoVariation.id}`, {
+    await apiClient(`/product-variations/${defaultVariation.id}`, {
       method: "PUT",
       token,
-      body: { stock: Number(autoVariation.stock) - decrement }
+      body: { stock: Number(defaultVariation.stock) - decrement }
     });
   }
 
   async function createProduct(event) {
     event.preventDefault();
     setError("");
+    if (!token) {
+      setError("Sessao expirada. Faca login novamente.");
+      return;
+    }
+    if (!form.categoryId || !form.brandId) {
+      setError("Selecione categoria e marca antes de salvar o produto.");
+      return;
+    }
     setLoading(true);
     try {
+      const skuTrim = String(form.sku || "").trim();
       const response = await apiClient(editingId ? `/products/${editingId}` : "/products", {
         method: editingId ? "PUT" : "POST",
         token,
         body: {
           ...form,
+          sku: skuTrim === "" ? null : skuTrim,
           price: parseCurrencyInput(form.price),
           cost: parseCurrencyInput(form.cost),
           minStock: Number(form.minStock || 0)
@@ -113,15 +220,30 @@ export function ProductsPage() {
       });
       const productId = editingId || response?.id;
       if (productId) {
-        await syncProductStock(productId, currentStockPreview);
+        const skipStockAdjust = Boolean(editingId) && currentStockPreview === "";
+        if (!skipStockAdjust) {
+          await syncProductStock(productId, currentStockPreview, {
+            variationSize,
+            variationColor
+          });
+        }
       }
-      showToast(editingId ? "Produto atualizado." : "Produto criado.");
-      setEditingId("");
-      setForm({ name: "", description: "", price: "", cost: "", categoryId: "", brandId: "", sku: "", minStock: "" });
-      setCurrentStockPreview(0);
-      await load();
+
+      if (editingId) {
+        showToast("Produto atualizado.");
+        await refreshProducts();
+        const full = await apiClient(`/products/${editingId}`, { token });
+        startEdit(full);
+      } else if (response?.id) {
+        showToast("Produto criado.");
+        await refreshProducts();
+        const full = await apiClient(`/products/${response.id}`, { token });
+        startEdit(full);
+      } else {
+        await refreshProducts();
+      }
     } catch (err) {
-      setError(err.message);
+      setError(err);
       showToast(err.message, "error");
     } finally {
       setLoading(false);
@@ -132,15 +254,23 @@ export function ProductsPage() {
     try {
       const confirmed = await confirm({
         title: "Excluir produto",
-        message: "Deseja excluir este produto?",
+        message:
+          "Excluir este produto e todas as variacoes? So e possivel se nao houver vendas/crediario vinculados e se os movimentos de estoque puderem ser removidos.",
         confirmText: "Excluir"
       });
       if (!confirmed) return;
       await apiClient(`/products/${id}`, { method: "DELETE", token });
-      await load();
+      if (id === editingId) {
+        setEditingId("");
+        setForm(EMPTY_PRODUCT_FORM);
+        setCurrentStockPreview("");
+        setVariationSize("");
+        setVariationColor("");
+      }
+      await refreshProducts();
       showToast("Produto excluido.");
     } catch (err) {
-      setError(err.message);
+      setError(err);
       showToast(err.message, "error");
     }
   }
@@ -150,14 +280,30 @@ export function ProductsPage() {
     setForm({
       name: item.name || "",
       description: item.description || "",
-      price: maskCurrencyInput(item.price),
-      cost: maskCurrencyInput(item.cost),
+      price: amountToCurrencyInput(item.price),
+      cost: amountToCurrencyInput(item.cost),
       categoryId: item.categoryId || "",
       brandId: item.brandId || "",
       sku: item.sku || "",
       minStock: Number(item.minStock || 0)
     });
-    setCurrentStockPreview(item.variations?.reduce((acc, v) => acc + v.stock, 0) || 0);
+    const vars = item.variations || [];
+    if (vars.length === 1) {
+      const v0 = vars[0];
+      if (isDefaultVariation(v0)) {
+        setVariationSize("");
+        setVariationColor("");
+      } else {
+        setVariationSize(v0.size || "");
+        setVariationColor(v0.color || "");
+      }
+      setCurrentStockPreview(String(Number(v0.stock ?? 0)));
+    } else {
+      setVariationSize("");
+      setVariationColor("");
+      const stockSum = productCurrentStock(item);
+      setCurrentStockPreview(stockSum > 0 ? String(stockSum) : "");
+    }
   }
 
   function applyScannedSku() {
@@ -169,16 +315,18 @@ export function ProductsPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">Produtos</h2>
+    <div className="ui-page">
+      <PageHeader
+        title="Produtos"
+        description="Cadastre o produto e, no mesmo lugar, as variacoes (tamanho, cor e estoque por combinacao)."
+      />
+      <SectionCard title={editingId ? "Editar produto" : "Novo produto"}>
         <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs text-slate-600">
             Leitor de codigo de barras: clique no campo, bip no scanner e pressione Enter.
           </p>
           <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-            <input
-              className="w-full rounded-md border p-2"
+            <Input
               placeholder="Aguardando leitura do scanner..."
               value={scannerSku}
               onChange={(e) => setScannerSku(e.target.value)}
@@ -189,39 +337,62 @@ export function ProductsPage() {
                 }
               }}
             />
-            <button type="button" className="rounded-md border px-4 py-2" onClick={applyScannedSku}>
+            <Button type="button" variant="secondary" onClick={applyScannedSku}>
               Aplicar codigo
-            </button>
+            </Button>
           </div>
         </div>
         <form className="mt-3 grid gap-2 md:grid-cols-2" onSubmit={createProduct}>
-          <input
-            className="rounded-md border p-2"
+          <p className="text-xs text-slate-600 md:col-span-2">
+            Tamanho e Cor (opcionais): se ambos forem preenchidos, a quantidade abaixo vale apenas para essa combinacao.
+            Se os dois ficarem em branco, a quantidade e o total geral do produto (como antes).
+          </p>
+          <Input
+            placeholder="Tamanho (opcional)"
+            value={variationSize}
+            onChange={(e) => setVariationSize(e.target.value)}
+          />
+          <Input
+            placeholder="Cor (opcional)"
+            value={variationColor}
+            onChange={(e) => setVariationColor(e.target.value)}
+          />
+          <Input
             placeholder="Nome"
             value={form.name}
             onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
           />
-          <input
-            className="rounded-md border p-2"
-            placeholder="SKU"
+          <Input
+            placeholder="SKU (opcional)"
             value={form.sku}
             onChange={(e) => setForm((prev) => ({ ...prev, sku: e.target.value }))}
           />
-          <input
-            className="rounded-md border p-2"
+          <CurrencyInput
             placeholder="Preco"
             value={form.price}
-            onChange={(e) => setForm((prev) => ({ ...prev, price: maskCurrencyInput(e.target.value) }))}
+            onChange={(price) => setForm((prev) => ({ ...prev, price }))}
           />
-          <input
-            className="rounded-md border p-2"
+          <CurrencyInput
             placeholder="Custo"
             value={form.cost}
-            onChange={(e) => setForm((prev) => ({ ...prev, cost: maskCurrencyInput(e.target.value) }))}
+            onChange={(cost) => setForm((prev) => ({ ...prev, cost }))}
           />
           <div>
-            <input
-              className="w-full rounded-md border p-2"
+            <Input
+              placeholder={
+                String(variationSize || "").trim() && String(variationColor || "").trim()
+                  ? "Quantidade nesta variacao (tamanho/cor)"
+                  : "Quantidade atual (total do produto)"
+              }
+              type="number"
+              inputMode="numeric"
+              min="0"
+              value={currentStockPreview}
+              onChange={(e) => setCurrentStockPreview(e.target.value)}
+            />
+          </div>
+          <div>
+            <Input
               placeholder="Quantidade minima"
               type="number"
               min="0"
@@ -229,18 +400,7 @@ export function ProductsPage() {
               onChange={(e) => setForm((prev) => ({ ...prev, minStock: e.target.value }))}
             />
           </div>
-          <div>
-            <input
-              className="w-full rounded-md border p-2"
-              placeholder="Quantidade atual"
-              type="number"
-              value={currentStockPreview}
-              min="0"
-              onChange={(e) => setCurrentStockPreview(e.target.value)}
-            />
-          </div>
-          <select
-            className="rounded-md border p-2"
+          <Select
             value={form.categoryId}
             onChange={(e) => setForm((prev) => ({ ...prev, categoryId: e.target.value }))}
           >
@@ -250,9 +410,8 @@ export function ProductsPage() {
                 {item.name}
               </option>
             ))}
-          </select>
-          <select
-            className="rounded-md border p-2"
+          </Select>
+          <Select
             value={form.brandId}
             onChange={(e) => setForm((prev) => ({ ...prev, brandId: e.target.value }))}
           >
@@ -262,46 +421,78 @@ export function ProductsPage() {
                 {item.name}
               </option>
             ))}
-          </select>
-          <textarea
-            className="rounded-md border p-2 md:col-span-2"
+          </Select>
+          <Textarea
+            className="md:col-span-2"
             placeholder="Descricao"
             value={form.description}
             onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
           />
           <div className="flex gap-2 md:col-span-2">
-            <button className="rounded-md bg-slate-900 px-4 py-2 text-white disabled:opacity-50" disabled={loading}>
+            <Button disabled={loading}>
               {editingId ? "Atualizar produto" : "Salvar produto"}
-            </button>
+            </Button>
             {editingId ? (
-              <button
+              <Button
                 type="button"
-                className="rounded-md border px-4 py-2"
+                variant="secondary"
                 onClick={() => {
                   setEditingId("");
-                  setForm({ name: "", description: "", price: "", cost: "", categoryId: "", brandId: "", sku: "", minStock: "" });
-                  setCurrentStockPreview(0);
+                  setForm(EMPTY_PRODUCT_FORM);
+                  setCurrentStockPreview("");
+                  setVariationSize("");
+                  setVariationColor("");
                 }}
               >
                 Cancelar
-              </button>
+              </Button>
             ) : null}
           </div>
         </form>
-        {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
-      </div>
+        <FormErrorSummary error={error} className="mt-2" />
+      </SectionCard>
 
-      <div className="rounded-lg bg-white p-4 shadow-sm">
+      <ProductVariationsSection
+        token={token}
+        productId={editingId}
+        productName={form.name?.trim() || ""}
+        onChanged={() => refreshProducts().catch(() => {})}
+      />
+
+      <SectionCard title="Lista de produtos">
+        <div className="mb-3 flex items-center justify-between text-xs text-slate-600">
+          <span>{listLoading ? "Carregando..." : `Mostrando ${products.length} de ${totalProducts} produtos`}</span>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              className="px-2 py-1 text-xs"
+              disabled={productSkip === 0 || listLoading}
+              onClick={() => setProductSkip((v) => Math.max(v - productTake, 0))}
+            >
+              Anterior
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="px-2 py-1 text-xs"
+              disabled={productSkip + productTake >= totalProducts || listLoading}
+              onClick={() => setProductSkip((v) => v + productTake)}
+            >
+              Proxima
+            </Button>
+          </div>
+        </div>
         <DataTable
-          title="Lista de produtos"
           data={products}
+          getRowClassName={productLowStockClass}
           columns={[
             { key: "name", label: "Nome" },
             { key: "sku", label: "SKU" },
             { key: "category", label: "Categoria" },
             { key: "brand", label: "Marca" },
+            { key: "stock", label: "Qtd atual" },
             { key: "min", label: "Min" },
-            { key: "stock", label: "Atual" },
             { key: "price", label: "Preco" },
             { key: "actions", label: "Acoes" }
           ]}
@@ -311,7 +502,7 @@ export function ProductsPage() {
             query,
             onQueryChange: setQuery,
             placeholder: "Buscar por nome ou SKU...",
-            matcher: (row, q) => `${row.name} ${row.sku}`.toLowerCase().includes(q.toLowerCase())
+            matcher: () => true
           }}
           filters={[
             {
@@ -322,37 +513,47 @@ export function ProductsPage() {
                 setBrandFilter("");
               },
               options: [{ value: "", label: "Todas as categorias" }, ...categories.map((item) => ({ value: item.id, label: item.name }))],
-              matcher: (row, value) => row.categoryId === value
+              matcher: () => true
             },
             {
               id: "brand",
               value: brandFilter,
               onChange: setBrandFilter,
               options: [{ value: "", label: "Todas as marcas" }, ...brands.map((item) => ({ value: item.id, label: item.name }))],
-              matcher: (row, value) => row.brandId === value
+              matcher: () => true
             }
           ]}
-          renderCells={(item) => (
+          renderCells={(item) => {
+            const current = productCurrentStock(item);
+            const min = Number(item.minStock ?? 0);
+            const low = min > 0 && current <= min;
+            const stockClass = low
+              ? current === 0
+                ? "font-semibold text-rose-700"
+                : "font-semibold text-amber-800"
+              : "";
+            return (
             <>
               <td className="py-2">{item.name}</td>
-              <td className="py-2">{item.sku}</td>
+              <td className="py-2">{item.sku?.trim() ? item.sku : "—"}</td>
               <td className="py-2">{item.category?.name}</td>
               <td className="py-2">{item.brand?.name}</td>
+              <td className={`py-2 ${stockClass}`}>{current}</td>
               <td className="py-2">{item.minStock}</td>
-              <td className="py-2">{item.variations?.reduce((acc, v) => acc + v.stock, 0)}</td>
               <td className="py-2">{formatCurrencyBRL(item.price)}</td>
               <td className="py-2">
-                <button className="mr-2 rounded border px-2 py-1 text-xs" onClick={() => startEdit(item)}>
+                <Button variant="secondary" className="mr-2 px-2 py-1 text-xs" onClick={() => startEdit(item)}>
                   Editar
-                </button>
-                <button className="rounded border px-2 py-1 text-xs" onClick={() => removeProduct(item.id)}>
+                </Button>
+                <Button variant="danger" className="px-2 py-1 text-xs" onClick={() => removeProduct(item.id)}>
                   Excluir
-                </button>
+                </Button>
               </td>
             </>
-          )}
+            );
+          }}
         />
-      </div>
+      </SectionCard>
     </div>
   );
 }

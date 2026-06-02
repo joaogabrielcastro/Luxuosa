@@ -4,12 +4,6 @@ import { BrowserRouter } from "react-router-dom";
 import { App } from "./app/App.jsx";
 import "./styles.css";
 
-document.documentElement.setAttribute("data-luxuosa-ui", "nfce-sales-module");
-
-if (import.meta.env.DEV) {
-  console.info("[Luxuosa] dev · /vendas (rota /sales redireciona no index.html e no React)");
-}
-
 class RootErrorBoundary extends React.Component {
   constructor(props) {
     super(props);

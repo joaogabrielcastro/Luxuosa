@@ -13,11 +13,23 @@ export const categoryService = {
     return categoryRepository.create(tenantId, payload);
   },
 
-  update(tenantId, id, payload) {
-    return categoryRepository.update(tenantId, id, payload);
+  async update(tenantId, id, payload) {
+    const result = await categoryRepository.update(tenantId, id, payload);
+    if (result.count === 0) {
+      const err = new Error("Categoria nao encontrada.");
+      err.statusCode = 404;
+      throw err;
+    }
+    return result;
   },
 
-  remove(tenantId, id) {
-    return categoryRepository.delete(tenantId, id);
+  async remove(tenantId, id) {
+    const result = await categoryRepository.delete(tenantId, id);
+    if (result.count === 0) {
+      const err = new Error("Categoria nao encontrada.");
+      err.statusCode = 404;
+      throw err;
+    }
+    return result;
   }
 };

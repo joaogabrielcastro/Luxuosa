@@ -14,20 +14,21 @@ SaaS multi-tenant para gestão de loja de roupa: catálogo, vendas, estoque, rel
 ## O que já existe no produto
 
 - **Autenticação:** login (`POST /auth/logout` e `GET /auth/me` requerem JWT). Email é único **por loja**: `@@unique([tenantId, email])` no Prisma. Se o mesmo email existir em mais de um tenant, o login exige **`tenantCnpj`** (14 dígitos) no body para escolher a loja.
-- **Catálogo:** categorias, produtos, variações (tamanho/cor/estoque), alerta de estoque baixo (produto vs soma das variações).
-- **Vendas:** criar, listar, editar, cancelar; baixa de estoque e movimentação `EXIT`; desconto com política por tipo de usuário (admin vs atendente); UI por categoria e produto; **sem cadastro de cliente na interface** — a NFC-e sai como **consumidor final**.
+- **Catálogo:** categorias, marcas, produtos, variações (tamanho/cor/estoque), alerta de estoque baixo (produto vs soma das variações).
+- **Vendas:** criar, listar, editar, cancelar; baixa de estoque e movimentação `EXIT`; desconto com política por tipo de usuário (admin vs atendente); UI por categoria e produto; **sem seleção de cliente na tela de venda** — a NFC-e padrão sai como **consumidor final** (`customerId` opcional na API).
+- **Crediário (contas a receber):** vendas a prazo sem NFC-e; parcelas e baixas; disponível para todos os tenants.
+- **Clientes:** tela em `/clientes` (CRUD) alinhada ao `GET|POST|PUT|DELETE /customers`; uso no crediário e vendas quando aplicável.
 - **Movimentações de estoque manuais:** entrada e saída sem venda (`POST /stock-movements`), com histórico (`GET /stock-movements`). Saída não pode ultrapassar o estoque da variação.
 - **Relatórios (API):** vendas pagas por intervalo de datas (`GET /reports/sales?from=&to=`) e lista de produtos abaixo do mínimo (`GET /reports/low-stock`). O **dashboard admin** continua com visão mais rica (só admin).
-- **Clientes (API):** `GET|POST|PUT|DELETE /customers` para integrações ou dados legados; não há tela dedicada no app.
 - **Dashboard (admin):** métricas agregadas (receita, ticket, vendas por período/atendente, lucro por produto, estoque consolidado, produtos sem venda recente, etc.).
-- **NFC-e (Nuvem Fiscal):** após registrar a venda, o backend enfileira emissão **modelo 65** (fila leve em memória, serializada por `tenantId`); consulta SEFAZ e grava `Invoice`. **PDF (DANFE):** `GET /invoices/sale/:saleId/pdf`. Reemissão/forçar emissão: `POST /invoices/issue/:saleId` (qualquer usuário autenticado da loja). Teste de conexão OAuth: `GET /invoices/connection-test` (só admin). OAuth com scope `empresa nfe nfce`. Simples Nacional (CSOSN 102).
+- **NFC-e (Nuvem Fiscal):** após registrar a venda, o backend enfileira emissão **modelo 65** em fila persistida no banco (`NfceIssueJob`) com serialização por `tenantId`; consulta SEFAZ e grava `Invoice`. **PDF (DANFE):** `GET /invoices/sale/:saleId/pdf`. Reemissão/forçar emissão: `POST /invoices/issue/:saleId` (só admin). Status do job por venda: `GET /invoices/sale/:saleId/job`. Teste de conexão OAuth: `GET /invoices/connection-test` (só admin). OAuth com scope `empresa nfe nfce`. Simples Nacional (CSOSN 102).
 
 ## O que ainda é esboço ou não existe
 
 - **NF-e na UI** e refinamentos fiscais avançados (outros CST/CFOP, download automático de XML em massa).
 - **Gestão de usuários** do tenant (criar atendentes), **onboarding** de novos tenants.
-- **Fila persistente** (Redis/Bull) para NFC-e — hoje a fila é em processo; reinício do servidor pode interromper jobs pendentes.
-- **Testes automatizados** em volume.
+- **Fila externa dedicada** (Redis/Bull) para NFC-e em cenários de alto volume/múltiplas instâncias (há worker `nfce-worker` no Docker; Redis/Bull ainda não).
+- **Testes automatizados** em volume (há testes unitários básicos em `salePayload`; falta cobertura de integração).
 
 ## Estrutura do repositório
 
@@ -57,7 +58,7 @@ Luxuosa/
   frontend/
     src/
       app/
-      features/         # auth, dashboard, catalog, sales, stock, reports
+      features/         # auth, dashboard, catalog, sales, stock, reports, crediario, customers
       shared/
   docker-compose.yml
   ARCHITECTURE.md
@@ -77,13 +78,26 @@ Copie `backend/.env.example` para `backend/.env`. Principais chaves:
 | `NUVEM_FISCAL_API_BASE` | Sandbox: `https://api.sandbox.nuvemfiscal.com.br` |
 | `NUVEM_FISCAL_OAUTH_SCOPE` | Padrão: `empresa nfe nfce` |
 | `NUVEM_FISCAL_AMBIENTE` | `homologacao` ou `producao` (igual à empresa no console Nuvem) |
-| `NUVEM_FISCAL_EMITENTE_CNPJ` | Opcional; 14 dígitos. Se vazio, usa `Tenant.cnpj` |
+| `NUVEM_FISCAL_EMITENTE_CNPJ` | Opcional; fallback só se `Tenant.cnpj` inválido. **Multi-tenant: sempre usa o CNPJ da loja logada** |
+| `NUVEM_FISCAL_EMITENTE_IE` | Opcional; IE só dígitos. Sobrescreve a IE vinda da Nuvem se a SEFAZ rejeitar vínculo CNPJ/IE |
 | `NUVEM_FISCAL_RESP_TEC_CNPJ` | CNPJ do responsável técnico (infRespTec), quando exigido pela SEFAZ |
 | `NUVEM_FISCAL_RESP_TEC_CONTATO` | Nome do contato técnico |
 | `NUVEM_FISCAL_RESP_TEC_EMAIL` | Email do responsável técnico |
 | `NUVEM_FISCAL_RESP_TEC_FONE` | Telefone (somente dígitos) do responsável técnico |
+| `NUVEM_FISCAL_RESP_TEC_ID_CSRT` | Identificador do CSRT na SEFAZ (ex.: PR); usado com `NUVEM_FISCAL_CSRT` |
+| `NUVEM_FISCAL_CSRT` | Segredo CSRT (SEFAZ); o backend calcula `hashCSRT` por nota (NT 2018.005) |
+| `NFCE_PROCESS_IN_API` | `false` na API e worker separado (`npm run worker:nfce`); `true` (padrão) processa fila no mesmo processo |
+| `NFCE_WORKER_POLL_MS` | Intervalo do worker NFC-e (padrão 5000 ms) |
+| `LOGIN_RATE_LIMIT_MAX` / `LOGIN_RATE_LIMIT_WINDOW_MS` | Limite de tentativas no `POST /auth/login` |
 
-No fluxo com Docker deste repositório, o `backend` lê essas variáveis via `env_file` em `docker-compose.yml` (arquivo `/.env.compose`).
+No fluxo com Docker deste repositório, o `backend` lê essas variáveis via `env_file` em `docker-compose.yml` (arquivo `/.env.compose`). O `docker-compose.yml` inclui o serviço **`nfce-worker`** com `NFCE_PROCESS_IN_API=true`; a API usa `NFCE_PROCESS_IN_API=false`.
+
+### Segurança e RBAC (resumo)
+
+- **Admin:** cancelar/editar venda, emitir NFC-e manual, CRUD de catálogo, estoque manual, crediário (criar/cancelar).
+- **Atendente:** criar venda, listar catálogo, receber crediário.
+- Vendas com NFC-e **emitida** ou job **em processamento** não podem ser editadas/canceladas.
+- `GET /customers` e `GET /product-variations` retornam `{ items, total, take, skip }` (paginação obrigatória).
 
 ## API REST
 
@@ -101,22 +115,29 @@ Prefixo global: **`/api/v1`**.
 | `GET\|PUT\|DELETE /customers/:id` | |
 | `GET\|POST /categories` | |
 | `GET\|PUT\|DELETE /categories/:id` | |
-| `GET\|POST /products` | |
+| `GET\|POST /products` | `GET` aceita `take`, `skip`, `q`, `categoryId`, `brandId` |
 | `GET /products/low-stock` | |
 | `GET\|PUT\|DELETE /products/:id` | |
-| `GET\|POST /product-variations` | |
+| `GET\|POST /product-variations` | `GET` aceita `take`, `skip`, `q`, `categoryId`, `brandId`, `productId` |
 | `GET\|PUT\|DELETE /product-variations/:id` | |
 | `GET /dashboard/admin` | Só admin |
-| `GET\|POST /sales` | |
-| `PUT /sales/:id` | |
-| `POST /sales/:id/cancel` | |
-| `GET /stock-movements` | Lista movimentações manuais e herdadas de vendas/cancelamentos |
+| `GET\|POST /sales` | `GET` aceita `take`, `skip`, `paymentMethod`, `nfce`, `q`, `mode` (`summary`/`full`) |
+| `GET\|POST /crediario` | Crediário: listar e criar venda a prazo (JWT + tenant) |
+| `GET /crediario/:id` | Detalhe com parcelas |
+| `POST /crediario/:id/payments` | Registrar pagamento |
+| `POST /crediario/:id/cancel` | Cancelar crediário |
+| `GET /sales/summary` | Lista enxuta para telas de operação (mesmos filtros de `GET /sales`) |
+| `GET /sales/:id` | Detalhe completo da venda |
+| `PUT /sales/:id` | Só admin; bloqueado se NFC-e emitida |
+| `POST /sales/:id/cancel` | Só admin; bloqueado se NFC-e emitida |
+| `GET /stock-movements` | Lista movimentações; aceita `take` e `skip` |
 | `POST /stock-movements` | Body: `productVariationId`, `type` (`ENTRY` \| `EXIT`), `quantity` |
 | `GET /reports/sales?from=YYYY-MM-DD&to=YYYY-MM-DD` | Vendas pagas no intervalo (totais e por dia) |
 | `GET /reports/low-stock` | Produtos com estoque total ≤ mínimo cadastrado |
 | `GET /invoices/connection-test` | Só admin; testa OAuth + `GET /empresas` na Nuvem Fiscal |
-| `POST /invoices/issue/:saleId` | Reemite/força NFC-e (venda paga); JWT da loja |
+| `POST /invoices/issue/:saleId` | Só admin; reemite/força NFC-e (venda paga) |
 | `GET /invoices/sale/:saleId/pdf` | PDF (DANFE) da NFC-e autorizada |
+| `GET /invoices/sale/:saleId/job` | Status da fila de emissão NFC-e para a venda |
 
 ## Frontend (rotas)
 
@@ -125,9 +146,12 @@ Prefixo global: **`/api/v1`**.
 | `/login` | Login (campo opcional CNPJ da loja se necessário) |
 | `/` | Dashboard admin |
 | `/catalog/categories` | Categorias |
+| `/catalog/brands` | Marcas |
 | `/catalog/products` | Produtos |
 | `/catalog/variations` | Variações |
 | `/vendas` | Vendas + NFC-e (lista com atualização automática enquanto pendente, filtros, PDF, reemissão) |
+| `/crediario` | Crediário (contas a receber) |
+| `/clientes` | Clientes |
 | `/sales` | Redireciona para `/vendas` |
 | `/estoque/movimentos` | Movimentações de estoque manuais |
 | `/stock` | Redireciona para `/estoque/movimentos` |
@@ -144,16 +168,35 @@ Prefixo global: **`/api/v1`**.
 
 ### Troubleshooting rápido (NFC-e)
 
-- **`Nao informado o grupo de informacoes do responsavel tecnico`**: preencha `NUVEM_FISCAL_RESP_TEC_*`.
-- **`IE do emitente nao vinculada ao CNPJ`**: confira IE/CNPJ da empresa no Console Nuvem/SEFAZ.
+- **`Nao informado o grupo de informacoes do responsavel tecnico`**: no Coolify use os nomes exatos `NUVEM_FISCAL_RESP_TEC_CNPJ` (14 dígitos), `NUVEM_FISCAL_RESP_TEC_EMAIL` e `NUVEM_FISCAL_RESP_TEC_CONTATO` (não `..._CONTA`). Em **Paraná / produção** (desde 01/04/2026) costuma ser obrigatório também **CSRT**: `NUVEM_FISCAL_RESP_TEC_ID_CSRT` + `NUVEM_FISCAL_CSRT` (solicitados na SEFAZ para o sistema emissor).
+- **`IE do emitente nao vinculada ao CNPJ`**: a IE na nota tem de ser a **mesma** que a SEFAZ tem para esse CNPJ. Corrija em **Nuvem Fiscal → Empresa → Dados** (inscrição estadual) ou defina **`NUVEM_FISCAL_EMITENTE_IE`** (só dígitos) no backend até alinhar o cadastro na Nuvem. Confirme a IE no **cadastro estadual** (ex.: portal Receita/SEFAZ PR).
 - **`Ja existe NFC-e emitida` + sem PDF**: o backend já reconcilia estado local vs Nuvem e libera reemissão quando a autorização remota não for 100/150.
 - **`Nuvem Fiscal retornou 404 ao baixar PDF`**: pode ser atraso de disponibilização; o backend já faz retry e valida autorização antes de baixar.
 
 Documentação oficial: [Autenticação](https://dev.nuvemfiscal.com.br/docs/autenticacao).
 
-**NFC-e automática:** ao criar uma venda (`POST /sales`), o backend enfileira emissão na Nuvem Fiscal. No fluxo atual do app, a venda **não** vincula cliente (`customerId` nulo), então a nota é **CONSUMIDOR FINAL**. Se `customerId` for enviado pela API e o cliente tiver dados fiscais completos, o destinatário pode usar CPF/CNPJ do cadastro. **PDF:** `GET /api/v1/invoices/sale/:saleId/pdf` (JWT). Produtos: `ncm`, `cfop`, `icmsOrig`, `icmsCsosn` (padrões: `61091000`, `5102`, `0`, `102`). CNPJ emitente: `Tenant.cnpj` ou `NUVEM_FISCAL_EMITENTE_CNPJ`; certificado e ambiente na Nuvem alinhados a `NUVEM_FISCAL_AMBIENTE`. OAuth **scope** `empresa nfe nfce`.
+**NFC-e automática:** ao criar uma venda (`POST /sales`), o backend enfileira emissão na Nuvem Fiscal. No fluxo atual do app, a venda **não** vincula cliente (`customerId` nulo), então a nota é **CONSUMIDOR FINAL**. Se `customerId` for enviado pela API e o cliente tiver dados fiscais completos, o destinatário pode usar CPF/CNPJ do cadastro. **PDF:** `GET /api/v1/invoices/sale/:saleId/pdf` (JWT). Produtos: `ncm`, `cfop`, `icmsOrig`, `icmsCsosn` (padrões: `61091000`, `5102`, `0`, `102`). CNPJ emitente: **`Tenant.cnpj` da loja** (cadastre a mesma empresa na conta Nuvem Fiscal do `CLIENT_ID`/`SECRET`). `NUVEM_FISCAL_EMITENTE_CNPJ` só se o tenant não tiver CNPJ válido. Ambiente na Nuvem = `NUVEM_FISCAL_AMBIENTE`. OAuth **scope** `empresa nfe nfce`.
 
 Nunca commite `Client Secret`. Se exposto, revogue e gere novas credenciais.
+
+### Várias lojas (multi-tenant) — cada cliente com CNPJ diferente
+
+Cada **login** está ligado a um `Tenant` no banco. Na emissão de NFC-e o sistema usa **sempre o `Tenant.cnpj` da loja logada** (não mistura com outra loja).
+
+| Como conferir | O que fazer |
+|---------------|-------------|
+| **No app** | Faça login em cada cliente: no topo das páginas aparece o banner **“NFC-e desta loja: XX.XXX.XXX/XXXX-XX”**. |
+| **Dashboard** | Admin → **Verificar configuração fiscal** (valida se aquele CNPJ existe na conta Nuvem). |
+| **No servidor** | `cd backend && npm run fiscal:list-tenants` — tabela com todas as lojas e o CNPJ que cada uma usaria. |
+
+**Cadastro de cada cliente:**
+
+1. `Tenant.cnpj` no PostgreSQL = CNPJ real da loja (14 dígitos).
+2. Mesma empresa cadastrada na **Nuvem Fiscal** (conta das credenciais `NUVEM_FISCAL_*`).
+3. `enableNfceEmission = true` só nas lojas que emitem nota; as outras ficam sem fila NFC-e.
+4. **Não** use `NUVEM_FISCAL_EMITENTE_CNPJ` em produção multi-tenant (forçaria um único CNPJ para todos).
+
+Se o mesmo e-mail existir em mais de uma loja, o login pede o **CNPJ da loja** para escolher o tenant certo.
 
 ## Credenciais demo (seed)
 
@@ -188,12 +231,45 @@ Resetar volume do banco:
 docker compose down -v
 ```
 
-O backend executa `prisma generate`, `prisma db push` e `npm run dev` ao iniciar o container.
+O `backend/Dockerfile` sobe com `prisma generate` e **`npm run start:prod`** (que corre `migrate deploy` antes de `node src/server.js`).
+
+No **Coolify / Nixpacks**, defina o **Start Command** do serviço API, por exemplo:
+
+`npx prisma generate && npm run start:prod`
+
+(As variáveis `DATABASE_URL` e `PORT` devem estar disponíveis no runtime.) Para **CORS** restrito à origem do teu front em producao, adicione `CORS_ORIGINS=https://teu-dominio-front.com` no backend (lista separada por virgulas se houver varios).
+
+No **frontend** em producao (Coolify ou Docker deste repo): defina **VITE_API_URL** no **buildtime** (ex.: `https://api-luxuosa.jwsoftware.com.br/api/v1`), depois `npm run build` e start com `npm run start` ou o `CMD` do `frontend/Dockerfile` — o preview escuta **3000** por defeito (`PORT` pode sobrescrever).
+
+## Antes de commitar (checagem rápida)
+
+Na raiz do repositório:
+
+```bash
+npm run check
+
+Backend — testes unitários: `cd backend && npm test`. Com Postgres (ex. Docker): `DATABASE_URL=... npm run test:integration`
+```
+
+Isso gera o build do frontend e valida o carregamento das rotas do backend. Com banco novo ou após puxar migrações: `npm run prisma:deploy` (aplica migrações em `backend/prisma/migrations`).
 
 ## Desenvolvimento local (sem Docker)
 
 1. Suba um PostgreSQL e defina `DATABASE_URL` e `JWT_SECRET` em `backend/.env`.
 2. Backend: `cd backend && npm install && npx prisma generate && npx prisma migrate deploy && npm run prisma:seed && npm run dev` (porta padrão 3001). Se o banco foi criado só com `db push` e aparecer erro P3005, veja baseline em `ARCHITECTURE.md` ou use `npx prisma db push` uma vez para alinhar o schema.
+
+### Banco de producao vazio (`User` / tabelas inexistentes, P3018)
+
+As pastas `prisma/migrations` deste repo **nao** incluem uma migração inicial que cria todo o schema; num Postgres **novo**, `migrate deploy` sozinho pode falhar a meio. Nesse caso:
+
+1. Desbloquear a migração em falha:  
+   `npx prisma migrate resolve --rolled-back <nome_da_migracao_que_falhou>`
+2. Aplicar o schema completo **sem** correr o SQL antigo das migrações:  
+   `npx prisma db push`
+3. Marcar como já aplicadas as migrações que **ainda não** constam como concluídas (uma linha por nome de pasta em `prisma/migrations`):  
+   `npx prisma migrate resolve --applied <nome_da_migracao>`
+
+Não voltes a correr `migrate deploy` depois do `db push` até o historico estar alinhado; caso contrário o SQL pode tentar criar tabelas/indices que o `db push` já criou. Depois de todos os `resolve --applied`, `npx prisma migrate status` deve mostrar tudo aplicado. Em seguida: `npm run prisma:seed` se quiser dados iniciais.
 
 ### Prisma (pastas e comandos)
 

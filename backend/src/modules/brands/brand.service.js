@@ -13,11 +13,23 @@ export const brandService = {
     return brandRepository.create(tenantId, payload);
   },
 
-  update(tenantId, id, payload) {
-    return brandRepository.update(tenantId, id, payload);
+  async update(tenantId, id, payload) {
+    const result = await brandRepository.update(tenantId, id, payload);
+    if (result.count === 0) {
+      const err = new Error("Marca nao encontrada.");
+      err.statusCode = 404;
+      throw err;
+    }
+    return result;
   },
 
-  remove(tenantId, id) {
-    return brandRepository.delete(tenantId, id);
+  async remove(tenantId, id) {
+    const result = await brandRepository.delete(tenantId, id);
+    if (result.count === 0) {
+      const err = new Error("Marca nao encontrada.");
+      err.statusCode = 404;
+      throw err;
+    }
+    return result;
   }
 };

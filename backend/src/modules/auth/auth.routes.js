@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { authController } from "./auth.controller.js";
 import { authMiddleware } from "../../middlewares/authMiddleware.js";
+import { loginRateLimit } from "../../middlewares/loginRateLimit.js";
 import { tenantMiddleware } from "../../middlewares/tenantMiddleware.js";
 
 const router = Router();
 
-router.post("/login", authController.login);
+router.post("/login", loginRateLimit, authController.login);
 router.post("/logout", authMiddleware, tenantMiddleware, authController.logout);
 router.get("/me", authMiddleware, tenantMiddleware, authController.me);
 

@@ -2,11 +2,13 @@ import { StockMovementType } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
 
 export const stockMovementService = {
-  list(tenantId, { take = 100 } = {}) {
+  list(tenantId, { take = 100, skip = 0 } = {}) {
     const limit = Math.min(Math.max(Number(take) || 100, 1), 500);
+    const offset = Math.max(Number(skip) || 0, 0);
     return prisma.stockMovement.findMany({
       where: { tenantId },
       orderBy: { occurredAt: "desc" },
+      skip: offset,
       take: limit,
       include: {
         productVariation: {
@@ -27,7 +29,8 @@ export const stockMovementService = {
 
     return prisma.$transaction(async (tx) => {
       const variation = await tx.productVariation.findFirst({
-        where: { id: payload.productVariationId, tenantId }
+        where: { id: payload.productVariationId, tenantId },
+        include: { product: true }
       });
       if (!variation) {
         const err = new Error("Variacao nao encontrada nesta loja.");

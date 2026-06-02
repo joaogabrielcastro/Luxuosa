@@ -1,7 +1,17 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../shared/apiClient.js";
 import { useAuth } from "../auth/useAuth.jsx";
 import { formatCurrencyBRL, formatDateBR } from "../../shared/formatters.js";
+import { queryKeys } from "../../shared/queryKeys.js";
+import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
+import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
+import { Input } from "../../shared/components/ui/Input.jsx";
+import { Button } from "../../shared/components/ui/Button.jsx";
+import { StatCard } from "../../shared/components/ui/StatCard.jsx";
+import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
+import { FormErrorSummary } from "../../shared/components/FormErrorSummary.jsx";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 function defaultFromTo() {
   const d = new Date();
@@ -13,42 +23,43 @@ function defaultFromTo() {
 export function ReportsPage() {
   const { token } = useAuth();
   const [{ from, to }, setRange] = useState(() => defaultFromTo());
-  const [salesReport, setSalesReport] = useState(null);
-  const [lowStock, setLowStock] = useState(null);
-  const [error, setError] = useState("");
+  const [appliedRange, setAppliedRange] = useState(() => defaultFromTo());
 
-  async function load() {
-    setError("");
-    const [s, l] = await Promise.all([
-      apiClient(`/reports/sales?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, { token }),
-      apiClient("/reports/low-stock", { token })
-    ]);
-    setSalesReport(s);
-    setLowStock(l);
-  }
+  const salesQuery = useQuery({
+    queryKey: queryKeys.reports.sales(token, appliedRange),
+    enabled: Boolean(token),
+    queryFn: () =>
+      apiClient(
+        `/reports/sales?from=${encodeURIComponent(appliedRange.from)}&to=${encodeURIComponent(appliedRange.to)}`,
+        { token }
+      )
+  });
 
-  useEffect(() => {
-    load().catch((err) => setError(err.message));
-  }, [token]);
+  const lowStockQuery = useQuery({
+    queryKey: queryKeys.reports.lowStock(token),
+    enabled: Boolean(token),
+    staleTime: 60_000,
+    queryFn: () => apiClient("/reports/low-stock", { token })
+  });
+
+  const salesReport = salesQuery.data ?? null;
+  const lowStock = lowStockQuery.data ?? null;
+  const error = salesQuery.error || lowStockQuery.error;
+  const loading = salesQuery.isFetching || lowStockQuery.isFetching;
 
   async function applyRange(e) {
     e.preventDefault();
-    try {
-      await load();
-    } catch (err) {
-      setError(err.message);
-    }
+    setAppliedRange({ from, to });
   }
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">Vendas por periodo</h2>
+    <div className="ui-page">
+      <PageHeader title="Relatórios" description="Analise vendas por período e produtos com estoque baixo." />
+      <SectionCard title="Vendas por periodo">
         <form className="mt-3 flex flex-wrap items-end gap-3" onSubmit={applyRange}>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-slate-600">De</span>
-            <input
-              className="rounded border p-2"
+            <Input
               type="date"
               value={from}
               onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
@@ -56,31 +67,40 @@ export function ReportsPage() {
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-slate-600">Ate</span>
-            <input
-              className="rounded border p-2"
+            <Input
               type="date"
               value={to}
               onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
             />
           </label>
-          <button type="submit" className="rounded bg-slate-900 px-4 py-2 text-sm text-white">
-            Atualizar
-          </button>
+          <Button type="submit" className="text-sm" disabled={loading}>
+            {loading ? "Atualizando…" : "Atualizar"}
+          </Button>
         </form>
         {salesReport ? (
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <article className="rounded border p-3">
-              <p className="text-xs text-slate-500">Vendas (pagas)</p>
-              <p className="text-xl font-semibold">{salesReport.saleCount}</p>
-            </article>
-            <article className="rounded border p-3">
-              <p className="text-xs text-slate-500">Total no periodo</p>
-              <p className="text-xl font-semibold">{formatCurrencyBRL(salesReport.totalAmount)}</p>
-            </article>
+            <StatCard label="Vendas (pagas)" value={salesReport.saleCount} />
+            <StatCard label="Total no periodo" value={formatCurrencyBRL(salesReport.totalAmount)} />
           </div>
         ) : null}
         {salesReport?.byDay?.length ? (
-          <div className="mt-4">
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <div className="h-64 rounded-lg border border-slate-200 bg-white p-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={salesReport.byDay.map((row) => ({
+                    date: formatDateBR(row.date).slice(0, 5),
+                    total: Number(row.amount || 0)
+                  }))}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip formatter={(v) => formatCurrencyBRL(v)} />
+                  <Line type="monotone" dataKey="total" stroke="#7C3AED" strokeWidth={2.5} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
             <h3 className="mb-2 text-sm font-medium text-slate-700">Por dia</h3>
             <ul className="max-h-56 space-y-1 overflow-y-auto text-sm">
               {salesReport.byDay.map((row) => (
@@ -94,12 +114,11 @@ export function ReportsPage() {
             </ul>
           </div>
         ) : salesReport && !salesReport.saleCount ? (
-          <p className="mt-3 text-sm text-slate-500">Nenhuma venda paga neste intervalo.</p>
+          <EmptyState description="Nenhuma venda paga neste intervalo." />
         ) : null}
-      </section>
+      </SectionCard>
 
-      <section className="rounded-lg bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">Estoque abaixo do minimo</h2>
+      <SectionCard title="Estoque abaixo do minimo">
         <p className="mt-1 text-sm text-slate-600">
           Soma das variacoes por produto comparada ao estoque minimo cadastrado no produto.
         </p>
@@ -107,7 +126,8 @@ export function ReportsPage() {
           <ul className="mt-3 space-y-2 text-sm">
             {lowStock.items.map((item) => (
               <li key={item.id} className="rounded border border-amber-200 bg-amber-50 px-3 py-2">
-                <strong>{item.name}</strong> ({item.sku})
+                <strong>{item.name}</strong>
+                {item.sku ? ` (${item.sku})` : null}
                 {item.category ? <span className="text-slate-600"> — {item.category}</span> : null}
                 {item.brand ? <span className="text-slate-600"> · {item.brand}</span> : null}
                 <div className="text-xs text-amber-900">
@@ -117,11 +137,11 @@ export function ReportsPage() {
             ))}
           </ul>
         ) : (
-          <p className="mt-3 text-sm text-slate-500">Nenhum produto abaixo do minimo no momento.</p>
+          <EmptyState description="Nenhum produto abaixo do minimo no momento." />
         )}
-      </section>
+      </SectionCard>
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      <FormErrorSummary error={error} />
     </div>
   );
 }

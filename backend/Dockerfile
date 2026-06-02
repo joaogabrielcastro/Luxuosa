@@ -9,4 +9,5 @@ COPY . .
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "npx prisma generate && npx prisma db push && npm run dev"]
+# Ordem: cliente Prisma → migrações (PRD) → servidor. start:prod já inclui migrate deploy.
+CMD ["sh", "-c", "npx prisma generate && npm run start:prod"]

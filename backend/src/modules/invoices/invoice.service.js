@@ -9,16 +9,14 @@ import {
   getNfceById
 } from "../../shared/nuvemFiscal/nuvemFiscalApi.js";
 import { buildNfceRequestBody, digitsOnly } from "../../shared/nuvemFiscal/nuvemFiscalNfceBuilder.js";
+import {
+  formatCnpjBr,
+  resolveEmitenteCnpj
+} from "../../shared/nuvemFiscal/nuvemFiscalEmitente.js";
 import { saleRepository } from "../sales/sale.repository.js";
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
-}
-
-function getEmitenteCnpj(tenantCnpj) {
-  const fromEnv = env.nuvemFiscal.emitenteCnpj;
-  if (fromEnv && digitsOnly(fromEnv).length === 14) return digitsOnly(fromEnv);
-  return digitsOnly(tenantCnpj);
 }
 
 function normalizeEmpresaResponse(body) {
@@ -95,9 +93,10 @@ async function pollNfceStatus(nf, docId) {
 }
 
 /**
- * Valida Client ID / Secret: obtém token OAuth e lista empresas cadastradas na conta Nuvem Fiscal.
+ * Valida OAuth e se o CNPJ **desta loja** está cadastrado na conta Nuvem Fiscal.
+ * Não usa outra empresa da conta sandbox como emitente.
  */
-async function connectionTest() {
+async function connectionTest(tenantId) {
   const nf = env.nuvemFiscal;
   if (!nf.clientId || !nf.clientSecret) {
     const err = new Error(
@@ -107,31 +106,113 @@ async function connectionTest() {
     throw err;
   }
 
-  const token = await getNuvemFiscalAccessToken(nf);
-  const res = await fetch(`${nf.apiBase}/empresas`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { name: true, cnpj: true, enableNfceEmission: true }
   });
-
-  const text = await res.text();
-  let body;
-  try {
-    body = JSON.parse(text);
-  } catch {
-    body = { raw: text };
-  }
-
-  if (!res.ok) {
-    const err = new Error(`Nuvem Fiscal API retornou ${res.status}.`);
-    err.statusCode = 502;
-    err.details = body;
+  if (!tenant) {
+    const err = new Error("Loja nao encontrada.");
+    err.statusCode = 404;
     throw err;
   }
 
+  const resolved = resolveEmitenteCnpj(tenant.cnpj);
+  const warnings = [];
+
+  if (resolved.envOverrideIgnored) {
+    warnings.push(
+      `NUVEM_FISCAL_EMITENTE_CNPJ no servidor (${formatCnpjBr(env.nuvemFiscal.emitenteCnpj)}) é ignorado: a NFC-e usa o CNPJ desta loja (${formatCnpjBr(resolved.emitCnpj)}).`
+    );
+  }
+  if (resolved.source === "env") {
+    warnings.push(
+      "CNPJ da loja no cadastro é inválido; a emissão usaria NUVEM_FISCAL_EMITENTE_CNPJ do servidor. Corrija o CNPJ do tenant."
+    );
+  }
+  if (resolved.emitCnpj.length !== 14) {
+    warnings.push("CNPJ do emitente inválido (precisa de 14 dígitos).");
+  }
+  if (!tenant.enableNfceEmission) {
+    warnings.push("NFC-e desligada para esta loja (enableNfceEmission). Vendas não enfileiram nota.");
+  }
+
+  const token = await getNuvemFiscalAccessToken(nf);
+  const listRes = await fetch(`${nf.apiBase}/empresas`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
+  });
+  const listText = await listRes.text();
+  let listBody;
+  try {
+    listBody = JSON.parse(listText);
+  } catch {
+    listBody = { raw: listText };
+  }
+
+  if (!listRes.ok) {
+    const err = new Error(`Nuvem Fiscal API retornou ${listRes.status}.`);
+    err.statusCode = 502;
+    err.details = listBody;
+    throw err;
+  }
+
+  let empresa = null;
+  let nfceConfig = null;
+  let empresaFound = false;
+
+  if (resolved.emitCnpj.length === 14) {
+    const empRes = await getEmpresa(nf, resolved.emitCnpj);
+    if (empRes.ok) {
+      empresaFound = true;
+      empresa = normalizeEmpresaResponse(empRes.body);
+      const nfceRes = await getEmpresaNfceConfig(nf, resolved.emitCnpj);
+      if (nfceRes.ok) nfceConfig = nfceRes.body;
+    } else {
+      warnings.push(
+        `CNPJ ${formatCnpjBr(resolved.emitCnpj)} não está cadastrado nesta conta Nuvem Fiscal. Cadastre a empresa no console com o mesmo Client ID/Secret do servidor.`
+      );
+    }
+
+    const ambienteConfig = nf.ambiente === "producao" ? "producao" : "homologacao";
+    if (nfceConfig?.ambiente && nfceConfig.ambiente !== ambienteConfig) {
+      warnings.push(
+        `Ambiente NFC-e na Nuvem (${nfceConfig.ambiente}) difere de NUVEM_FISCAL_AMBIENTE (${ambienteConfig}).`
+      );
+    }
+  }
+
+  const ok =
+    resolved.emitCnpj.length === 14 &&
+    empresaFound &&
+    Boolean(empresa?.endereco) &&
+    (!nfceConfig?.ambiente ||
+      nfceConfig.ambiente === (nf.ambiente === "producao" ? "producao" : "homologacao"));
+
   return {
+    ok,
     provider: "nuvemfiscal",
     environment: nf.apiBase.includes("sandbox") ? "sandbox" : "producao",
-    empresas: body,
-    doc: "NFC-e modelo 65 apos venda (POST /nfce). OAuth com scope empresa nfe nfce."
+    ambienteConfig: nf.ambiente === "producao" ? "producao" : "homologacao",
+    tenant: {
+      name: tenant.name,
+      cnpj: digitsOnly(tenant.cnpj),
+      cnpjFormatado: formatCnpjBr(tenant.cnpj),
+      enableNfceEmission: tenant.enableNfceEmission
+    },
+    emitente: {
+      cnpj: resolved.emitCnpj,
+      cnpjFormatado: formatCnpjBr(resolved.emitCnpj),
+      source: resolved.source,
+      razaoSocial: empresa?.nome_razao_social || null,
+      nomeFantasia: empresa?.nome_fantasia || null,
+      cadastradoNaNuvem: empresaFound
+    },
+    nfce: nfceConfig
+      ? {
+          ambiente: nfceConfig.ambiente || null,
+          serie: nfceConfig.serie ?? null
+        }
+      : null,
+    warnings
   };
 }
 
@@ -142,6 +223,20 @@ async function connectionTest() {
 async function issueFromSale(tenantId, saleId, opts = {}) {
   const silent = opts.silent === true;
   const nf = env.nuvemFiscal;
+
+  const tenantPolicy = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { enableNfceEmission: true, cnpj: true }
+  });
+  if (!tenantPolicy?.enableNfceEmission) {
+    if (silent) return null;
+    const err = new Error(
+      "Emissao de NFC-e nao habilitada para esta loja. Configure o CNPJ na Nuvem Fiscal ou use venda sem nota."
+    );
+    err.statusCode = 403;
+    err.code = "NFCE_TENANT_DISABLED";
+    throw err;
+  }
 
   if (!nf.clientId || !nf.clientSecret) {
     if (silent) return null;
@@ -207,11 +302,10 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
     });
   }
 
-  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
-  const emitCnpj = getEmitenteCnpj(tenant.cnpj);
+  const { emitCnpj } = resolveEmitenteCnpj(tenantPolicy.cnpj);
 
   if (emitCnpj.length !== 14) {
-    const err = new Error("CNPJ do emitente invalido (tenant ou NUVEM_FISCAL_EMITENTE_CNPJ).");
+    const err = new Error("CNPJ do emitente invalido. Cadastre 14 digitos no CNPJ da loja (Tenant).");
     err.statusCode = 400;
     throw err;
   }
@@ -230,6 +324,11 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
     const err = new Error("Resposta Nuvem Fiscal sem dados de endereco do emitente.");
     err.statusCode = 502;
     throw err;
+  }
+
+  const ieOverride = digitsOnly(nf.emitenteIe || "");
+  if (ieOverride.length >= 2 && ieOverride.length <= 14) {
+    empresa.inscricao_estadual = ieOverride;
   }
 
   const nfceCfgRes = await getEmpresaNfceConfig(nf, emitCnpj);
@@ -257,12 +356,25 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
         }
       : null;
 
+  const empresaNfceMerged = { ...(empresaNfce || {}) };
+  if (infRespTec) {
+    empresaNfceMerged.respTec = infRespTec;
+  } else {
+    delete empresaNfceMerged.respTec;
+  }
+
+  const csrtId = String(nf.respTecIdCsrt || "").trim();
+  const csrtSecret = String(nf.csrt || "").trim();
+  const csrt =
+    csrtId && csrtSecret ? { id: csrtId, secret: csrtSecret } : null;
+
   const payload = buildNfceRequestBody({
     sale,
     empresa,
-    empresaNfce: { ...(empresaNfce || {}), ...(infRespTec ? { respTec: infRespTec } : {}) },
+    empresaNfce: empresaNfceMerged,
     ambiente,
-    referencia: sale.id
+    referencia: sale.id,
+    csrt
   });
 
   await ensureInvoiceRow(tenantId, saleId);

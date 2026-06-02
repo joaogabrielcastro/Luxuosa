@@ -6,6 +6,10 @@ export const productService = {
     return productRepository.list(tenantId);
   },
 
+  listPaged(tenantId, options) {
+    return productRepository.listPaged(tenantId, options);
+  },
+
   getById(tenantId, id) {
     return productRepository.findById(tenantId, id);
   },
@@ -51,11 +55,53 @@ export const productService = {
         throw err;
       }
     }
-    return productRepository.update(tenantId, id, payload);
+
+    const result = await productRepository.update(tenantId, id, payload);
+    if (result.count === 0) {
+      const err = new Error("Produto nao encontrado.");
+      err.statusCode = 404;
+      throw err;
+    }
+    return result;
   },
 
-  remove(tenantId, id) {
-    return productRepository.remove(tenantId, id);
+  async remove(tenantId, id) {
+    return prisma.$transaction(async (tx) => {
+      const product = await tx.product.findFirst({
+        where: { tenantId, id },
+        include: { variations: { select: { id: true } } }
+      });
+      if (!product) {
+        const err = new Error("Produto nao encontrado.");
+        err.statusCode = 404;
+        throw err;
+      }
+
+      const varIds = product.variations.map((v) => v.id);
+      if (varIds.length > 0) {
+        const [saleItems, creditItems] = await Promise.all([
+          tx.saleItem.count({ where: { tenantId, productVariationId: { in: varIds } } }),
+          tx.creditSaleItem.count({ where: { tenantId, productVariationId: { in: varIds } } })
+        ]);
+        if (saleItems > 0 || creditItems > 0) {
+          const err = new Error(
+            "Nao e possivel excluir produto com vendas ou crediario vinculados as variacoes."
+          );
+          err.statusCode = 409;
+          throw err;
+        }
+
+        await tx.stockMovement.deleteMany({
+          where: { tenantId, productVariationId: { in: varIds } }
+        });
+        await tx.productVariation.deleteMany({
+          where: { tenantId, productId: id }
+        });
+      }
+
+      const deleted = await tx.product.deleteMany({ where: { tenantId, id } });
+      return deleted;
+    });
   },
 
   async lowStock(tenantId) {

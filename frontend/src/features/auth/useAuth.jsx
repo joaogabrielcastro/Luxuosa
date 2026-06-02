@@ -1,5 +1,5 @@
-import { createContext, useContext, useMemo, useState } from "react";
-import { apiClient } from "../../shared/apiClient.js";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { apiClient, AUTH_UNAUTHORIZED_EVENT } from "../../shared/apiClient.js";
 
 const AuthContext = createContext(null);
 
@@ -9,11 +9,40 @@ export function AuthProvider({ children }) {
     return raw ? JSON.parse(raw) : null;
   });
 
-  async function login(email, password, tenantCnpj) {
-    const body = { email, password };
-    if (tenantCnpj && String(tenantCnpj).trim()) {
-      body.tenantCnpj = String(tenantCnpj).trim();
+  useEffect(() => {
+    function onUnauthorized() {
+      setSession(null);
+      localStorage.removeItem("luxuosa_session");
     }
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, onUnauthorized);
+    return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, onUnauthorized);
+  }, []);
+
+  useEffect(() => {
+    const t = session?.token;
+    if (!t) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await apiClient("/auth/me", { token: t });
+        if (cancelled) return;
+        setSession((prev) => {
+          if (!prev?.token) return prev;
+          const next = { ...prev, user: data.user, tenant: data.tenant };
+          localStorage.setItem("luxuosa_session", JSON.stringify(next));
+          return next;
+        });
+      } catch {
+        /* mantem sessao local */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.token]);
+
+  async function login(email, password) {
+    const body = { email, password };
     const data = await apiClient("/auth/login", {
       method: "POST",
       body

@@ -33,8 +33,30 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/luxuosa
       JWT_SECRET: change-me-in-production
       JWT_EXPIRES_IN: 1d
+      NFCE_PROCESS_IN_API: "false"
     ports:
       - "3001:3001"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  nfce-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: luxuosa_nfce_worker
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    env_file:
+      - ./.env.compose
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/luxuosa
+      NFCE_PROCESS_IN_API: "true"
+    command: ["npm", "run", "worker:nfce"]
     volumes:
       - ./backend:/app
       - /app/node_modules
@@ -43,10 +65,15 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: builder
+      args:
+        VITE_API_URL: http://localhost:3001/api/v1
     container_name: luxuosa_frontend
     restart: unless-stopped
     depends_on:
       - backend
+    # Desenvolvimento: servidor Vite com hot reload na 5180 (imagem faz build; volume sobrescreve o codigo)
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5180"]
     environment:
       VITE_API_URL: http://localhost:3001/api/v1
     ports:

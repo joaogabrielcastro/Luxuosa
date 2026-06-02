@@ -1,6 +1,8 @@
 import { InvoiceStatus, NfceIssueJobStatus } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
+import { env } from "../config/env.js";
 import { invoiceService } from "../modules/invoices/invoice.service.js";
+import { logger } from "../utils/logger.js";
 
 const chains = new Map();
 
@@ -161,6 +163,22 @@ async function drainTenantQueue(tenantId) {
  * Um worker logico por tenant (Promise chain) evita corrida e rate limit na Nuvem Fiscal.
  */
 export async function enqueueNfceIssue(tenantId, saleId) {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { enableNfceEmission: true }
+  });
+  if (!tenant?.enableNfceEmission) {
+    await prisma.nfceIssueJob.updateMany({
+      where: { tenantId, saleId },
+      data: {
+        status: NfceIssueJobStatus.FAILED,
+        lastError: "NFC-e nao habilitada para esta loja (emitente Nuvem Fiscal).",
+        runAt: null
+      }
+    });
+    return;
+  }
+
   const inv = await prisma.invoice.findUnique({
     where: { saleId },
     select: { status: true }
@@ -182,6 +200,11 @@ export async function enqueueNfceIssue(tenantId, saleId) {
   }
   // FAILED / PROCESSING: nao altera aqui; drain ainda roda para demais jobs do tenant.
 
+  scheduleTenantDrain(tenantId);
+}
+
+function scheduleTenantDrain(tenantId) {
+  if (!env.nfceProcessInApi) return;
   const prev = chains.get(tenantId) || Promise.resolve();
   const next = prev
     .then(() => drainTenantQueue(tenantId))
@@ -195,30 +218,43 @@ export async function enqueueNfceIssue(tenantId, saleId) {
  * Recupera jobs presos em PROCESSING (ex.: deploy durante emissao) e retoma filas com PENDING.
  */
 export async function resumeNfceQueuesOnStartup() {
-  const stale = await prisma.nfceIssueJob.updateMany({
-    where: {
-      status: NfceIssueJobStatus.PROCESSING,
-      updatedAt: { lt: new Date(Date.now() - STALE_PROCESSING_MS) }
-    },
-    data: { status: NfceIssueJobStatus.PENDING }
-  });
-  if (stale.count > 0) {
-    console.info(`[NFC-e] recuperados ${stale.count} job(s) presos em PROCESSING.`);
-  }
-
-  const tenants = await prisma.nfceIssueJob.groupBy({
-    by: ["tenantId"],
-    where: {
-      status: NfceIssueJobStatus.PENDING,
-      OR: [{ runAt: null }, { runAt: { lte: new Date() } }]
+  try {
+    const stale = await prisma.nfceIssueJob.updateMany({
+      where: {
+        status: NfceIssueJobStatus.PROCESSING,
+        updatedAt: { lt: new Date(Date.now() - STALE_PROCESSING_MS) }
+      },
+      data: { status: NfceIssueJobStatus.PENDING }
+    });
+    if (stale.count > 0) {
+      console.info(`[NFC-e] recuperados ${stale.count} job(s) presos em PROCESSING.`);
     }
-  });
 
-  for (const row of tenants) {
-    const prev = chains.get(row.tenantId) || Promise.resolve();
-    const next = prev
-      .then(() => drainTenantQueue(row.tenantId))
-      .catch((err) => console.error(`[NFC-e] fila tenant ${row.tenantId}:`, err?.message || err));
-    chains.set(row.tenantId, next);
+    const tenants = await prisma.nfceIssueJob.groupBy({
+      by: ["tenantId"],
+      where: {
+        status: NfceIssueJobStatus.PENDING,
+        OR: [{ runAt: null }, { runAt: { lte: new Date() } }]
+      }
+    });
+
+    for (const row of tenants) {
+      const prev = chains.get(row.tenantId) || Promise.resolve();
+      const next = prev
+        .then(() => drainTenantQueue(row.tenantId))
+        .catch((err) => console.error(`[NFC-e] fila tenant ${row.tenantId}:`, err?.message || err));
+      chains.set(row.tenantId, next);
+    }
+  } catch (err) {
+    const code = err?.code;
+    const msg = String(err?.message || "");
+    if (code === "P2021" || /does not exist in the current database/i.test(msg)) {
+      logger.warn(
+        "Schema Prisma nao aplicado neste banco (faltam tabelas). Com DATABASE_URL de producao: cd backend && npx prisma migrate deploy",
+        { prismaCode: code }
+      );
+      return;
+    }
+    throw err;
   }
 }

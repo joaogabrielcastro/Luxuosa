@@ -1,18 +1,18 @@
-import { PaymentMethod, SaleStatus, StockMovementType } from "@prisma/client";
+import { PaymentMethod, SaleStatus } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
 import { enqueueNfceIssue } from "../../jobs/enqueueNfceIssue.js";
+import { assertSaleMutable } from "../../shared/saleGuards.js";
+import {
+  assertCustomerBelongsToTenant,
+  assertNoDuplicateVariationLines,
+  normalizePaymentMethod
+} from "../../shared/salePayload.js";
+import {
+  applyStockExitForLine,
+  buildAndValidateSaleLineItems,
+  restoreStockForLine
+} from "../../shared/saleStockLineItems.js";
 import { saleRepository } from "./sale.repository.js";
-
-function normalizePaymentMethod(method) {
-  const map = {
-    dinheiro: PaymentMethod.CASH,
-    cartao_credito: PaymentMethod.CREDIT_CARD,
-    cartao_debito: PaymentMethod.DEBIT_CARD,
-    pix: PaymentMethod.PIX,
-    parcelamento: PaymentMethod.INSTALLMENT
-  };
-  return map[method] || method;
-}
 
 function toNumber(value, fallback = 0) {
   const parsed = Number(value);
@@ -58,18 +58,7 @@ function assertInstallmentPolicy(paymentMethod, installments) {
 
 async function restoreSaleEffects(tx, tenantId, sale) {
   for (const item of sale.items) {
-    await tx.productVariation.updateMany({
-      where: { tenantId, id: item.productVariationId },
-      data: { stock: { increment: item.quantity } }
-    });
-    await tx.stockMovement.create({
-      data: {
-        tenantId,
-        productVariationId: item.productVariationId,
-        type: StockMovementType.ENTRY,
-        quantity: item.quantity
-      }
-    });
+    await restoreStockForLine(tx, tenantId, item);
   }
 
   if (sale.customerId) {
@@ -84,9 +73,17 @@ async function restoreSaleEffects(tx, tenantId, sale) {
 }
 
 export const saleService = {
-  async list(tenantId) {
-    const sales = await saleRepository.list(tenantId);
-    if (!sales.length) return sales;
+  async list(tenantId, { skip = 0, take = 50, paymentMethod, nfce, q, summary = false } = {}) {
+    const { items, total } = await saleRepository.list(tenantId, {
+      skip,
+      take,
+      paymentMethod,
+      nfce,
+      q,
+      summary
+    });
+    const sales = items;
+    if (!sales.length) return { items: [], total, skip, take };
 
     const saleIds = sales.map((s) => s.id);
     const jobs = await prisma.nfceIssueJob.findMany({
@@ -95,14 +92,22 @@ export const saleService = {
     });
     const jobsBySale = new Map(jobs.map((j) => [j.saleId, j]));
 
-    return sales.map((sale) => ({
+    const enriched = sales.map((sale) => ({
       ...sale,
       nfceJob: jobsBySale.get(sale.id) || null
     }));
+    return { items: enriched, total, skip, take };
+  },
+
+  getById(tenantId, saleId) {
+    return saleRepository.findByIdPlain(tenantId, saleId);
   },
 
   async create(tenantId, userId, userType, payload) {
     return prisma.$transaction(async (tx) => {
+      assertNoDuplicateVariationLines(payload.items);
+      await assertCustomerBelongsToTenant(tx, tenantId, payload.customerId);
+
       const variationIds = payload.items.map((item) => item.productVariationId);
       const variations = await tx.productVariation.findMany({
         where: { tenantId, id: { in: variationIds } },
@@ -116,19 +121,7 @@ export const saleService = {
       }
 
       const variationMap = new Map(variations.map((item) => [item.id, item]));
-      const saleItems = payload.items.map((item) => {
-        const variation = variationMap.get(item.productVariationId);
-        if (!variation || variation.stock < item.quantity) {
-          const err = new Error(`Estoque insuficiente para variacao ${item.productVariationId}.`);
-          err.statusCode = 400;
-          throw err;
-        }
-        return {
-          productVariationId: item.productVariationId,
-          quantity: item.quantity,
-          unitPrice: Number(item.unitPrice)
-        };
-      });
+      const saleItems = buildAndValidateSaleLineItems(payload.items, variationMap);
 
       const grossTotal = saleItems.reduce((acc, item) => acc + item.quantity * item.unitPrice, 0);
       const discountValue = toNumber(payload.discountValue, 0);
@@ -157,18 +150,7 @@ export const saleService = {
       );
 
       for (const item of saleItems) {
-        await tx.productVariation.updateMany({
-          where: { tenantId, id: item.productVariationId },
-          data: { stock: { decrement: item.quantity } }
-        });
-        await tx.stockMovement.create({
-          data: {
-            tenantId,
-            productVariationId: item.productVariationId,
-            type: StockMovementType.EXIT,
-            quantity: item.quantity
-          }
-        });
+        await applyStockExitForLine(tx, tenantId, item);
       }
 
       if (payload.customerId) {
@@ -181,28 +163,31 @@ export const saleService = {
         });
       }
 
-      return sale;
-    }).then((sale) => {
-      void enqueueNfceIssue(tenantId, sale.id).catch((err) =>
-        console.error("[NFC-e] enqueue:", err?.message || err)
-      );
+      const wantsNfce = payload.emitNfce === undefined ? true : payload.emitNfce === true;
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { enableNfceEmission: true }
+      });
+      if (wantsNfce && tenant?.enableNfceEmission) {
+        void enqueueNfceIssue(tenantId, sale.id).catch((err) =>
+          console.error("[NFC-e] enqueue:", err?.message || err)
+        );
+      }
       return sale;
     });
   },
 
   async update(tenantId, saleId, userId, userType, payload) {
     return prisma.$transaction(async (tx) => {
-      const currentSale = await saleRepository.findById(tx, tenantId, saleId);
-      if (!currentSale) {
-        const err = new Error("Venda nao encontrada.");
-        err.statusCode = 404;
-        throw err;
-      }
+      const currentSale = await assertSaleMutable(tx, tenantId, saleId);
       if (currentSale.status === SaleStatus.CANCELED) {
         const err = new Error("Nao e possivel editar venda cancelada.");
         err.statusCode = 409;
         throw err;
       }
+
+      assertNoDuplicateVariationLines(payload.items);
+      await assertCustomerBelongsToTenant(tx, tenantId, payload.customerId);
 
       await restoreSaleEffects(tx, tenantId, currentSale);
 
@@ -218,19 +203,7 @@ export const saleService = {
       }
 
       const variationMap = new Map(variations.map((item) => [item.id, item]));
-      const saleItems = payload.items.map((item) => {
-        const variation = variationMap.get(item.productVariationId);
-        if (!variation || variation.stock < item.quantity) {
-          const err = new Error(`Estoque insuficiente para variacao ${item.productVariationId}.`);
-          err.statusCode = 400;
-          throw err;
-        }
-        return {
-          productVariationId: item.productVariationId,
-          quantity: item.quantity,
-          unitPrice: Number(item.unitPrice)
-        };
-      });
+      const saleItems = buildAndValidateSaleLineItems(payload.items, variationMap);
 
       const grossTotal = saleItems.reduce((acc, item) => acc + item.quantity * item.unitPrice, 0);
       const discountValue = toNumber(payload.discountValue, 0);
@@ -260,18 +233,7 @@ export const saleService = {
       );
 
       for (const item of saleItems) {
-        await tx.productVariation.updateMany({
-          where: { tenantId, id: item.productVariationId },
-          data: { stock: { decrement: item.quantity } }
-        });
-        await tx.stockMovement.create({
-          data: {
-            tenantId,
-            productVariationId: item.productVariationId,
-            type: StockMovementType.EXIT,
-            quantity: item.quantity
-          }
-        });
+        await applyStockExitForLine(tx, tenantId, item);
       }
 
       if (payload.customerId) {
@@ -290,12 +252,7 @@ export const saleService = {
 
   async cancel(tenantId, saleId) {
     return prisma.$transaction(async (tx) => {
-      const currentSale = await saleRepository.findById(tx, tenantId, saleId);
-      if (!currentSale) {
-        const err = new Error("Venda nao encontrada.");
-        err.statusCode = 404;
-        throw err;
-      }
+      const currentSale = await assertSaleMutable(tx, tenantId, saleId);
       if (currentSale.status === SaleStatus.CANCELED) {
         return currentSale;
       }
@@ -303,7 +260,7 @@ export const saleService = {
       await restoreSaleEffects(tx, tenantId, currentSale);
 
       return tx.sale.update({
-        where: { id: currentSale.id },
+        where: { id: currentSale.id, tenantId },
         data: { status: SaleStatus.CANCELED }
       });
     });

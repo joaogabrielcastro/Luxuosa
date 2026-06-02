@@ -41,5 +41,15 @@ export default defineConfig({
     headers: {
       "Cache-Control": "no-store"
     }
+  },
+  /** Producao (Docker / Coolify): `vite preview` — PORT pode vir do hosting */
+  preview: {
+    host: "0.0.0.0",
+    port: Number(process.env.PORT || 3000),
+    strictPort: true,
+    /** Evita o browser ficar com index.html ou assets antigos apos novo deploy. */
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"
+    }
   }
 });

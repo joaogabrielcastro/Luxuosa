@@ -20,9 +20,15 @@ export function authMiddleware(req, _res, next) {
       type: payload.user_type
     };
     return next();
-  } catch {
-    const err = new Error("Token invalido.");
+  } catch (verifyError) {
+    const expired = verifyError?.name === "TokenExpiredError";
+    const err = new Error(
+      expired
+        ? "Sessao expirada. Faca login novamente."
+        : "Sessao invalida. Faca login novamente."
+    );
     err.statusCode = 401;
+    err.code = expired ? "TOKEN_EXPIRED" : "TOKEN_INVALID";
     return next(err);
   }
 }

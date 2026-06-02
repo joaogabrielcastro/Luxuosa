@@ -1,20 +1,8 @@
--- DropForeignKey
-ALTER TABLE "CashMovement" DROP CONSTRAINT "CashMovement_cashRegisterId_fkey";
+-- Bancos novos podem nunca ter tido caixa/registradora. CASCADE remove FKs dependentes.
+DROP TABLE IF EXISTS "CashMovement" CASCADE;
 
--- DropForeignKey
-ALTER TABLE "CashMovement" DROP CONSTRAINT "CashMovement_tenantId_fkey";
+DROP TABLE IF EXISTS "CashRegister" CASCADE;
 
--- DropForeignKey
-ALTER TABLE "CashRegister" DROP CONSTRAINT "CashRegister_tenantId_fkey";
+DROP TYPE IF EXISTS "CashMovementType";
 
--- DropTable
-DROP TABLE "CashMovement";
-
--- DropTable
-DROP TABLE "CashRegister";
-
--- DropEnum
-DROP TYPE "CashMovementType";
-
--- DropEnum
-DROP TYPE "CashRegisterStatus";
+DROP TYPE IF EXISTS "CashRegisterStatus";

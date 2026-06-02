@@ -1,7 +1,9 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { env } from "../../config/env.js";
+import { prisma } from "../../config/prisma.js";
 import { authRepository } from "./auth.repository.js";
+import { buildTenantFiscalContext } from "../../shared/nuvemFiscal/nuvemFiscalEmitente.js";
 
 function digitsOnly(value) {
   return String(value ?? "").replace(/\D/g, "");
@@ -66,8 +68,44 @@ export const authService = {
       tenant: {
         id: user.tenant.id,
         name: user.tenant.name,
-        plan: user.tenant.plan
+        cnpj: user.tenant.cnpj,
+        plan: user.tenant.plan,
+        enableNfceEmission: user.tenant.enableNfceEmission,
+        fiscal: buildTenantFiscalContext(user.tenant)
       }
+    };
+  },
+
+  async me(tenantId, userId) {
+    const [tenant, profile] = await Promise.all([
+      prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: {
+          id: true,
+          name: true,
+          cnpj: true,
+          plan: true,
+          enableNfceEmission: true
+        }
+      }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, email: true, type: true, tenantId: true }
+      })
+    ]);
+    if (!tenant || !profile) {
+      const err = new Error("Sessao invalida.");
+      err.statusCode = 401;
+      throw err;
+    }
+    if (profile.tenantId !== tenantId) {
+      const err = new Error("Sessao invalida.");
+      err.statusCode = 401;
+      throw err;
+    }
+    return {
+      tenant: { ...tenant, fiscal: buildTenantFiscalContext(tenant) },
+      user: profile
     };
   }
 };

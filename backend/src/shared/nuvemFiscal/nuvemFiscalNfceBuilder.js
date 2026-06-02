@@ -1,5 +1,8 @@
 /** @typedef {{ endereco: { logradouro: string; numero?: string; complemento?: string; bairro: string; codigo_municipio: string; cidade: string; uf: string; cep: string }; cpf_cnpj: string; nome_razao_social: string; nome_fantasia?: string; inscricao_estadual?: string; fone?: string }} EmpresaNuvem */
 
+import crypto from "node:crypto";
+import { isDefaultVariation } from "../autoVariation.js";
+
 const UF_CUF = {
   RO: 11,
   AC: 12,
@@ -46,6 +49,76 @@ function round2(n) {
   return Math.round(Number(n) * 100) / 100;
 }
 
+/** Numero da nota: prioriza config Nuvem; fallback estavel por venda (evita Date.now()). */
+function resolveNnfNumber({ sale, empresaNfce }) {
+  const fromConfig = Number(
+    empresaNfce?.numero ?? empresaNfce?.numero_inicial ?? empresaNfce?.proximo_numero
+  );
+  if (Number.isFinite(fromConfig) && fromConfig > 0) return Math.floor(fromConfig);
+
+  const saleId = String(sale?.id || "");
+  let hash = 0;
+  for (let i = 0; i < saleId.length; i += 1) {
+    hash = (hash * 31 + saleId.charCodeAt(i)) >>> 0;
+  }
+  return (hash % 999_999_999) + 1;
+}
+
+function allocateItemDiscounts(det, targetVDesc) {
+  const totalCents = Math.max(0, Math.round(round2(targetVDesc) * 100));
+  if (totalCents <= 0 || !det.length) return;
+
+  const lineTotals = det.map((d) => Math.max(0, Math.round(round2(d.prod.vProd) * 100)));
+  const sumLineTotals = lineTotals.reduce((acc, v) => acc + v, 0);
+  if (sumLineTotals <= 0) return;
+
+  // Rateio proporcional por item, com ajuste de resto pelos maiores residuos.
+  const allocations = det.map((_, idx) => {
+    const raw = (totalCents * lineTotals[idx]) / sumLineTotals;
+    const base = Math.floor(raw);
+    return { idx, cents: base, frac: raw - base };
+  });
+
+  let used = allocations.reduce((acc, a) => acc + a.cents, 0);
+  let remainder = totalCents - used;
+  allocations
+    .slice()
+    .sort((a, b) => b.frac - a.frac)
+    .forEach((a) => {
+      if (remainder <= 0) return;
+      a.cents += 1;
+      remainder -= 1;
+    });
+
+  // Garante que nenhum desconto de item ultrapasse vProd do item.
+  let overflow = 0;
+  allocations.forEach((a) => {
+    const max = lineTotals[a.idx];
+    if (a.cents > max) {
+      overflow += a.cents - max;
+      a.cents = max;
+    }
+  });
+  if (overflow > 0) {
+    allocations
+      .slice()
+      .sort((a, b) => lineTotals[b.idx] - b.cents - (lineTotals[a.idx] - a.cents))
+      .forEach((a) => {
+        if (overflow <= 0) return;
+        const room = lineTotals[a.idx] - a.cents;
+        if (room <= 0) return;
+        const extra = Math.min(room, overflow);
+        a.cents += extra;
+        overflow -= extra;
+      });
+  }
+
+  allocations.forEach((a) => {
+    const vDesc = round2(a.cents / 100);
+    if (vDesc > 0) det[a.idx].prod.vDesc = vDesc;
+  });
+}
+
 function randomCNF() {
   return Array.from({ length: 8 }, () => Math.floor(Math.random() * 10)).join("");
 }
@@ -59,6 +132,13 @@ function modulo11Cdv(chave43) {
   }
   const mod = sum % 11;
   return mod === 0 || mod === 1 ? 0 : 11 - mod;
+}
+
+/** Hash CSRT (NT 2018.005): Base64(SHA1(UTF8(CSRT + chave44))). */
+export function buildHashCsrt(csrtSecret, infNFeId) {
+  const chave44 = String(infNFeId || "").replace(/^NFe/i, "");
+  if (chave44.length !== 44 || !/^\d{44}$/.test(chave44)) return null;
+  return crypto.createHash("sha1").update(csrtSecret + chave44, "utf8").digest("base64");
 }
 
 function buildInfNfeId({ cUF, dhEmi, cnpjEmit, mod, serie, nNF, tpEmis, cNF }) {
@@ -168,14 +248,17 @@ function buildDetItem(item, nItem) {
   const qCom = item.quantity;
   const vUnCom = round2(Number(item.unitPrice));
   const vProd = round2(qCom * vUnCom);
-  const xProd = `${p.name} ${v.size} ${v.color}`.trim().slice(0, 120);
+  const xProd = isDefaultVariation(v)
+    ? String(p.name || "").trim().slice(0, 120)
+    : `${p.name} ${v.size} ${v.color}`.trim().slice(0, 120);
   const ncm = digitsOnly(p.ncm).slice(0, 8).padStart(8, "0");
   const cfop = digitsOnly(p.cfop).slice(0, 4).padStart(4, "0");
+  const skuOrFallback = (p.sku && String(p.sku).trim()) || `ID-${p.id.slice(0, 12)}`;
 
   return {
     nItem,
     prod: {
-      cProd: p.sku.slice(0, 60),
+      cProd: skuOrFallback.slice(0, 60),
       cEAN: "SEM GTIN",
       xProd,
       NCM: ncm,
@@ -207,7 +290,7 @@ function buildDetItem(item, nItem) {
  * NFC-e modelo 65 — varejo / consumidor. POST /nfce na Nuvem Fiscal.
  * Com cliente + dados fiscais completos usa CPF/CNPJ e endereco do cliente; senao CONSUMIDOR FINAL no endereco do emitente.
  */
-export function buildNfceRequestBody({ sale, empresa, empresaNfce, ambiente, referencia }) {
+export function buildNfceRequestBody({ sale, empresa, empresaNfce, ambiente, referencia, csrt }) {
   const emit = buildEmit(empresa, empresaNfce?.CRT);
   const useCustomer =
     sale.customer && customerFiscalComplete(sale.customer) && digitsOnly(sale.customer.cpfCnpj).length >= 11;
@@ -219,24 +302,34 @@ export function buildNfceRequestBody({ sale, empresa, empresaNfce, ambiente, ref
   const cUF = UF_CUF[emitUF] ?? 41;
   const dhEmi = new Date(sale.occurredAt).toISOString();
   const cNF = randomCNF();
-  const nNF = Number(String(Date.now()).slice(-9));
+  const serie = Math.max(1, Number(empresaNfce?.serie) || 1);
+  const nNF = resolveNnfNumber({ sale, empresaNfce });
   const idData = buildInfNfeId({
     cUF,
     dhEmi,
     cnpjEmit: emit.CNPJ,
     mod: 65,
-    serie: 1,
+    serie,
     nNF,
     tpEmis: 1,
     cNF
   });
+
+  let respTec = empresaNfce?.respTec || null;
+  if (respTec && csrt?.id && csrt?.secret) {
+    const hashCSRT = buildHashCsrt(csrt.secret, idData.Id);
+    const idNum = Number.parseInt(String(csrt.id).replace(/\D/g, ""), 10);
+    if (hashCSRT && Number.isFinite(idNum) && idNum > 0) {
+      respTec = { ...respTec, idCSRT: idNum, hashCSRT };
+    }
+  }
 
   const ide = {
     cUF,
     cNF,
     natOp: "VENDA DE MERCADORIA",
     mod: 65,
-    serie: 1,
+    serie,
     nNF,
     dhEmi,
     tpNF: 1,
@@ -258,6 +351,7 @@ export function buildNfceRequestBody({ sale, empresa, empresaNfce, ambiente, ref
   const vProd = round2(vProdItens);
   const vNF = round2(Number(sale.totalValue));
   const vDesc = round2(Math.max(0, vProd - vNF));
+  allocateItemDiscounts(det, vDesc);
 
   const total = {
     ICMSTot: {
@@ -303,8 +397,6 @@ export function buildNfceRequestBody({ sale, empresa, empresaNfce, ambiente, ref
     ],
     vTroco: 0
   };
-
-  const respTec = empresaNfce?.respTec || null;
 
   return {
     infNFe: {

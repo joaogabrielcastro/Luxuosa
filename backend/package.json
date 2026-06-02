@@ -3,9 +3,17 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  },
   "scripts": {
+    "check:backend": "node -e \"import('./src/routes.js').then(()=>console.log('backend routes ok')).catch(e=>{console.error(e);process.exit(1)})\"",
+    "test": "node --test src/shared/salePayload.test.js src/shared/pagination.test.js",
+    "test:integration": "node --test src/modules/dashboard/dashboard.queries.integration.test.js",
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
+    "start:prod": "npx prisma migrate deploy && node src/server.js",
+    "worker:nfce": "node src/nfceWorker.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
@@ -13,7 +21,8 @@
     "prisma:status": "prisma migrate status",
     "prisma:studio": "prisma studio",
     "prisma:seed": "node prisma/seed.js",
-    "test:nuvemfiscal": "node scripts/test-nuvemfiscal.mjs"
+    "test:nuvemfiscal": "node scripts/test-nuvemfiscal.mjs",
+    "fiscal:list-tenants": "node scripts/list-tenant-fiscal.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.6.0",
@@ -23,9 +32,7 @@
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
+    "prisma": "^6.6.0",
     "zod": "^3.23.8"
-  },
-  "devDependencies": {
-    "prisma": "^6.6.0"
   }
 }
