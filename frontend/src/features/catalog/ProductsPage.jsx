@@ -36,8 +36,9 @@ export function ProductsPage() {
   const [currentStockPreview, setCurrentStockPreview] = useState(0);
 
   async function load() {
+    if (!token) return;
     const [productsData, categoriesData, brandsData] = await Promise.all([
-      apiClient("/products", { token }),
+      apiClient(`/products?_=${Date.now()}`, { token }),
       apiClient("/categories", { token }),
       apiClient("/brands", { token })
     ]);
@@ -48,7 +49,7 @@ export function ProductsPage() {
 
   useEffect(() => {
     load().catch((err) => setError(err.message));
-  }, []);
+  }, [token]);
 
   async function syncProductStock(productId, desiredStock) {
     const product = await apiClient(`/products/${productId}`, { token });
