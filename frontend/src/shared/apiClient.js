@@ -28,6 +28,7 @@ export class ApiError extends Error {
 export async function apiClient(path, { method = "GET", body, token } = {}) {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     method,
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {})

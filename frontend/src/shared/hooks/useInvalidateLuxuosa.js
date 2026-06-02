@@ -15,9 +15,11 @@ export function useInvalidateLuxuosa(token) {
     return queryClient.invalidateQueries({ queryKey: queryKeys.sales.all(token) });
   }, [queryClient, token]);
 
-  const invalidateProducts = useCallback(() => {
-    if (!token) return Promise.resolve();
-    return queryClient.invalidateQueries({ queryKey: queryKeys.products.all(token) });
+  const invalidateProducts = useCallback(async () => {
+    if (!token) return;
+    const key = queryKeys.products.all(token);
+    await queryClient.invalidateQueries({ queryKey: key });
+    await queryClient.refetchQueries({ queryKey: key, type: "active" });
   }, [queryClient, token]);
 
   const invalidateCustomers = useCallback(() => {
