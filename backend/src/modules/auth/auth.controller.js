@@ -24,14 +24,14 @@ export const authController = {
 
   async me(req, res, next) {
     try {
-      const { tenant, profile } = await authService.me(req.tenantId, req.user.id);
+      const { tenant, user } = await authService.me(req.tenantId, req.user.id);
       return res.json({
         user: {
-          id: profile.id,
-          name: profile.name,
-          email: profile.email,
-          type: profile.type,
-          tenant_id: profile.tenantId
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          type: user.type,
+          tenant_id: user.tenantId
         },
         tenant
       });

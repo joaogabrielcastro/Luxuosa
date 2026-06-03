@@ -5,19 +5,22 @@ import { queryKeys } from "../queryKeys.js";
 export function useInvalidateLuxuosa(token) {
   const queryClient = useQueryClient();
 
-  const invalidateCatalog = useCallback(() => {
-    if (!token) return Promise.resolve();
-    return queryClient.invalidateQueries({ queryKey: queryKeys.catalog.all(token) });
+  const invalidateCatalog = useCallback(async () => {
+    if (!token) return;
+    await queryClient.invalidateQueries({ queryKey: queryKeys.catalog.all(token) });
+    await queryClient.refetchQueries({ queryKey: queryKeys.catalog.all(token) });
   }, [queryClient, token]);
 
-  const invalidateSales = useCallback(() => {
-    if (!token) return Promise.resolve();
-    return queryClient.invalidateQueries({ queryKey: queryKeys.sales.all(token) });
+  const invalidateSales = useCallback(async () => {
+    if (!token) return;
+    await queryClient.invalidateQueries({ queryKey: queryKeys.sales.all(token) });
+    await queryClient.refetchQueries({ queryKey: queryKeys.sales.all(token) });
   }, [queryClient, token]);
 
-  const invalidateProducts = useCallback(() => {
-    if (!token) return Promise.resolve();
-    return queryClient.invalidateQueries({ queryKey: queryKeys.products.all(token) });
+  const invalidateProducts = useCallback(async () => {
+    if (!token) return;
+    await queryClient.invalidateQueries({ queryKey: queryKeys.products.all(token) });
+    await queryClient.refetchQueries({ queryKey: queryKeys.products.all(token) });
   }, [queryClient, token]);
 
   const invalidateCustomers = useCallback(() => {
@@ -30,9 +33,10 @@ export function useInvalidateLuxuosa(token) {
     return queryClient.invalidateQueries({ queryKey: queryKeys.crediario.all(token) });
   }, [queryClient, token]);
 
-  const invalidateStock = useCallback(() => {
-    if (!token) return Promise.resolve();
-    return queryClient.invalidateQueries({ queryKey: queryKeys.stock.all(token) });
+  const invalidateStock = useCallback(async () => {
+    if (!token) return;
+    await queryClient.invalidateQueries({ queryKey: queryKeys.stock.all(token) });
+    await queryClient.refetchQueries({ queryKey: queryKeys.stock.all(token) });
   }, [queryClient, token]);
 
   const invalidateReports = useCallback(() => {

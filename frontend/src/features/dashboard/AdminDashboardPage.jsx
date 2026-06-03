@@ -1,17 +1,13 @@
-import { useMemo, useState } from "react";
-import { apiClient } from "../../shared/apiClient.js";
+import { useMemo } from "react";
 import { useApiQuery } from "../../shared/hooks/useApiQuery.js";
 import { formatCurrencyBRL, formatDateBR } from "../../shared/formatters.js";
 import { useAuth } from "../auth/useAuth.jsx";
-import { useToast } from "../../shared/components/ToastProvider.jsx";
 import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
 import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
 import { StatCard } from "../../shared/components/ui/StatCard.jsx";
 import { Alert } from "../../shared/components/ui/Alert.jsx";
 import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
-import { Button } from "../../shared/components/ui/Button.jsx";
-import { AlertTriangle, CheckCircle2, DollarSign, Plug, ShoppingCart, Wallet, XCircle } from "lucide-react";
-import { Badge } from "../../shared/components/ui/Badge.jsx";
+import { AlertTriangle, DollarSign, ShoppingCart, Wallet } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -39,10 +35,7 @@ const EMPTY_DASHBOARD = {
 };
 
 export function AdminDashboardPage() {
-  const { token, user, tenant } = useAuth();
-  const { showToast } = useToast();
-  const [nfceConn, setNfceConn] = useState(null);
-  const [nfceConnLoading, setNfceConnLoading] = useState(false);
+  const { token } = useAuth();
 
   const {
     data = EMPTY_DASHBOARD,
@@ -51,29 +44,6 @@ export function AdminDashboardPage() {
     isFetching,
     refetch
   } = useApiQuery(["dashboard", "admin"], "/dashboard/admin", { token });
-
-  async function runNfceConnectionTest() {
-    setNfceConnLoading(true);
-    setNfceConn(null);
-    try {
-      const data = await apiClient("/invoices/connection-test", { token });
-      setNfceConn({ ok: data?.ok === true, data });
-      if (data?.ok) {
-        showToast(`Nuvem Fiscal OK — emitente ${data.emitente?.cnpjFormatado || "—"}.`);
-      } else {
-        showToast("Conexão OK, mas há pendências na configuração fiscal.", "error");
-      }
-    } catch (err) {
-      setNfceConn({
-        ok: false,
-        message: err.message,
-        details: err.details
-      });
-      showToast(err.message, "error");
-    } finally {
-      setNfceConnLoading(false);
-    }
-  }
 
   const salesByAttendantData = useMemo(
     () =>
@@ -105,98 +75,6 @@ export function AdminDashboardPage() {
   return (
     <div className="ui-page">
       <PageHeader title="Dashboard" description="Visão geral do desempenho da loja: vendas, ticket médio e alertas de estoque." />
-      {user?.type === "ADMIN" ? (
-        <div className="mb-4">
-        <SectionCard
-          title="Fiscal — Nuvem Fiscal"
-          description="Verifica se o CNPJ desta loja está na Nuvem Fiscal e pronto para emitir NFC-e."
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              className="gap-2 text-sm"
-              disabled={nfceConnLoading}
-              onClick={runNfceConnectionTest}
-            >
-              <Plug className="h-4 w-4" />
-              {nfceConnLoading ? "Verificando…" : "Verificar configuração fiscal"}
-            </Button>
-            {tenant?.enableNfceEmission ? (
-              <Badge variant="success">NFC-e ativa nesta loja</Badge>
-            ) : (
-              <Badge variant="neutral">NFC-e desligada</Badge>
-            )}
-          </div>
-
-          {tenant?.cnpj ? (
-            <p className="mt-3 text-sm text-slate-600">
-              CNPJ cadastrado nesta loja:{" "}
-              <span className="font-semibold text-slate-900">{tenant.cnpj.replace(/\D/g, "").replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")}</span>
-            </p>
-          ) : null}
-
-          {nfceConn?.data ? (
-            <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                {nfceConn.data.ok ? (
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600" aria-hidden />
-                ) : (
-                  <XCircle className="h-5 w-5 text-amber-600" aria-hidden />
-                )}
-                <span className="text-sm font-semibold text-slate-900">
-                  {nfceConn.data.ok ? "Pronto para emitir" : "Configuração incompleta"}
-                </span>
-                <Badge variant={nfceConn.data.environment === "sandbox" ? "warning" : "info"}>
-                  {nfceConn.data.environment === "sandbox" ? "Sandbox" : "Produção"}
-                </Badge>
-              </div>
-
-              <dl className="grid gap-2 text-sm sm:grid-cols-2">
-                <div>
-                  <dt className="text-slate-500">Emitente na NFC-e</dt>
-                  <dd className="font-medium text-slate-900">
-                    {nfceConn.data.emitente?.cnpjFormatado || "—"}
-                    {nfceConn.data.emitente?.nomeFantasia || nfceConn.data.emitente?.razaoSocial
-                      ? ` — ${nfceConn.data.emitente.nomeFantasia || nfceConn.data.emitente.razaoSocial}`
-                      : null}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-slate-500">Cadastro na Nuvem</dt>
-                  <dd className="font-medium text-slate-900">
-                    {nfceConn.data.emitente?.cadastradoNaNuvem ? "Sim" : "Não — cadastre este CNPJ no console"}
-                  </dd>
-                </div>
-                {nfceConn.data.nfce?.ambiente ? (
-                  <div>
-                    <dt className="text-slate-500">Ambiente NFC-e (Nuvem)</dt>
-                    <dd className="font-medium capitalize text-slate-900">{nfceConn.data.nfce.ambiente}</dd>
-                  </div>
-                ) : null}
-              </dl>
-
-              {nfceConn.data.warnings?.length ? (
-                <ul className="space-y-2 border-t border-slate-200 pt-3">
-                  {nfceConn.data.warnings.map((w) => (
-                    <li key={w} className="flex gap-2 text-xs leading-relaxed text-amber-900">
-                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
-                      {w}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          ) : null}
-
-          {nfceConn && !nfceConn.ok && nfceConn.message ? (
-            <Alert className="mt-3" variant="danger" title="Falha na verificação">
-              {nfceConn.message}
-            </Alert>
-          ) : null}
-        </SectionCard>
-        </div>
-      ) : null}
       <section className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Faturamento do mes"

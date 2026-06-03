@@ -63,7 +63,11 @@ export function SalesPage() {
     <div className="ui-page">
       <PageHeader
         title="Vendas"
-        description="Registre vendas, aplique descontos e acompanhe a emissão de NFC-e quando habilitada para sua loja."
+        description={
+          enableNfceEmission
+            ? "Registre vendas, aplique descontos e acompanhe a nota fiscal quando necessário."
+            : "Registre vendas, aplique descontos e acompanhe o histórico da loja."
+        }
       />
       <SalesFormCard
         editingSaleId={editingSaleId}

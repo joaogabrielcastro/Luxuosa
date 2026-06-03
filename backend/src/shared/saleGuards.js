@@ -6,7 +6,7 @@ import { InvoiceStatus, NfceIssueJobStatus } from "@prisma/client";
 export async function assertSaleMutable(tx, tenantId, saleId) {
   const sale = await tx.sale.findFirst({
     where: { tenantId, id: saleId },
-    include: { invoice: true }
+    include: { invoice: true, items: true }
   });
   if (!sale) {
     const err = new Error("Venda nao encontrada.");

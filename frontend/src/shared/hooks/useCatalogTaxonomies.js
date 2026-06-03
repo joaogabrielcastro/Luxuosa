@@ -5,7 +5,7 @@ import { unwrapList } from "../apiList.js";
 import { queryKeys } from "../queryKeys.js";
 
 const LIST_PARAMS = new URLSearchParams({ take: "500", skip: "0" }).toString();
-const CATALOG_STALE_MS = 60_000;
+const CATALOG_STALE_MS = 0;
 
 export function useCatalogTaxonomies(token) {
   const [variationsQ, categoriesQ, brandsQ] = useQueries({

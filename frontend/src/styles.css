@@ -125,13 +125,17 @@
     color: transparent;
   }
 
-  .ui-nav-active {
-    @apply text-white shadow-md;
-    background: var(--gradient-brand);
-  }
-
   .ui-nav-item {
     @apply flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900;
+  }
+
+  /* Item ativo: fundo claro + texto escuro (evita gradiente forte ilegivel) */
+  .ui-nav-item.ui-nav-active {
+    @apply bg-violet-100 font-semibold text-violet-900 shadow-none ring-1 ring-violet-200;
+  }
+
+  .ui-nav-item.ui-nav-active:hover {
+    @apply bg-violet-100 text-violet-900;
   }
 
   .ui-table-head {

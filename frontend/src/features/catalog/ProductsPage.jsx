@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../shared/apiClient.js";
 import { queryKeys } from "../../shared/queryKeys.js";
 import { useCatalogTaxonomies } from "../../shared/hooks/useCatalogTaxonomies.js";
@@ -51,6 +51,7 @@ export function ProductsPage() {
   const { confirm } = useConfirm();
   const [editingId, setEditingId] = useState("");
   const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
   const { invalidateProducts, invalidateCatalog } = useInvalidateLuxuosa(token);
   const { categories, brands } = useCatalogTaxonomies(token);
   const [productSkip, setProductSkip] = useState(0);
@@ -81,6 +82,7 @@ export function ProductsPage() {
   const productsQuery = useQuery({
     queryKey: queryKeys.products.list(token, listParams),
     enabled: Boolean(token),
+    staleTime: 0,
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("take", String(productTake));
@@ -233,6 +235,13 @@ export function ProductsPage() {
         showToast("Produto atualizado.");
         await refreshProducts();
         const full = await apiClient(`/products/${editingId}`, { token });
+        queryClient.setQueryData(queryKeys.products.list(token, listParams), (old) => {
+          if (!old?.items) return old;
+          return {
+            ...old,
+            items: old.items.map((p) => (p.id === editingId ? { ...p, ...full } : p))
+          };
+        });
         startEdit(full);
       } else if (response?.id) {
         showToast("Produto criado.");

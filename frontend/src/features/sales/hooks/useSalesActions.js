@@ -6,6 +6,7 @@ import {
   parseCurrencyInput
 } from "../../../shared/formatters.js";
 import { DEFAULT_SALE_FORM } from "../sales.constants.js";
+import { findVariationsByExactCodeOrName } from "../sales.utils.js";
 
 export function useSalesActions({ token, variations, load, setError, showToast, confirm }) {
   const [form, setForm] = useState(DEFAULT_SALE_FORM);
@@ -85,14 +86,18 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
     );
   }
 
-  /** Bip ou digitacao: corresponde ao SKU do produto e adiciona/atualiza linha. */
+  /** Bip ou digitacao: SKU ou nome exato do produto. */
   async function addItemByBarcode(code) {
     const raw = String(code ?? "").trim();
     if (!raw) return;
 
-    const candidates = variations.filter((v) => String(v.product?.sku || "").trim() === raw);
+    const candidates = findVariationsByExactCodeOrName(variations, raw);
     if (!candidates.length) {
-      showToast("Codigo / SKU nao encontrado.", "error");
+      showToast("Produto nao encontrado (SKU ou nome).", "error");
+      return;
+    }
+    if (candidates.length > 1) {
+      showToast("Varios tamanhos/cores: escolha na lista de busca.", "error");
       return;
     }
 

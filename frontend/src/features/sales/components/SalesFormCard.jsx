@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { brandIdsForCategory, variationsForCategoryAndBrand } from "../sales.utils.js";
+import {
+  brandIdsForCategory,
+  filterVariationsBySearch,
+  findVariationsByExactCodeOrName,
+  variationsForCategoryAndBrand
+} from "../sales.utils.js";
 import { SectionCard } from "../../../shared/components/ui/SectionCard.jsx";
 import { FormErrorSummary } from "../../../shared/components/FormErrorSummary.jsx";
 import { Input } from "../../../shared/components/ui/Input.jsx";
@@ -92,28 +97,24 @@ export function SalesFormCard({
   }, [items, form.discountValue, form.discountPercent]);
 
   const quickOptions = useMemo(() => {
-    const q = unifiedInput.trim().toLowerCase();
-    if (!q) return [];
-    return variations
-      .filter((v) => {
-        if (getRemainingUnits && getRemainingUnits(v.id) < 1) return false;
-        const name = String(v.product?.name || "").toLowerCase();
-        const sku = String(v.product?.sku || "").toLowerCase();
-        const size = String(v.size || "").toLowerCase();
-        const color = String(v.color || "").toLowerCase();
-        return `${name} ${sku} ${size} ${color}`.includes(q);
-      })
-      .slice(0, 8);
+    if (!unifiedInput.trim()) return [];
+    return filterVariationsBySearch(variations, unifiedInput, { getRemainingUnits }).slice(0, 8);
   }, [unifiedInput, variations, getRemainingUnits]);
 
   async function handleUnifiedEnter() {
     const raw = unifiedInput.trim();
     if (!raw) return;
 
-    const skuHits = variations.filter((v) => String(v.product?.sku || "").trim() === raw);
-    if (skuHits.length) {
-      await addItemByBarcode(raw);
+    const exactHits = findVariationsByExactCodeOrName(variations, raw).filter(
+      (v) => !getRemainingUnits || getRemainingUnits(v.id) >= 1
+    );
+    if (exactHits.length === 1) {
+      addItemByVariationId(exactHits[0].id);
       setUnifiedInput("");
+      return;
+    }
+    if (exactHits.length > 1) {
+      showToast("Varios tamanhos/cores para este produto: escolha na lista abaixo.", "error");
       return;
     }
 
@@ -169,7 +170,7 @@ export function SalesFormCard({
             <Input
               id="sale-unified-search"
               className="text-base md:text-lg"
-              placeholder="Busca ou digite o SKU e Enter"
+              placeholder="Nome, SKU, tamanho ou cor — Enter para adicionar"
               value={unifiedInput}
               onChange={(e) => setUnifiedInput(e.target.value)}
               onKeyDown={(e) => {
@@ -460,12 +461,6 @@ export function SalesFormCard({
                 </span>
               </span>
             </label>
-          ) : null}
-          {!editingSaleId && !enableNfceEmission ? (
-            <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              <strong className="text-slate-800">NFC-e desligada para esta loja.</strong> As vendas registram apenas
-              estoque e totais.
-            </p>
           ) : null}
         </section>
 

@@ -1,8 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../features/auth/useAuth.jsx";
 import { BrandLogo } from "./BrandLogo.jsx";
-import { FiscalEmitenteBanner } from "./FiscalEmitenteBanner.jsx";
 import { Button } from "./ui/Button.jsx";
 import {
   BarChart3,
@@ -19,35 +18,38 @@ import {
   X
 } from "lucide-react";
 
-const navGroups = [
-  {
-    label: "Visão geral",
-    items: [{ to: "/", label: "Dashboard", end: true, icon: LayoutGrid }]
-  },
-  {
-    label: "Catálogo",
-    items: [
-      { to: "/catalog/categories", label: "Categorias", icon: Tags },
-      { to: "/catalog/brands", label: "Marcas", icon: Boxes },
-      { to: "/catalog/products", label: "Produtos", icon: PackageSearch }
-    ]
-  },
-  {
-    label: "Vendas",
-    items: [
-      { to: "/vendas", label: "Vendas", icon: ShoppingCart },
-      { to: "/crediario", label: "Crediário", icon: WalletCards },
-      { to: "/clientes", label: "Clientes", icon: Users }
-    ]
-  },
-  {
-    label: "Operação",
-    items: [
-      { to: "/estoque/movimentos", label: "Estoque", icon: BarChart3 },
-      { to: "/relatorios", label: "Relatórios", icon: ReceiptText }
-    ]
-  }
-];
+function buildNavGroups() {
+  const salesItems = [
+    { to: "/vendas", label: "Vendas", icon: ShoppingCart },
+    { to: "/crediario", label: "Crediário", icon: WalletCards },
+    { to: "/clientes", label: "Clientes", icon: Users }
+  ];
+  return [
+    {
+      label: "Visão geral",
+      items: [{ to: "/", label: "Dashboard", end: true, icon: LayoutGrid }]
+    },
+    {
+      label: "Catálogo",
+      items: [
+        { to: "/catalog/categories", label: "Categorias", icon: Tags },
+        { to: "/catalog/brands", label: "Marcas", icon: Boxes },
+        { to: "/catalog/products", label: "Produtos", icon: PackageSearch }
+      ]
+    },
+    {
+      label: "Vendas",
+      items: salesItems
+    },
+    {
+      label: "Operação",
+      items: [
+        { to: "/estoque/movimentos", label: "Estoque", icon: BarChart3 },
+        { to: "/relatorios", label: "Relatórios", icon: ReceiptText }
+      ]
+    }
+  ];
+}
 
 const roleLabel = {
   ADMIN: "Administrador",
@@ -57,6 +59,7 @@ const roleLabel = {
 export function AppShell({ children }) {
   const { tenant, user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const navGroups = useMemo(() => buildNavGroups(), []);
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -149,7 +152,7 @@ export function AppShell({ children }) {
                       end={item.end}
                       onClick={() => setMenuOpen(false)}
                       className={({ isActive }) =>
-                        isActive ? "ui-nav-active ui-nav-item" : "ui-nav-item"
+                        isActive ? "ui-nav-item ui-nav-active" : "ui-nav-item"
                       }
                     >
                       <item.icon className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
@@ -166,10 +169,7 @@ export function AppShell({ children }) {
           </div>
         </aside>
 
-        <main className="ui-page min-w-0 flex-1 px-4 py-5 lg:px-0 lg:py-0">
-          <FiscalEmitenteBanner />
-          {content}
-        </main>
+        <main className="ui-page min-w-0 flex-1 px-4 py-5 lg:px-0 lg:py-0">{content}</main>
       </div>
 
       {import.meta.env.VITE_GIT_SHA ? (

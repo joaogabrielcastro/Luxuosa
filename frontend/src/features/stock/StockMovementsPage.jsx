@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../shared/apiClient.js";
 import { useAuth } from "../auth/useAuth.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
@@ -17,9 +17,12 @@ import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
 import { Badge } from "../../shared/components/ui/Badge.jsx";
 import { StatCard } from "../../shared/components/ui/StatCard.jsx";
 
+const VARIATIONS_LIST_Q = new URLSearchParams({ take: "500", skip: "0" }).toString();
+
 export function StockMovementsPage() {
   const { token } = useAuth();
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
   const { refreshAfterStockMutation } = useInvalidateLuxuosa(token);
   const [submitting, setSubmitting] = useState(false);
   const [listSkip, setListSkip] = useState(0);
@@ -35,6 +38,7 @@ export function StockMovementsPage() {
   const movementsQuery = useQuery({
     queryKey: queryKeys.stock.movements(token, { skip: listSkip, take: pageSize }),
     enabled: Boolean(token),
+    staleTime: 0,
     queryFn: () => apiClient(`/stock-movements?take=${pageSize}&skip=${listSkip}`, { token })
   });
 
@@ -75,7 +79,19 @@ export function StockMovementsPage() {
       });
       showToast(form.type === "ENTRY" ? "Entrada registrada." : "Saida registrada.");
       setForm((prev) => ({ ...prev, quantity: "1" }));
-      await refreshAfterStockMutation();
+      setListSkip(0);
+      const listParams = { skip: 0, take: pageSize };
+      await Promise.all([
+        queryClient.fetchQuery({
+          queryKey: queryKeys.stock.movements(token, listParams),
+          queryFn: () => apiClient(`/stock-movements?take=${pageSize}&skip=0`, { token })
+        }),
+        queryClient.fetchQuery({
+          queryKey: queryKeys.catalog.variations(token),
+          queryFn: () => apiClient(`/product-variations?${VARIATIONS_LIST_Q}`, { token })
+        }),
+        refreshAfterStockMutation()
+      ]);
     } catch (err) {
       showToast(err.message, "error");
     } finally {

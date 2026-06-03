@@ -35,7 +35,6 @@ const CrediarioPage = lazy(() =>
 const CustomersPage = lazy(() =>
   import("../features/customers/CustomersPage.jsx").then((m) => ({ default: m.CustomersPage }))
 );
-
 function PrivateRoute({ children }) {
   const { token } = useAuth();
   return token ? children : <Navigate to="/login" replace />;

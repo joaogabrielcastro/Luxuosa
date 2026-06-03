@@ -11,7 +11,6 @@ import { invoiceRoutes } from "./modules/invoices/invoice.routes.js";
 import { stockMovementRoutes } from "./modules/stockMovements/stockMovement.routes.js";
 import { reportsRoutes } from "./modules/reports/reports.routes.js";
 import { crediarioRoutes } from "./modules/crediario/crediario.routes.js";
-
 const router = Router();
 
 router.get("/health", (_req, res) => res.json({ ok: true }));

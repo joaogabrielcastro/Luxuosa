@@ -29,6 +29,54 @@ export function SalesTableCard({
 }) {
   const canPrev = salesSkip > 0;
   const canNext = salesSkip + salesTake < totalSales;
+
+  const tableColumns = [
+    { key: "date", label: "Data" },
+    { key: "amount", label: "Total" },
+    { key: "payment", label: "Pagamento" },
+    { key: "status", label: "Status" },
+    ...(enableNfceEmission ? [{ key: "nfce", label: "Nota fiscal" }] : []),
+    { key: "actions", label: "Acoes" }
+  ];
+
+  const tableFilters = [
+    {
+      id: "payment",
+      value: paymentFilter,
+      onChange: setPaymentFilter,
+      options: [
+        { value: "", label: "Todos pagamentos" },
+        { value: "PIX", label: "PIX" },
+        { value: "CASH", label: "Dinheiro" },
+        { value: "CREDIT_CARD", label: "Cartao credito" },
+        { value: "DEBIT_CARD", label: "Cartao debito" },
+        { value: "INSTALLMENT", label: "Parcelado" }
+      ],
+      matcher: (row, value) => row.paymentMethod === value
+    },
+    ...(enableNfceEmission
+      ? [
+          {
+            id: "nfce",
+            value: nfceFilter,
+            onChange: setNfceFilter,
+            options: [
+              { value: "", label: "Todas" },
+              { value: "WAITING", label: "Sem registro" },
+              { value: "PENDING", label: "Pendentes" },
+              { value: "ISSUED", label: "Autorizadas" },
+              { value: "ERROR", label: "Com erro" }
+            ],
+            matcher: (row, value) => {
+              if (value === "WAITING") return !row.invoice;
+              if (!row.invoice) return false;
+              return row.invoice.status === value;
+            }
+          }
+        ]
+      : [])
+  ];
+
   const saleStatusVariant = (status) => {
     if (status === "PAID") return "success";
     if (status === "CANCELED") return "danger";
@@ -65,28 +113,18 @@ export function SalesTableCard({
           </div>
         }
       >
-      <div className="mb-2 text-xs text-slate-600">
-        <span>
-          Filtros aplicados no servidor para melhor performance.
-        </span>
-      </div>
       <DataTable
       data={sales}
-      columns={[
-        { key: "date", label: "Data" },
-        { key: "amount", label: "Total" },
-        { key: "payment", label: "Pagamento" },
-        { key: "status", label: "Status" },
-        { key: "nfce", label: "NFC-e" },
-        { key: "actions", label: "Acoes" }
-      ]}
+      columns={tableColumns}
       getRowKey={(row) => row.id}
       emptyMessage="Sem vendas."
       pageSize={Math.max(sales.length, 1)}
       search={{
         query: search,
         onQueryChange: setSearch,
-        placeholder: "Buscar por id, pagamento ou chave NFC-e...",
+        placeholder: enableNfceEmission
+          ? "Buscar por pagamento ou nota fiscal..."
+          : "Buscar por pagamento ou status...",
         matcher: (row, q) => {
           const needle = q.toLowerCase().trim();
           if (!needle) return true;
@@ -94,43 +132,11 @@ export function SalesTableCard({
           const st = saleStatusLabel(row.status);
           const key = row.invoice?.key ? String(row.invoice.key) : "";
           const job = nfceJobStatusLabel(row.nfceJob?.status);
-          const hay = `${row.id} ${row.paymentMethod} ${pay} ${row.status} ${st} ${key} ${job}`.toLowerCase();
+          const hay = `${row.paymentMethod} ${pay} ${row.status} ${st} ${key} ${job}`.toLowerCase();
           return hay.includes(needle);
         }
       }}
-      filters={[
-        {
-          id: "payment",
-          value: paymentFilter,
-          onChange: setPaymentFilter,
-          options: [
-            { value: "", label: "Todos pagamentos" },
-            { value: "PIX", label: "PIX" },
-            { value: "CASH", label: "Dinheiro" },
-            { value: "CREDIT_CARD", label: "Cartao credito" },
-            { value: "DEBIT_CARD", label: "Cartao debito" },
-            { value: "INSTALLMENT", label: "Parcelado" }
-          ],
-          matcher: (row, value) => row.paymentMethod === value
-        },
-        {
-          id: "nfce",
-          value: nfceFilter,
-          onChange: setNfceFilter,
-          options: [
-            { value: "", label: "Todas NFC-e" },
-            { value: "WAITING", label: "Sem registro" },
-            { value: "PENDING", label: "Pendentes" },
-            { value: "ISSUED", label: "Autorizadas" },
-            { value: "ERROR", label: "Com erro" }
-          ],
-          matcher: (row, value) => {
-            if (value === "WAITING") return !row.invoice;
-            if (!row.invoice) return false;
-            return row.invoice.status === value;
-          }
-        }
-      ]}
+      filters={tableFilters}
       renderCells={(sale) => (
         <>
           <td className="py-2 whitespace-nowrap">{formatDateTimeBR(sale.occurredAt)}</td>
@@ -139,17 +145,8 @@ export function SalesTableCard({
           <td className="py-2">
             <Badge variant={saleStatusVariant(sale.status)}>{saleStatusLabel(sale.status)}</Badge>
           </td>
+          {enableNfceEmission ? (
           <td className="max-w-[220px] py-2 align-top text-xs">
-            {!enableNfceEmission && sale.invoice?.status !== "ISSUED" ? (
-              <span className="text-slate-500">
-                {sale.nfceJob?.lastError?.includes("nao habilitada") ? (
-                  <span title={sale.nfceJob.lastError}>Sem NFC-e (loja)</span>
-                ) : (
-                  "Sem emissao fiscal nesta loja"
-                )}
-              </span>
-            ) : null}
-            {enableNfceEmission || sale.invoice?.status === "ISSUED" ? (
               <>
             {sale.nfceJob?.status && sale.nfceJob.status !== "COMPLETED" ? (
               <div className="mb-1">
@@ -239,8 +236,8 @@ export function SalesTableCard({
               </Button>
             ) : null}
               </>
-            ) : null}
           </td>
+          ) : null}
           <td className="py-2">
             {sale.status !== "CANCELED" ? (
               <div className="inline-flex gap-2">
