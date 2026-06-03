@@ -254,6 +254,7 @@ export function ProductsPage() {
         showToast("Produto atualizado.");
         const full = await apiClient(`/products/${editingId}`, { token });
         patchProductInListCaches(full);
+        await refreshProducts();
         startEdit(full);
       } else if (response?.id) {
         showToast("Produto criado.");
