@@ -45,13 +45,27 @@ const EMPTY_PRODUCT_FORM = {
   minStock: ""
 };
 
+function buildProductPayload(form) {
+  const skuTrim = String(form.sku || "").trim();
+  return {
+    name: String(form.name || "").trim(),
+    description: String(form.description || "").trim() || undefined,
+    categoryId: form.categoryId,
+    brandId: form.brandId,
+    sku: skuTrim === "" ? null : skuTrim,
+    price: parseCurrencyInput(form.price),
+    cost: parseCurrencyInput(form.cost),
+    minStock: Number(form.minStock || 0)
+  };
+}
+
 export function ProductsPage() {
   const { token } = useAuth();
+  const queryClient = useQueryClient();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
   const [editingId, setEditingId] = useState("");
   const [loading, setLoading] = useState(false);
-  const queryClient = useQueryClient();
   const { invalidateProducts, invalidateCatalog } = useInvalidateLuxuosa(token);
   const { categories, brands } = useCatalogTaxonomies(token);
   const [productSkip, setProductSkip] = useState(0);
@@ -105,6 +119,17 @@ export function ProductsPage() {
   useEffect(() => {
     setProductSkip(0);
   }, [query, categoryFilter, brandFilter]);
+
+  function patchProductInListCaches(product) {
+    if (!product?.id) return;
+    queryClient.setQueriesData({ queryKey: queryKeys.products.all(token) }, (cached) => {
+      if (!cached?.items) return cached;
+      return {
+        ...cached,
+        items: cached.items.map((row) => (row.id === product.id ? { ...row, ...product } : row))
+      };
+    });
+  }
 
   async function refreshProducts() {
     await Promise.all([invalidateProducts(), invalidateCatalog()]);
@@ -208,17 +233,11 @@ export function ProductsPage() {
     }
     setLoading(true);
     try {
-      const skuTrim = String(form.sku || "").trim();
+      const payload = buildProductPayload(form);
       const response = await apiClient(editingId ? `/products/${editingId}` : "/products", {
         method: editingId ? "PUT" : "POST",
         token,
-        body: {
-          ...form,
-          sku: skuTrim === "" ? null : skuTrim,
-          price: parseCurrencyInput(form.price),
-          cost: parseCurrencyInput(form.cost),
-          minStock: Number(form.minStock || 0)
-        }
+        body: payload
       });
       const productId = editingId || response?.id;
       if (productId) {
@@ -233,20 +252,14 @@ export function ProductsPage() {
 
       if (editingId) {
         showToast("Produto atualizado.");
-        await refreshProducts();
         const full = await apiClient(`/products/${editingId}`, { token });
-        queryClient.setQueryData(queryKeys.products.list(token, listParams), (old) => {
-          if (!old?.items) return old;
-          return {
-            ...old,
-            items: old.items.map((p) => (p.id === editingId ? { ...p, ...full } : p))
-          };
-        });
+        patchProductInListCaches(full);
         startEdit(full);
       } else if (response?.id) {
         showToast("Produto criado.");
-        await refreshProducts();
         const full = await apiClient(`/products/${response.id}`, { token });
+        patchProductInListCaches(full);
+        await refreshProducts();
         startEdit(full);
       } else {
         await refreshProducts();

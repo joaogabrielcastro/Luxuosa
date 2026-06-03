@@ -19,8 +19,9 @@ export function useInvalidateLuxuosa(token) {
 
   const invalidateProducts = useCallback(async () => {
     if (!token) return;
-    await queryClient.invalidateQueries({ queryKey: queryKeys.products.all(token) });
-    await queryClient.refetchQueries({ queryKey: queryKeys.products.all(token) });
+    const key = queryKeys.products.all(token);
+    await queryClient.invalidateQueries({ queryKey: key });
+    await queryClient.refetchQueries({ queryKey: key, type: "active" });
   }, [queryClient, token]);
 
   const invalidateCustomers = useCallback(() => {
