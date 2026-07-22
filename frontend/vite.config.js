@@ -30,9 +30,9 @@ export default defineConfig({
   plugins: [luxuosaSpaFallback(), react()],
   server: {
     host: "0.0.0.0",
-    // 5180: evita conflito com outro app na 5173 (porta padrão do Vite)
-    port: 5180,
-    // Se 5180 estiver ocupado, falhar em vez de subir noutra porta (evita abrir o projeto errado e achar que é "tela antiga")
+    // 3006: porta fixa do frontend neste repo
+    port: 3006,
+    // Se 3006 estiver ocupado, falhar em vez de subir noutra porta (evita abrir o projeto errado e achar que é "tela antiga")
     strictPort: true,
     watch: {
       usePolling: true

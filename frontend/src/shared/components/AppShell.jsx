@@ -6,6 +6,7 @@ import { Button } from "./ui/Button.jsx";
 import {
   BarChart3,
   Boxes,
+  FileInput,
   LayoutGrid,
   LogOut,
   Menu,
@@ -45,6 +46,7 @@ function buildNavGroups() {
       label: "Operação",
       items: [
         { to: "/estoque/movimentos", label: "Estoque", icon: BarChart3 },
+        { to: "/estoque/importar-nfe", label: "Importar NF-e", icon: FileInput },
         { to: "/relatorios", label: "Relatórios", icon: ReceiptText }
       ]
     }

@@ -57,6 +57,16 @@ enum CreditSaleStatus {
   CANCELED
 }
 
+enum NfeImportStatus {
+  COMPLETED
+}
+
+enum NfeImportItemAction {
+  LINKED
+  CREATED
+  IGNORED
+}
+
 model Tenant {
   id               String   @id @default(cuid())
   name             String
@@ -82,6 +92,10 @@ model Tenant {
   creditSales    CreditSale[]
   creditSaleItems CreditSaleItem[]
   creditPayments CreditPayment[]
+  suppliers      Supplier[]
+  productSupplierCodes ProductSupplierCode[]
+  nfeImports     NfeImport[]
+  nfeImportItems NfeImportItem[]
 }
 
 model User {
@@ -96,6 +110,7 @@ model User {
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
   sales     Sale[]
   creditSales CreditSale[]
+  nfeImports NfeImport[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -172,6 +187,8 @@ model Product {
   category      Category @relation(fields: [categoryId], references: [id])
   brand         Brand    @relation(fields: [brandId], references: [id])
   variations    ProductVariation[]
+  supplierCodes ProductSupplierCode[]
+  nfeImportItems NfeImportItem[]
 
   @@index([tenantId])
   @@index([tenantId, categoryId])
@@ -193,6 +210,7 @@ model ProductVariation {
   stockMoves    StockMovement[]
   saleItems     SaleItem[]
   creditSaleItems CreditSaleItem[]
+  nfeImportItems NfeImportItem[]
 
   @@index([tenantId])
   @@index([tenantId, productId])
@@ -206,12 +224,107 @@ model StockMovement {
   type               StockMovementType
   quantity           Int
   occurredAt         DateTime          @default(now())
+  nfeImportId        String?
 
   tenant             Tenant            @relation(fields: [tenantId], references: [id])
   productVariation   ProductVariation  @relation(fields: [productVariationId], references: [id])
+  nfeImport          NfeImport?        @relation(fields: [nfeImportId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, productVariationId])
+  @@index([tenantId, nfeImportId])
+}
+
+model Supplier {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  name               String
+  tradeName          String?
+  cnpj               String
+  stateRegistration  String?
+  createdAt          DateTime @default(now())
+
+  tenant             Tenant   @relation(fields: [tenantId], references: [id])
+  productCodes       ProductSupplierCode[]
+  nfeImports         NfeImport[]
+
+  @@unique([tenantId, cnpj])
+  @@index([tenantId])
+}
+
+model ProductSupplierCode {
+  id         String   @id @default(cuid())
+  tenantId   String
+  productId  String
+  supplierId String
+  code       String
+  createdAt  DateTime @default(now())
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id])
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+
+  @@unique([tenantId, supplierId, code])
+  @@index([tenantId])
+  @@index([tenantId, productId])
+}
+
+model NfeImport {
+  id            String          @id @default(cuid())
+  tenantId      String
+  accessKey     String
+  number        String
+  series        String
+  issuedAt      DateTime
+  importedAt    DateTime        @default(now())
+  supplierId    String?
+  supplierCnpj  String
+  supplierName  String
+  totalValue    Decimal         @db.Decimal(12, 2)
+  paymentInfo   String?
+  itemCount     Int
+  status        NfeImportStatus @default(COMPLETED)
+  userId        String
+
+  tenant        Tenant          @relation(fields: [tenantId], references: [id])
+  supplier      Supplier?       @relation(fields: [supplierId], references: [id])
+  user          User            @relation(fields: [userId], references: [id])
+  items         NfeImportItem[]
+  stockMoves    StockMovement[]
+
+  @@unique([tenantId, accessKey])
+  @@index([tenantId])
+  @@index([tenantId, importedAt])
+  @@index([tenantId, supplierId])
+}
+
+model NfeImportItem {
+  id                 String              @id @default(cuid())
+  tenantId           String
+  nfeImportId        String
+  lineNumber         Int
+  supplierCode       String?
+  ean                String?
+  description        String
+  ncm                String?
+  cfop               String?
+  unit               String?
+  quantity           Decimal             @db.Decimal(12, 4)
+  quantityEntered    Int
+  unitValue          Decimal             @db.Decimal(12, 4)
+  totalValue         Decimal             @db.Decimal(12, 2)
+  productId          String?
+  productVariationId String?
+  stockMovementId    String?
+  action             NfeImportItemAction
+
+  tenant             Tenant              @relation(fields: [tenantId], references: [id])
+  nfeImport          NfeImport           @relation(fields: [nfeImportId], references: [id], onDelete: Cascade)
+  product            Product?            @relation(fields: [productId], references: [id])
+  productVariation   ProductVariation?   @relation(fields: [productVariationId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, nfeImportId])
 }
 
 model Sale {

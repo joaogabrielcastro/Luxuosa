@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../shared/apiClient.js";
 import { useAuth } from "../auth/useAuth.jsx";
@@ -101,7 +102,17 @@ export function StockMovementsPage() {
 
   return (
     <div className="ui-page">
-      <PageHeader title="Movimentacoes de estoque" description="Ajustes manuais e historico operacional." />
+      <PageHeader
+        title="Movimentacoes de estoque"
+        description="Ajustes manuais e historico operacional."
+      />
+      <div className="mb-1">
+        <Link to="/estoque/importar-nfe">
+          <Button type="button" variant="secondary" className="text-sm">
+            Importar XML NF-e
+          </Button>
+        </Link>
+      </div>
       <section className="grid gap-3 sm:grid-cols-3">
         <StatCard label="Movimentacoes na pagina" value={movements.length} />
         <StatCard label="Entradas" value={movements.filter((m) => m.type === "ENTRY").length} />

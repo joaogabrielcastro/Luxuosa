@@ -16,12 +16,13 @@ function notifyUnauthorized() {
  * Erro de API com mensagem em portugues e detalhes opcionais por campo.
  */
 export class ApiError extends Error {
-  constructor(message, { status, code, details } = {}) {
+  constructor(message, { status, code, details, payload } = {}) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
     this.details = details || [];
+    this.payload = payload || null;
   }
 }
 
@@ -40,7 +41,7 @@ export async function apiClient(path, { method = "GET", body, token } = {}) {
     const data = await response.json().catch(() => null);
     if (response.status === 401) notifyUnauthorized();
     const { message, code, details, status } = parseApiErrorPayload(data, response.status);
-    throw new ApiError(message, { status, code, details });
+    throw new ApiError(message, { status, code, details, payload: data });
   }
 
   if (response.status === 204) return null;

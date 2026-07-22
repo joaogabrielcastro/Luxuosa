@@ -26,7 +26,8 @@ export const queryKeys = {
   },
   stock: {
     all: (token) => ["stock", token],
-    movements: (token, params) => ["stock", token, "movements", params]
+    movements: (token, params) => ["stock", token, "movements", params],
+    nfeImports: (token, params) => ["stock", token, "nfe-imports", params]
   },
   reports: {
     all: (token) => ["reports", token],

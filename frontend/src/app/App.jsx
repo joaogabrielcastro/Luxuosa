@@ -26,6 +26,9 @@ const SalesPage = lazy(() =>
 const StockMovementsPage = lazy(() =>
   import("../features/stock/StockMovementsPage.jsx").then((m) => ({ default: m.StockMovementsPage }))
 );
+const NfeImportPage = lazy(() =>
+  import("../features/stock/NfeImportPage.jsx").then((m) => ({ default: m.NfeImportPage }))
+);
 const ReportsPage = lazy(() =>
   import("../features/reports/ReportsPage.jsx").then((m) => ({ default: m.ReportsPage }))
 );
@@ -67,6 +70,7 @@ function AppRoutes() {
       <Route path="/crediario" element={<PrivateShell><CrediarioPage /></PrivateShell>} />
       <Route path="/clientes" element={<PrivateShell><CustomersPage /></PrivateShell>} />
       <Route path="/estoque/movimentos" element={<PrivateShell><StockMovementsPage /></PrivateShell>} />
+      <Route path="/estoque/importar-nfe" element={<PrivateShell><NfeImportPage /></PrivateShell>} />
       <Route path="/relatorios" element={<PrivateShell><ReportsPage /></PrivateShell>} />
     </Routes>
   );

@@ -8,7 +8,9 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: luxuosa
     ports:
-      - "5432:5432"
+      # 5434 no host: evita conflito com outros Postgres locais (ex.: colombocal na 5432).
+      # Dentro da rede Docker o backend continua em db:5432.
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -38,7 +40,7 @@ services:
       - "3001:3001"
     volumes:
       - ./backend:/app
-      - /app/node_modules
+      - backend_node_modules:/app/node_modules
 
   nfce-worker:
     build:
@@ -59,7 +61,7 @@ services:
     command: ["npm", "run", "worker:nfce"]
     volumes:
       - ./backend:/app
-      - /app/node_modules
+      - backend_node_modules:/app/node_modules
 
   frontend:
     build:
@@ -72,15 +74,17 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
-    # Desenvolvimento: servidor Vite com hot reload na 5180 (imagem faz build; volume sobrescreve o codigo)
-    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5180"]
+    # Desenvolvimento: servidor Vite com hot reload na 3006 (imagem faz build; volume sobrescreve o codigo)
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3006"]
     environment:
       VITE_API_URL: http://localhost:3001/api/v1
     ports:
-      - "5180:5180"
+      - "3006:3006"
     volumes:
       - ./frontend:/app
-      - /app/node_modules
+      - frontend_node_modules:/app/node_modules
 
 volumes:
   postgres_data:
+  backend_node_modules:
+  frontend_node_modules:

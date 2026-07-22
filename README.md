@@ -215,7 +215,7 @@ docker compose up --build
 
 | Serviço | URL / porta |
 |---------|-------------|
-| Frontend | http://localhost:5180 |
+| Frontend | http://localhost:3006 |
 | Backend | http://localhost:3001/api/v1/health |
 | PostgreSQL | localhost:5432 (usuário/senha/db conforme `docker-compose.yml`) |
 
@@ -277,7 +277,7 @@ Não voltes a correr `migrate deploy` depois do `db push` até o historico estar
 - O CLI do Prisma não fica no PATH global: use **`npx prisma db push`** (e outros subcomandos), ou **`npm run prisma:push`** em `backend/` ou na raiz. **`db push` sozinho não existe** no PowerShell — isso não é um comando.
 - Em **`backend/`** também funcionam: `npm run prisma:push`, `npm run prisma:deploy`, `npm run prisma:status` (definidos no `package.json` do backend).
 - **P1001 (Can't reach database server):** o PostgreSQL não está rodando ou a `DATABASE_URL` está errada. Com Docker: `docker compose up -d` (serviço `db`). Confira porta **5432** e usuário/senha no `.env`.
-3. Frontend: `cd frontend && npm install`; defina `VITE_API_URL` apontando para a API (ex.: `http://localhost:3001/api/v1`); `npm run dev` (porta **5180** neste repo, para não conflitar com outro app na 5173).
+3. Frontend: `cd frontend && npm install`; defina `VITE_API_URL` apontando para a API (ex.: `http://localhost:3001/api/v1`); `npm run dev` (porta **3006** neste repo).
 
 ## Evolução recomendada para produção
 
