@@ -5,10 +5,12 @@
 const STATUS_DEFAULTS = {
   400: "Nao foi possivel concluir. Verifique os dados e tente novamente.",
   401: "Sessao expirada ou nao autorizada. Faca login novamente.",
+  402: "Este recurso exige um plano superior. Atualize sua assinatura.",
   403: "Voce nao tem permissao para esta acao.",
   404: "Registro nao encontrado. Atualize a pagina e tente novamente.",
   409: "Nao e possivel concluir: conflito com dados existentes ou vinculos no sistema.",
   422: "Nao foi possivel processar os dados enviados.",
+  429: "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
   502: "Servico externo indisponivel. Tente novamente em instantes.",
   503: "Servico temporariamente indisponivel. Tente novamente.",
   504: "A operacao demorou demais. Tente novamente."
@@ -22,7 +24,10 @@ const CODE_HINTS = {
   TOKEN_INVALID: "Sessao invalida. Faca login novamente.",
   CONFLICT: "Esta acao conflita com dados ja cadastrados.",
   NOT_FOUND: "O registro nao foi encontrado. Atualize a pagina.",
-  INTERNAL_ERROR: "Erro interno. Tente novamente ou contacte o suporte."
+  INTERNAL_ERROR: "Erro interno. Tente novamente ou contacte o suporte.",
+  PLAN_UPGRADE_REQUIRED:
+    "Recurso disponivel em planos superiores. Acesse Assinatura para atualizar.",
+  LOGIN_RATE_LIMIT: "Muitas tentativas de login. Aguarde alguns minutos e tente novamente."
 };
 
 /** Padroes tecnicos que nunca devem aparecer na tela. */

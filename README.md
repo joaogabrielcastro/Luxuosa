@@ -2,6 +2,10 @@
 
 SaaS multi-tenant para gestão de loja de roupa: catálogo, vendas, estoque, relatórios e dashboard. Uma única base PostgreSQL com isolamento lógico por `tenant_id`; autenticação via JWT.
 
+## Homologação
+
+Checklist operacional (Docker, Stripe, NFC-e, produção): ver [HOMOLOGACAO.md](./HOMOLOGACAO.md).
+
 ## Stack
 
 | Camada | Tecnologia |

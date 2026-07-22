@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, ShieldCheck, Sparkles } from "lucide-react";
 import { useAuth } from "./useAuth.jsx";
 import { Input } from "../../shared/components/ui/Input.jsx";
@@ -7,11 +7,17 @@ import { Button } from "../../shared/components/ui/Button.jsx";
 import { Alert } from "../../shared/components/ui/Alert.jsx";
 import { FormField } from "../../shared/components/ui/FormField.jsx";
 
+function digitsOnly(value) {
+  return String(value ?? "").replace(/\D/g, "");
+}
+
 export function LoginPage() {
   const { login, token } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [tenantCnpj, setTenantCnpj] = useState("");
+  const [needTenantCnpj, setNeedTenantCnpj] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -27,9 +33,12 @@ export function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      await login(email, password);
+      await login(email, password, needTenantCnpj ? tenantCnpj : undefined);
       navigate("/vendas", { replace: true });
     } catch (err) {
+      if (err?.code === "TENANT_CNPJ_REQUIRED") {
+        setNeedTenantCnpj(true);
+      }
       setError(err);
     } finally {
       setLoading(false);
@@ -127,14 +136,39 @@ export function LoginPage() {
               </div>
             </FormField>
 
+            {needTenantCnpj ? (
+              <FormField
+                label="CNPJ da loja"
+                htmlFor="login-cnpj"
+                required
+                hint="Este e-mail existe em mais de uma loja. Informe o CNPJ (14 dígitos)."
+              >
+                <Input
+                  id="login-cnpj"
+                  inputMode="numeric"
+                  autoComplete="organization"
+                  placeholder="00.000.000/0000-00"
+                  value={tenantCnpj}
+                  onChange={(e) => setTenantCnpj(digitsOnly(e.target.value).slice(0, 14))}
+                />
+              </FormField>
+            ) : null}
+
             <p className="text-xs text-slate-500">
               Esqueceu a senha? Peça ao administrador da sua loja para redefinir o acesso.
             </p>
 
             <Button className="w-full py-2.5" type="submit" disabled={loading}>
-              {loading ? "Entrando…" : "Entrar na plataforma"}
+              {loading ? "Entrando…" : "Entrar"}
             </Button>
           </form>
+
+          <p className="mt-5 text-center text-sm text-slate-600">
+            Nova loja?{" "}
+            <Link className="font-medium text-violet-700 hover:underline" to="/cadastro">
+              Criar conta
+            </Link>
+          </p>
 
           {error ? (
             <Alert className="mt-5" variant="danger" title="Não foi possível entrar">

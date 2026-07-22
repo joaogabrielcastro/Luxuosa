@@ -4,6 +4,7 @@ import morgan from "morgan";
 import { env } from "./config/env.js";
 import { router } from "./routes.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
+import { billingController } from "./modules/billing/billing.controller.js";
 
 export const app = express();
 
@@ -15,6 +16,14 @@ const corsMiddleware =
     : cors();
 
 app.use(corsMiddleware);
+
+/** Webhook Stripe exige body raw (assinatura). Registrar antes do JSON parser. */
+app.post(
+  "/api/v1/billing/webhook",
+  express.raw({ type: "application/json" }),
+  billingController.webhook
+);
+
 app.use(express.json({ limit: "2.5mb" }));
 if (process.env.NODE_ENV !== "production") {
   app.use(morgan("dev"));

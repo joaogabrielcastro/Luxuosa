@@ -1,5 +1,6 @@
+import { forwardRef } from "react";
 import { cn } from "./helpers.js";
 
-export function Input({ className = "", ...props }) {
-  return <input className={cn("ui-input", className)} {...props} />;
-}
+export const Input = forwardRef(function Input({ className = "", ...props }, ref) {
+  return <input ref={ref} className={cn("ui-input", className)} {...props} />;
+});

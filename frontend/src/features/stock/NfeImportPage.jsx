@@ -26,6 +26,7 @@ import { Badge } from "../../shared/components/ui/Badge.jsx";
 import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
 import { Modal } from "../../shared/components/ui/Modal.jsx";
 import { StatCard } from "../../shared/components/ui/StatCard.jsx";
+import { Alert } from "../../shared/components/ui/Alert.jsx";
 
 const STEPS = {
   UPLOAD: "upload",
@@ -101,6 +102,7 @@ export function NfeImportPage() {
   const [result, setResult] = useState(null);
   const [detailId, setDetailId] = useState(null);
   const [historySkip, setHistorySkip] = useState(0);
+  const [planUpgradeRequired, setPlanUpgradeRequired] = useState(false);
   const historyPageSize = 20;
 
   const productsQuery = useQuery({
@@ -173,6 +175,9 @@ export function NfeImportPage() {
       }
       setStep(STEPS.REVIEW);
     } catch (err) {
+      if (err instanceof ApiError && (err.status === 402 || err.code === "PLAN_UPGRADE_REQUIRED")) {
+        setPlanUpgradeRequired(true);
+      }
       if (err instanceof ApiError && err.status === 409) {
         setDuplicateInfo({
           message: err.message,
@@ -268,10 +273,20 @@ export function NfeImportPage() {
         queryClient.invalidateQueries({ queryKey: ["suppliers"] })
       ]);
     } catch (err) {
+      if (err instanceof ApiError && (err.status === 402 || err.code === "PLAN_UPGRADE_REQUIRED")) {
+        setPlanUpgradeRequired(true);
+      }
       showToast(err.message || "Falha na importacao.", "error");
     } finally {
       setConfirming(false);
     }
+  }
+
+  function importStatusBadge(status) {
+    if (status === "COMPLETED") return <Badge variant="success">Concluida</Badge>;
+    if (status === "FAILED") return <Badge variant="danger">Falhou</Badge>;
+    if (status === "DRAFT") return <Badge variant="warning">Rascunho</Badge>;
+    return <Badge variant="neutral">{status || "—"}</Badge>;
   }
 
   function resetWizard() {
@@ -294,11 +309,11 @@ export function NfeImportPage() {
   if (!isAdmin) {
     return (
       <div className="ui-page">
-        <PageHeader title="Importar XML NF-e" description="Entrada de mercadoria via nota fiscal." />
+        <PageHeader title="Entrada por NF-e (XML)" description="Entrada de mercadoria via nota fiscal." />
         <SectionCard title="Acesso restrito">
           <p className="text-sm text-slate-600">Apenas administradores podem importar NF-e.</p>
           <Link to="/estoque/movimentos" className="mt-3 inline-flex text-sm text-violet-700 hover:underline">
-            Voltar ao estoque
+            Voltar a ajustar estoque
           </Link>
         </SectionCard>
       </div>
@@ -308,9 +323,22 @@ export function NfeImportPage() {
   return (
     <div className="ui-page">
       <PageHeader
-        title="Importar XML NF-e"
+        title="Entrada por NF-e (XML)"
         description="Selecione o XML, confira os produtos e confirme a entrada no estoque."
       />
+
+      {planUpgradeRequired ? (
+        <Alert
+          variant="warning"
+          title="Plano Pro necessario"
+          className="mb-4"
+        >
+          <p>A importacao de NF-e esta disponivel a partir do plano Pro.</p>
+          <Link to="/assinatura" className="mt-2 inline-flex text-sm font-medium underline hover:no-underline">
+            Ir para Assinatura
+          </Link>
+        </Alert>
+      ) : null}
 
       <div className="mb-4 flex flex-wrap gap-2">
         <Button
@@ -334,7 +362,7 @@ export function NfeImportPage() {
           className="inline-flex items-center gap-1 self-center text-sm text-slate-600 hover:text-slate-900"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Movimentacoes
+          Movimentações
         </Link>
       </div>
 
@@ -385,7 +413,10 @@ export function NfeImportPage() {
                 {(historyQuery.data?.items || []).length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-4">
-                      <EmptyState description="Nenhuma NF-e importada ainda." />
+                      <EmptyState
+                        title="Nenhuma NF-e importada"
+                        description="Vá em Nova importação, envie o XML da nota do fornecedor e confirme a entrada."
+                      />
                     </td>
                   </tr>
                 ) : (
@@ -413,7 +444,12 @@ export function NfeImportPage() {
                       <td className="py-2 pr-2">{row.itemCount}</td>
                       <td className="py-2 pr-2">{row.user?.name || "—"}</td>
                       <td className="py-2">
-                        <Badge variant="success">{row.status}</Badge>
+                        {importStatusBadge(row.status)}
+                        {row.status === "FAILED" ? (
+                          <p className="mt-1 text-[10px] text-rose-700">
+                            Pode reenviar o XML na aba Nova importacao.
+                          </p>
+                        ) : null}
                       </td>
                     </tr>
                   ))

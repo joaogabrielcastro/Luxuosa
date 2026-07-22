@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useApiQuery } from "../../shared/hooks/useApiQuery.js";
 import { formatCurrencyBRL, formatDateBR } from "../../shared/formatters.js";
 import { useAuth } from "../auth/useAuth.jsx";
@@ -45,6 +46,11 @@ export function AdminDashboardPage() {
     refetch
   } = useApiQuery(["dashboard", "admin"], "/dashboard/admin", { token });
 
+  const criticalCount = useMemo(
+    () => (data.lowStockItems || []).filter((item) => Number(item.currentStock) === 0).length,
+    [data.lowStockItems]
+  );
+
   const salesByAttendantData = useMemo(
     () =>
       (data.salesByAttendant || []).map((row) => ({
@@ -74,10 +80,41 @@ export function AdminDashboardPage() {
 
   return (
     <div className="ui-page">
-      <PageHeader title="Dashboard" description="Visão geral do desempenho da loja: vendas, ticket médio e alertas de estoque." />
+      <PageHeader title="Início" description="Visão geral do desempenho da loja: vendas, ticket médio e avisos de estoque." />
+
+      {data.lowStockCount > 0 ? (
+        <Alert
+          variant={criticalCount > 0 ? "danger" : "warning"}
+          title={
+            criticalCount > 0
+              ? `${criticalCount} produto(s) sem estoque`
+              : `${data.lowStockCount} produto(s) com estoque baixo`
+          }
+          className="mb-2"
+        >
+          <p>
+            Há produtos que precisam de atenção.
+            {criticalCount > 0
+              ? ` Inclui ${criticalCount} item(ns) zerado(s).`
+              : ` Total: ${data.lowStockCount} abaixo do mínimo.`}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-3 text-sm font-medium">
+            <Link to="/relatorios" className="underline hover:no-underline">
+              Ver produtos em falta
+            </Link>
+            <Link to="/estoque/alertas" className="underline hover:no-underline">
+              Avisos por e-mail
+            </Link>
+            <Link to="/estoque/movimentos" className="underline hover:no-underline">
+              Registrar entrada
+            </Link>
+          </div>
+        </Alert>
+      ) : null}
+
       <section className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Faturamento do mes"
+          label="Faturamento do mês"
           value={formatCurrencyBRL(data.monthlyRevenue)}
           hint="Total de vendas no mês atual"
           icon={<DollarSign className="h-4 w-4 text-violet-600" />}
@@ -88,7 +125,7 @@ export function AdminDashboardPage() {
           icon={<ShoppingCart className="h-4 w-4 text-blue-600" />}
         />
         <StatCard
-          label="Ticket medio"
+          label="Ticket médio"
           value={formatCurrencyBRL(data.ticketAverage)}
           icon={<Wallet className="h-4 w-4 text-indigo-600" />}
         />
@@ -114,11 +151,11 @@ export function AdminDashboardPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <EmptyState description="Sem dados no periodo." />
+            <EmptyState description="Sem dados no período." />
           )}
         </SectionCard>
 
-        <SectionCard title="Vendas por periodo (mes atual)">
+        <SectionCard title="Vendas por período (mês atual)">
           {salesByPeriodData.length ? (
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
@@ -132,7 +169,7 @@ export function AdminDashboardPage() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <EmptyState description="Sem vendas no mes atual." />
+            <EmptyState description="Sem vendas no mês atual." />
           )}
         </SectionCard>
       </section>
@@ -156,12 +193,12 @@ export function AdminDashboardPage() {
       </SectionCard>
 
       <section className="grid gap-4 lg:grid-cols-2">
-      <SectionCard title="Produtos sem venda ha 30 dias">
+      <SectionCard title="Produtos sem venda há 30 dias">
         {data.productsWithoutSales.length ? (
           <ul className="space-y-2 text-sm">
             {data.productsWithoutSales.slice(0, 8).map((row) => (
               <li key={row.productId} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
-                {row.name} - ultima venda: {row.lastSaleAt ? formatDateBR(row.lastSaleAt) : "Nunca"}
+                {row.name} - última venda: {row.lastSaleAt ? formatDateBR(row.lastSaleAt) : "Nunca"}
               </li>
             ))}
           </ul>
@@ -201,7 +238,7 @@ export function AdminDashboardPage() {
                 >
                   <span className="font-medium">{item.name}</span>
                   <span className="mt-0.5 block text-xs opacity-90">
-                    Atual: <strong>{item.currentStock}</strong> · Minimo: <strong>{item.minStock}</strong>
+                    Atual: <strong>{item.currentStock}</strong> · Mínimo: <strong>{item.minStock}</strong>
                     {zero ? " · sem estoque" : ""}
                   </span>
                 </li>
@@ -209,8 +246,21 @@ export function AdminDashboardPage() {
             })}
           </ul>
         ) : (
-          <EmptyState description="Sem alertas no momento." />
+          <EmptyState description="Sem avisos no momento." />
         )}
+        {data.lowStockItems.length ? (
+          <div className="mt-3 flex flex-wrap gap-3 text-sm">
+            <Link to="/relatorios" className="text-violet-700 hover:underline">
+              Ver produtos em falta
+            </Link>
+            <Link to="/estoque/alertas" className="text-violet-700 hover:underline">
+              Avisos por e-mail
+            </Link>
+            <Link to="/estoque/movimentos" className="text-violet-700 hover:underline">
+              Registrar entrada
+            </Link>
+          </div>
+        ) : null}
       </SectionCard>
       {loading || isFetching ? <Alert variant="info">Atualizando indicadores...</Alert> : null}
       {dashboardError ? (

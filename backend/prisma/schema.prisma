@@ -58,13 +58,20 @@ enum CreditSaleStatus {
 }
 
 enum NfeImportStatus {
+  DRAFT
   COMPLETED
+  FAILED
 }
 
 enum NfeImportItemAction {
   LINKED
   CREATED
   IGNORED
+}
+
+enum CashSessionStatus {
+  OPEN
+  CLOSED
 }
 
 model Tenant {
@@ -76,6 +83,22 @@ model Tenant {
   plan             Plan     @default(BASIC)
   /** Emissao NFC-e (Nuvem Fiscal). So habilite na loja com CNPJ/config na Nuvem — evita emitir pelo emitente errado. */
   enableNfceEmission Boolean @default(false)
+  /** Customer Stripe (cus_...). */
+  stripeCustomerId String?  @unique
+  /** Subscription Stripe ativa/mais recente (sub_...). */
+  stripeSubscriptionId String? @unique
+  /** active | trialing | past_due | canceled | unpaid | incomplete | ... */
+  stripeSubscriptionStatus String?
+  /** Fim do periodo atual da assinatura (UTC). */
+  planPeriodEnd    DateTime?
+  /** Alertas de estoque baixo (email / WhatsApp). */
+  stockAlertsEnabled     Boolean @default(false)
+  stockAlertEmail        String?
+  stockAlertPhone        String?
+  /** low | critical — severidade minima para disparar. */
+  stockAlertMinSeverity  String  @default("low")
+  /** Cooldown em minutos entre alertas do mesmo produto. */
+  stockAlertCooldownMin  Int     @default(1440)
   createdAt        DateTime @default(now())
 
   users       User[]
@@ -96,6 +119,8 @@ model Tenant {
   productSupplierCodes ProductSupplierCode[]
   nfeImports     NfeImport[]
   nfeImportItems NfeImportItem[]
+  cashSessions   CashSession[]
+  stockAlertLogs StockAlertLog[]
 }
 
 model User {
@@ -111,6 +136,8 @@ model User {
   sales     Sale[]
   creditSales CreditSale[]
   nfeImports NfeImport[]
+  cashSessionsOpened CashSession[] @relation("CashSessionOpenedBy")
+  cashSessionsClosed CashSession[] @relation("CashSessionClosedBy")
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -463,4 +490,47 @@ model CreditPayment {
 
   @@index([tenantId])
   @@index([tenantId, creditSaleId])
+}
+
+model CashSession {
+  id             String            @id @default(cuid())
+  tenantId       String
+  openedByUserId String
+  closedByUserId String?
+  status         CashSessionStatus @default(OPEN)
+  openedAt       DateTime          @default(now())
+  closedAt       DateTime?
+  openingFloat   Decimal           @default(0) @db.Decimal(12, 2)
+  expectedCash   Decimal?          @db.Decimal(12, 2)
+  countedCash    Decimal?          @db.Decimal(12, 2)
+  differenceCash Decimal?          @db.Decimal(12, 2)
+  totalsByMethod Json?
+  saleCount      Int?
+  totalAmount    Decimal?          @db.Decimal(12, 2)
+  notes          String?
+  createdAt      DateTime          @default(now())
+
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  openedBy User   @relation("CashSessionOpenedBy", fields: [openedByUserId], references: [id])
+  closedBy User?  @relation("CashSessionClosedBy", fields: [closedByUserId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([tenantId, openedAt])
+}
+
+model StockAlertLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  channel   String
+  productId String?
+  severity  String
+  status    String
+  message   String?
+  error     String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, productId, channel])
 }

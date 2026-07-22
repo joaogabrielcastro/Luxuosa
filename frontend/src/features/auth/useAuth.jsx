@@ -41,14 +41,32 @@ export function AuthProvider({ children }) {
     };
   }, [session?.token]);
 
-  async function login(email, password) {
+  async function login(email, password, tenantCnpj) {
     const body = { email, password };
+    const cnpj = String(tenantCnpj || "").replace(/\D/g, "");
+    if (cnpj.length === 14) body.tenantCnpj = cnpj;
     const data = await apiClient("/auth/login", {
       method: "POST",
       body
     });
+    acceptSession(data);
+    return data;
+  }
+
+  function acceptSession(data) {
     setSession(data);
     localStorage.setItem("luxuosa_session", JSON.stringify(data));
+    return data;
+  }
+
+  async function refreshSession() {
+    const t = session?.token;
+    if (!t) return null;
+    const data = await apiClient("/auth/me", { token: t });
+    const next = { ...session, user: data.user, tenant: data.tenant };
+    setSession(next);
+    localStorage.setItem("luxuosa_session", JSON.stringify(next));
+    return next;
   }
 
   function logout() {
@@ -63,7 +81,9 @@ export function AuthProvider({ children }) {
       tenant: session?.tenant,
       user: session?.user,
       login,
-      logout
+      acceptSession,
+      logout,
+      refreshSession
     }),
     [session]
   );

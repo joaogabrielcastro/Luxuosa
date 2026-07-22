@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../shared/apiClient.js";
 import { useAuth } from "../auth/useAuth.jsx";
@@ -18,6 +19,30 @@ function defaultFromTo() {
   const from = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
   const to = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   return { from, to };
+}
+
+function escapeCsvCell(value) {
+  const s = String(value ?? "");
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+/** Baixa um CSV a partir de linhas (arrays) no browser. */
+function downloadCsv(filename, rows) {
+  const body = rows.map((row) => row.map(escapeCsvCell).join(",")).join("\r\n");
+  const blob = new Blob(["\uFEFF" + body], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function severityLabel(severity) {
+  if (severity === "critical") return "Crítico (zerado)";
+  if (severity === "low") return "Baixo";
+  return severity || "";
 }
 
 export function ReportsPage() {
@@ -52,10 +77,40 @@ export function ReportsPage() {
     setAppliedRange({ from, to });
   }
 
+  function exportSalesCsv() {
+    if (!salesReport) return;
+    const rows = [["day", "count", "amount"]];
+    for (const row of salesReport.byDay || []) {
+      rows.push([row.date, row.count, Number(row.amount || 0).toFixed(2)]);
+    }
+    rows.push(["TOTAL", salesReport.saleCount, Number(salesReport.totalAmount || 0).toFixed(2)]);
+    downloadCsv(`vendas_${appliedRange.from}_${appliedRange.to}.csv`, rows);
+  }
+
+  function exportLowStockCsv() {
+    if (!lowStock?.items?.length) return;
+    const rows = [["name", "sku", "category", "brand", "currentStock", "minStock", "severity"]];
+    for (const item of lowStock.items) {
+      rows.push([
+        item.name,
+        item.sku || "",
+        item.category || "",
+        item.brand || "",
+        item.currentStock,
+        item.minStock,
+        item.severity || ""
+      ]);
+    }
+    downloadCsv("estoque_baixo.csv", rows);
+  }
+
   return (
     <div className="ui-page">
-      <PageHeader title="Relatórios" description="Analise vendas por período e produtos com estoque baixo." />
-      <SectionCard title="Vendas por periodo">
+      <PageHeader
+        title="Relatórios"
+        description="Veja vendas por período e produtos em falta no estoque."
+      />
+      <SectionCard title="Vendas por período">
         <form className="mt-3 flex flex-wrap items-end gap-3" onSubmit={applyRange}>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-slate-600">De</span>
@@ -66,7 +121,7 @@ export function ReportsPage() {
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-slate-600">Ate</span>
+            <span className="text-xs font-medium text-slate-600">Até</span>
             <Input
               type="date"
               value={to}
@@ -76,11 +131,20 @@ export function ReportsPage() {
           <Button type="submit" className="text-sm" disabled={loading}>
             {loading ? "Atualizando…" : "Atualizar"}
           </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="text-sm"
+            disabled={!salesReport?.byDay?.length && !salesReport?.saleCount}
+            onClick={exportSalesCsv}
+          >
+            Exportar CSV
+          </Button>
         </form>
         {salesReport ? (
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard label="Vendas (pagas)" value={salesReport.saleCount} />
-            <StatCard label="Total no periodo" value={formatCurrencyBRL(salesReport.totalAmount)} />
+            <StatCard label="Total no período" value={formatCurrencyBRL(salesReport.totalAmount)} />
           </div>
         ) : null}
         {salesReport?.byDay?.length ? (
@@ -101,44 +165,73 @@ export function ReportsPage() {
                 </LineChart>
               </ResponsiveContainer>
             </div>
-            <h3 className="mb-2 text-sm font-medium text-slate-700">Por dia</h3>
-            <ul className="max-h-56 space-y-1 overflow-y-auto text-sm">
-              {salesReport.byDay.map((row) => (
-                <li key={row.date} className="flex justify-between rounded border border-slate-100 px-2 py-1">
-                  <span>{formatDateBR(row.date)}</span>
-                  <span>
-                    {row.count} vendas — {formatCurrencyBRL(row.amount)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <div>
+              <h3 className="mb-2 text-sm font-medium text-slate-700">Por dia</h3>
+              <ul className="max-h-56 space-y-1 overflow-y-auto text-sm">
+                {salesReport.byDay.map((row) => (
+                  <li key={row.date} className="flex justify-between rounded border border-slate-100 px-2 py-1">
+                    <span>{formatDateBR(row.date)}</span>
+                    <span>
+                      {row.count} vendas — {formatCurrencyBRL(row.amount)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         ) : salesReport && !salesReport.saleCount ? (
           <EmptyState description="Nenhuma venda paga neste intervalo." />
         ) : null}
       </SectionCard>
 
-      <SectionCard title="Estoque abaixo do minimo">
-        <p className="mt-1 text-sm text-slate-600">
-          Soma das variacoes por produto comparada ao estoque minimo cadastrado no produto.
-        </p>
+      <SectionCard title="Estoque abaixo do mínimo">
+        <div className="mt-1 flex flex-wrap items-start justify-between gap-2">
+          <p className="text-sm text-slate-600">
+            Soma das variações por produto comparada ao estoque mínimo cadastrado no produto.
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            className="text-sm"
+            disabled={!lowStock?.items?.length}
+            onClick={exportLowStockCsv}
+          >
+            Exportar CSV
+          </Button>
+        </div>
         {lowStock?.items?.length ? (
           <ul className="mt-3 space-y-2 text-sm">
-            {lowStock.items.map((item) => (
-              <li key={item.id} className="rounded border border-amber-200 bg-amber-50 px-3 py-2">
-                <strong>{item.name}</strong>
-                {item.sku ? ` (${item.sku})` : null}
-                {item.category ? <span className="text-slate-600"> — {item.category}</span> : null}
-                {item.brand ? <span className="text-slate-600"> · {item.brand}</span> : null}
-                <div className="text-xs text-amber-900">
-                  Atual: {item.currentStock} / minimo: {item.minStock}
-                </div>
-              </li>
-            ))}
+            {lowStock.items.map((item) => {
+              const critical = item.severity === "critical" || Number(item.currentStock) === 0;
+              return (
+                <li
+                  key={item.id}
+                  className={`rounded border px-3 py-2 ${
+                    critical
+                      ? "border-rose-300 bg-rose-50 text-rose-950"
+                      : "border-amber-200 bg-amber-50 text-amber-950"
+                  }`}
+                >
+                  <strong>{item.name}</strong>
+                  {item.sku ? ` (${item.sku})` : null}
+                  {item.category ? <span className="text-slate-600"> — {item.category}</span> : null}
+                  {item.brand ? <span className="text-slate-600"> · {item.brand}</span> : null}
+                  <div className="text-xs opacity-90">
+                    Atual: {item.currentStock} / mínimo: {item.minStock}
+                    {item.severity ? ` · ${severityLabel(item.severity)}` : ""}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         ) : (
-          <EmptyState description="Nenhum produto abaixo do minimo no momento." />
+          <EmptyState description="Nenhum produto abaixo do mínimo no momento." />
         )}
+        <div className="mt-3 flex flex-wrap gap-3 text-sm">
+          <Link to="/estoque/movimentos" className="text-violet-700 hover:underline">
+            Registrar entrada
+          </Link>
+        </div>
       </SectionCard>
 
       <FormErrorSummary error={error} />

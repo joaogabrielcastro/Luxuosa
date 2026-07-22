@@ -3,7 +3,7 @@ import { parsePageQuery } from "../../shared/pagination.js";
 import { saleService } from "./sale.service.js";
 
 const saleSchema = z.object({
-  customerId: z.string().optional(),
+  customerId: z.union([z.string().min(1), z.null()]).optional(),
   discountValue: z.coerce.number().nonnegative().optional(),
   discountPercent: z.coerce.number().nonnegative().optional(),
   /** Se false, nao enfileira emissao de NFC-e (venda ainda e registrada e estoque baixa). */

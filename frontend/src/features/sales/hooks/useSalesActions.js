@@ -336,6 +336,7 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
         installments,
         discountValue: form.discountValue === "" ? 0 : parseCurrencyInput(form.discountValue),
         discountPercent: form.discountPercent === "" ? 0 : Number(form.discountPercent),
+        customerId: form.customerId ? form.customerId : null,
         items: items.map((item) => ({
           productVariationId: item.productVariationId,
           quantity: parseQuantity(item.quantity),
@@ -379,6 +380,7 @@ export function useSalesActions({ token, variations, load, setError, showToast, 
         installments: Math.max(1, Number(fullSale.installments || 1)),
         discountValue: dv !== 0 ? formatCurrencyInputValue(dv) : "",
         discountPercent: dp !== 0 ? dp : "",
+        customerId: fullSale.customerId || "",
         emitNfce: DEFAULT_SALE_FORM.emitNfce
       });
       const release = new Map();

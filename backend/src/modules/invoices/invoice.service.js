@@ -238,7 +238,7 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
     throw err;
   }
 
-  if (!nf.clientId || !nf.clientSecret) {
+  if (!env.nfceMock && (!nf.clientId || !nf.clientSecret)) {
     if (silent) return null;
     const err = new Error("Nuvem Fiscal nao configurado.");
     err.statusCode = 503;
@@ -477,19 +477,28 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
  * Baixa PDF da NFC-e na Nuvem Fiscal (uso interno do controller).
  */
 async function fetchNfcePdfBuffer(tenantId, saleId) {
-  const nf = env.nuvemFiscal;
-  if (!nf.clientId || !nf.clientSecret) {
-    const err = new Error("Nuvem Fiscal nao configurado.");
-    err.statusCode = 503;
-    throw err;
-  }
-
   const invoice = await prisma.invoice.findFirst({
     where: { tenantId, saleId, status: InvoiceStatus.ISSUED }
   });
   if (!invoice?.externalId) {
     const err = new Error("NFC-e nao encontrada ou ainda nao autorizada.");
     err.statusCode = 404;
+    throw err;
+  }
+
+  if (env.nfceMock) {
+    // Minimal valid-looking PDF stub for tests / mock mode.
+    const stub = Buffer.from(
+      "%PDF-1.1\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n",
+      "utf8"
+    );
+    return { buf: stub, filename: `nfce-${invoice.number || saleId}.pdf` };
+  }
+
+  const nf = env.nuvemFiscal;
+  if (!nf.clientId || !nf.clientSecret) {
+    const err = new Error("Nuvem Fiscal nao configurado.");
+    err.statusCode = 503;
     throw err;
   }
 

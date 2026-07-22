@@ -19,6 +19,22 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    container_name: luxuosa_redis
+    restart: unless-stopped
+    ports:
+      # 6380 no host: evita conflito com outro Redis local na 6379.
+      # Na rede Docker o backend usa redis:6379.
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build:
       context: ./backend
@@ -28,11 +44,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     env_file:
       - ./.env.compose
     environment:
       PORT: 3001
       DATABASE_URL: postgresql://postgres:postgres@db:5432/luxuosa
+      REDIS_URL: redis://redis:6379
+      FRONTEND_URL: http://localhost:3006
       JWT_SECRET: change-me-in-production
       JWT_EXPIRES_IN: 1d
       NFCE_PROCESS_IN_API: "false"
@@ -86,5 +106,6 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
   backend_node_modules:
   frontend_node_modules:

@@ -341,12 +341,12 @@ export function ProductsPage() {
     <div className="ui-page">
       <PageHeader
         title="Produtos"
-        description="Cadastre o produto e, no mesmo lugar, as variacoes (tamanho, cor e estoque por combinacao)."
+        description="Cadastre o produto e, no mesmo lugar, as variações (tamanho, cor e estoque por combinação)."
       />
       <SectionCard title={editingId ? "Editar produto" : "Novo produto"}>
         <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs text-slate-600">
-            Leitor de codigo de barras: clique no campo, bip no scanner e pressione Enter.
+            Leitor de código de barras: clique no campo, bip no scanner e pressione Enter.
           </p>
           <div className="mt-2 flex flex-col gap-2 sm:flex-row">
             <Input
@@ -361,14 +361,14 @@ export function ProductsPage() {
               }}
             />
             <Button type="button" variant="secondary" onClick={applyScannedSku}>
-              Aplicar codigo
+              Aplicar código
             </Button>
           </div>
         </div>
         <form className="mt-3 grid gap-2 md:grid-cols-2" onSubmit={createProduct}>
           <p className="text-xs text-slate-600 md:col-span-2">
-            Tamanho e Cor (opcionais): se ambos forem preenchidos, a quantidade abaixo vale apenas para essa combinacao.
-            Se os dois ficarem em branco, a quantidade e o total geral do produto (como antes).
+            Tamanho e Cor (opcionais): se ambos forem preenchidos, a quantidade abaixo vale apenas para essa combinação.
+            Se os dois ficarem em branco, a quantidade é o total geral do produto (como antes).
           </p>
           <Input
             placeholder="Tamanho (opcional)"
@@ -515,12 +515,12 @@ export function ProductsPage() {
             { key: "category", label: "Categoria" },
             { key: "brand", label: "Marca" },
             { key: "stock", label: "Qtd atual" },
-            { key: "min", label: "Min" },
-            { key: "price", label: "Preco" },
-            { key: "actions", label: "Acoes" }
+            { key: "min", label: "Mín" },
+            { key: "price", label: "Preço" },
+            { key: "actions", label: "Ações" }
           ]}
           getRowKey={(row) => row.id}
-          emptyMessage="Nenhum produto encontrado."
+          emptyMessage="Nenhum produto encontrado. Cadastre o primeiro no formulário acima."
           search={{
             query,
             onQueryChange: setQuery,

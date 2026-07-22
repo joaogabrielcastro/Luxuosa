@@ -272,7 +272,7 @@ export function CrediarioPage() {
     <div className="ui-page">
       <PageHeader
         title="Crediário"
-        description="Controle vendas a prazo, saldo em aberto e recebimentos parciais por cliente."
+        description="Cliente leva agora e paga depois na loja (fiado). Não é cartão parcelado — use Crediário para saldo em aberto e recebimentos."
         actions={
           <Button type="button" onClick={() => setCreateOpen(true)}>
             Nova venda a prazo

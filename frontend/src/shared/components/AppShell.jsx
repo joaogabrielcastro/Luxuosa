@@ -5,7 +5,9 @@ import { BrandLogo } from "./BrandLogo.jsx";
 import { Button } from "./ui/Button.jsx";
 import {
   BarChart3,
+  BellRing,
   Boxes,
+  CreditCard,
   FileInput,
   LayoutGrid,
   LogOut,
@@ -14,21 +16,42 @@ import {
   ReceiptText,
   ShoppingCart,
   Tags,
+  UserCog,
   Users,
+  Wallet,
   WalletCards,
   X
 } from "lucide-react";
 
-function buildNavGroups() {
+function buildNavGroups(userType) {
+  const isAdmin = userType === "ADMIN";
   const salesItems = [
     { to: "/vendas", label: "Vendas", icon: ShoppingCart },
     { to: "/crediario", label: "Crediário", icon: WalletCards },
     { to: "/clientes", label: "Clientes", icon: Users }
   ];
+  const overviewItems = [{ to: "/", label: "Início", end: true, icon: LayoutGrid }];
+  if (isAdmin) {
+    overviewItems.push(
+      { to: "/usuarios", label: "Usuários", icon: UserCog },
+      { to: "/assinatura", label: "Assinatura", icon: CreditCard }
+    );
+  }
+  const operationItems = [
+    { to: "/caixa", label: "Caixa", icon: Wallet },
+    { to: "/estoque/movimentos", label: "Ajustar estoque", icon: BarChart3 },
+    ...(isAdmin
+      ? [
+          { to: "/estoque/importar-nfe", label: "Entrada por NF-e", icon: FileInput },
+          { to: "/estoque/alertas", label: "Avisos de estoque", icon: BellRing }
+        ]
+      : []),
+    { to: "/relatorios", label: "Relatórios", icon: ReceiptText }
+  ];
   return [
     {
       label: "Visão geral",
-      items: [{ to: "/", label: "Dashboard", end: true, icon: LayoutGrid }]
+      items: overviewItems
     },
     {
       label: "Catálogo",
@@ -44,11 +67,7 @@ function buildNavGroups() {
     },
     {
       label: "Operação",
-      items: [
-        { to: "/estoque/movimentos", label: "Estoque", icon: BarChart3 },
-        { to: "/estoque/importar-nfe", label: "Importar NF-e", icon: FileInput },
-        { to: "/relatorios", label: "Relatórios", icon: ReceiptText }
-      ]
+      items: operationItems
     }
   ];
 }
@@ -61,7 +80,7 @@ const roleLabel = {
 export function AppShell({ children }) {
   const { tenant, user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
-  const navGroups = useMemo(() => buildNavGroups(), []);
+  const navGroups = useMemo(() => buildNavGroups(user?.type), [user?.type]);
 
   useEffect(() => {
     if (!menuOpen) return undefined;

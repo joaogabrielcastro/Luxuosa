@@ -7,6 +7,7 @@ import { tenantMiddleware } from "../../middlewares/tenantMiddleware.js";
 const router = Router();
 
 router.post("/login", loginRateLimit, authController.login);
+router.post("/register", loginRateLimit, authController.register);
 router.post("/logout", authMiddleware, tenantMiddleware, authController.logout);
 router.get("/me", authMiddleware, tenantMiddleware, authController.me);
 

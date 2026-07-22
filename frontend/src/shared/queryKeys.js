@@ -19,6 +19,10 @@ export const queryKeys = {
     all: (token) => ["customers", token],
     list: (token) => ["customers", token, "list"]
   },
+  users: {
+    all: (token) => ["users", token],
+    list: (token) => ["users", token, "list"]
+  },
   crediario: {
     all: (token) => ["crediario", token],
     list: (token, params) => ["crediario", token, "list", params],
@@ -28,6 +32,16 @@ export const queryKeys = {
     all: (token) => ["stock", token],
     movements: (token, params) => ["stock", token, "movements", params],
     nfeImports: (token, params) => ["stock", token, "nfe-imports", params]
+  },
+  cash: {
+    all: (token) => ["cash", token],
+    current: (token) => ["cash", token, "current"],
+    history: (token) => ["cash", token, "history"]
+  },
+  stockAlerts: {
+    all: (token) => ["stock-alerts", token],
+    settings: (token) => ["stock-alerts", token, "settings"],
+    logs: (token) => ["stock-alerts", token, "logs"]
   },
   reports: {
     all: (token) => ["reports", token],

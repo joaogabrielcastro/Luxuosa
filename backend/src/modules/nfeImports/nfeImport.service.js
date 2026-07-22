@@ -169,7 +169,7 @@ export const nfeImportService = {
   async preview(tenantId, xmlContent) {
     const parsed = parseNfeXml(xmlContent);
     const existing = await this.findByAccessKey(tenantId, parsed.accessKey);
-    if (existing) {
+    if (existing && existing.status === NfeImportStatus.COMPLETED) {
       const err = createAppError(
         `Esta NF-e ja foi importada anteriormente em ${formatDateBR(existing.importedAt)}.`,
         409,
@@ -254,18 +254,42 @@ export const nfeImportService = {
   async confirm(tenantId, userId, { xmlContent, supplierDecision, items: itemDecisions }) {
     const parsed = parseNfeXml(xmlContent);
 
-    return prisma.$transaction(async (tx) => {
-      const existing = await tx.nfeImport.findFirst({
-        where: { tenantId, accessKey: parsed.accessKey }
-      });
-      if (existing) {
-        throw createAppError(
-          `Esta NF-e ja foi importada anteriormente em ${formatDateBR(existing.importedAt)}.`,
-          409,
-          ERROR_CODES.CONFLICT
-        );
-      }
+    const existing = await prisma.nfeImport.findFirst({
+      where: { tenantId, accessKey: parsed.accessKey }
+    });
+    if (existing?.status === NfeImportStatus.COMPLETED) {
+      throw createAppError(
+        `Esta NF-e ja foi importada anteriormente em ${formatDateBR(existing.importedAt)}.`,
+        409,
+        ERROR_CODES.CONFLICT
+      );
+    }
+    if (existing && (existing.status === NfeImportStatus.FAILED || existing.status === NfeImportStatus.DRAFT)) {
+      await prisma.nfeImport.delete({ where: { id: existing.id } });
+    }
 
+    let draftId = null;
+    try {
+      const draft = await prisma.nfeImport.create({
+        data: {
+          tenantId,
+          accessKey: parsed.accessKey,
+          number: parsed.number,
+          series: parsed.series,
+          issuedAt: new Date(parsed.issuedAt),
+          supplierId: null,
+          supplierCnpj: parsed.supplier.taxId,
+          supplierName: parsed.supplier.name,
+          totalValue: parsed.totalValue,
+          paymentInfo: parsed.paymentInfo,
+          itemCount: parsed.itemCount,
+          status: NfeImportStatus.DRAFT,
+          userId
+        }
+      });
+      draftId = draft.id;
+
+      return await prisma.$transaction(async (tx) => {
       const decisionByLine = new Map(
         (itemDecisions || []).map((d) => [Number(d.lineNumber), d])
       );
@@ -361,21 +385,13 @@ export const nfeImportService = {
 
       const defaults = await ensureDefaultTaxonomy(tx, tenantId);
 
-      const nfeImport = await tx.nfeImport.create({
+      const nfeImport = await tx.nfeImport.update({
+        where: { id: draftId },
         data: {
-          tenantId,
-          accessKey: parsed.accessKey,
-          number: parsed.number,
-          series: parsed.series,
-          issuedAt: new Date(parsed.issuedAt),
           supplierId: supplier?.id || null,
           supplierCnpj: supplierTaxId,
           supplierName: supplier?.name || parsed.supplier.name,
-          totalValue: parsed.totalValue,
-          paymentInfo: parsed.paymentInfo,
-          itemCount: parsed.itemCount,
-          status: NfeImportStatus.COMPLETED,
-          userId
+          status: NfeImportStatus.COMPLETED
         }
       });
 
@@ -584,5 +600,16 @@ export const nfeImportService = {
         items: createdItems
       });
     });
+    } catch (error) {
+      if (draftId) {
+        await prisma.nfeImport
+          .update({
+            where: { id: draftId },
+            data: { status: NfeImportStatus.FAILED }
+          })
+          .catch(() => null);
+      }
+      throw error;
+    }
   }
 };

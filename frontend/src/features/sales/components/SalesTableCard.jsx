@@ -48,9 +48,9 @@ export function SalesTableCard({
         { value: "", label: "Todos pagamentos" },
         { value: "PIX", label: "PIX" },
         { value: "CASH", label: "Dinheiro" },
-        { value: "CREDIT_CARD", label: "Cartao credito" },
-        { value: "DEBIT_CARD", label: "Cartao debito" },
-        { value: "INSTALLMENT", label: "Parcelado" }
+        { value: "CREDIT_CARD", label: "Cartão crédito" },
+        { value: "DEBIT_CARD", label: "Cartão débito" },
+        { value: "INSTALLMENT", label: "Cartão parcelado" }
       ],
       matcher: (row, value) => row.paymentMethod === value
     },

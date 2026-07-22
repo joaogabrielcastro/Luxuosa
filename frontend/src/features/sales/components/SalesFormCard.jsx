@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   brandIdsForCategory,
   filterVariationsBySearch,
@@ -13,6 +13,7 @@ import { Select } from "../../../shared/components/ui/Select.jsx";
 import { Button } from "../../../shared/components/ui/Button.jsx";
 import { formatCurrencyBRL, parseCurrencyInput } from "../../../shared/formatters.js";
 import { useToast } from "../../../shared/components/ToastProvider.jsx";
+import { apiClient } from "../../../shared/apiClient.js";
 
 function parseQty(raw) {
   if (raw === "" || raw === undefined) return 1;
@@ -38,6 +39,7 @@ function variationLabel(v) {
 }
 
 export function SalesFormCard({
+  token,
   editingSaleId,
   form,
   setForm,
@@ -60,19 +62,78 @@ export function SalesFormCard({
   getRemainingUnits = null
 }) {
   const { showToast } = useToast();
+  const barcodeInputRef = useRef(null);
 
   useEffect(() => {
     if (!enableNfceEmission) {
       setForm((prev) => ({ ...prev, emitNfce: false }));
     }
   }, [enableNfceEmission, setForm]);
+
+  useEffect(() => {
+    barcodeInputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === "F2") {
+        e.preventDefault();
+        barcodeInputRef.current?.focus();
+        barcodeInputRef.current?.select?.();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        if (loading) return;
+        e.preventDefault();
+        const formEl = document.getElementById("sale-form");
+        if (formEl?.requestSubmit) formEl.requestSubmit();
+        else formEl?.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [loading]);
+
   const [unifiedInput, setUnifiedInput] = useState("");
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [customers, setCustomers] = useState([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
   const [manualDraft, setManualDraft] = useState({
     categoryId: "",
     brandId: "",
     productVariationId: "",
     quantity: "1"
   });
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      setCustomersLoading(true);
+      const q = customerQuery.trim();
+      const path = `/customers?take=50${q ? `&q=${encodeURIComponent(q)}` : ""}`;
+      apiClient(path, { token })
+        .then((data) => {
+          if (!cancelled) setCustomers(data?.items || []);
+        })
+        .catch(() => {
+          if (!cancelled) setCustomers([]);
+        })
+        .finally(() => {
+          if (!cancelled) setCustomersLoading(false);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [token, customerQuery]);
+
+  function focusBarcodeInput() {
+    requestAnimationFrame(() => {
+      barcodeInputRef.current?.focus();
+    });
+  }
 
   const saleTotals = useMemo(() => {
     let gross = 0;
@@ -111,6 +172,7 @@ export function SalesFormCard({
     if (exactHits.length === 1) {
       addItemByVariationId(exactHits[0].id);
       setUnifiedInput("");
+      focusBarcodeInput();
       return;
     }
     if (exactHits.length > 1) {
@@ -122,6 +184,7 @@ export function SalesFormCard({
     if (opts.length === 1) {
       addItemByVariationId(opts[0].id);
       setUnifiedInput("");
+      focusBarcodeInput();
       return;
     }
     if (opts.length > 1) {
@@ -131,6 +194,7 @@ export function SalesFormCard({
 
     await addItemByBarcode(raw);
     setUnifiedInput("");
+    focusBarcodeInput();
   }
 
   const brandsInManual = brandIdsForCategory(variations, manualDraft.categoryId);
@@ -151,10 +215,12 @@ export function SalesFormCard({
   }
 
   const variationById = useMemo(() => new Map(variations.map((v) => [v.id, v])), [variations]);
+  const selectedCustomer = customers.find((c) => c.id === form.customerId);
 
   return (
     <SectionCard title={editingSaleId ? "Editar venda" : "Nova venda"}>
-      <form className="mt-4 space-y-8" onSubmit={createSale}>
+      <p className="mt-1 text-xs text-slate-500">Atalhos: F2 busca/bipar · Ctrl+Enter finalizar</p>
+      <form id="sale-form" className="mt-4 space-y-8" onSubmit={createSale}>
         {/* 1 — Adicionar produtos */}
         <section className="space-y-4">
           <StepHeading
@@ -164,11 +230,12 @@ export function SalesFormCard({
           />
 
           <div className="space-y-2">
-            <label className="text-xs font-medium text-slate-600" htmlFor="sale-unified-search">
-              Buscar produto ou bipar codigo
+            <label className="text-xs font-medium text-slate-600" htmlFor="sale-barcode-input">
+              Buscar produto ou bipar código
             </label>
             <Input
-              id="sale-unified-search"
+              id="sale-barcode-input"
+              ref={barcodeInputRef}
               className="text-base md:text-lg"
               placeholder="Nome, SKU, tamanho ou cor — Enter para adicionar"
               value={unifiedInput}
@@ -180,6 +247,7 @@ export function SalesFormCard({
                 }
               }}
               autoComplete="off"
+              autoFocus
             />
             {quickOptions.length ? (
               <div className="max-h-48 overflow-auto rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -191,6 +259,7 @@ export function SalesFormCard({
                     onClick={() => {
                       addItemByVariationId(variation.id);
                       setUnifiedInput("");
+                      focusBarcodeInput();
                     }}
                   >
                     <span className="min-w-0 truncate">{variationLabel(variation)}</span>
@@ -202,7 +271,7 @@ export function SalesFormCard({
           </div>
 
           <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/80 p-4">
-            <p className="text-xs font-medium text-slate-700">Ou escolha pelo catalogo</p>
+            <p className="text-xs font-medium text-slate-700">Ou escolha pela lista</p>
             <p className="mt-0.5 text-xs text-slate-500">Categoria, marca, produto e quantidade — depois incluir na lista.</p>
             <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
               <label className="flex flex-col gap-1">
@@ -284,7 +353,7 @@ export function SalesFormCard({
           <StepHeading step="2" title="Itens da venda" description="Confira quantidades e preços antes de finalizar." />
           {items.length === 0 ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-6 text-center text-sm text-amber-900">
-              Nenhum produto na lista. Use o campo acima ou o catalogo.
+              Nenhum produto na lista. Use o campo acima ou a lista.
             </div>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-slate-200">
@@ -407,9 +476,44 @@ export function SalesFormCard({
           </dl>
         </div>
 
-        {/* 5 — Pagamento */}
+        {/* 5 — Cliente (opcional) */}
+        <section className="space-y-3">
+          <StepHeading step="5" title="Cliente (opcional)" description="Vincule um cliente cadastrado a esta venda." />
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-slate-600">Buscar cliente</span>
+              <Input
+                placeholder="Nome, CPF/CNPJ ou e-mail"
+                value={customerQuery}
+                onChange={(e) => setCustomerQuery(e.target.value)}
+                autoComplete="off"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-slate-600">Cliente selecionado</span>
+              <Select
+                value={form.customerId || ""}
+                onChange={(e) => setForm((prev) => ({ ...prev, customerId: e.target.value }))}
+              >
+                <option value="">Nenhum (consumidor final)</option>
+                {form.customerId && !selectedCustomer ? (
+                  <option value={form.customerId}>Cliente atual</option>
+                ) : null}
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.cpfCnpj ? ` · ${c.cpfCnpj}` : ""}
+                  </option>
+                ))}
+              </Select>
+              {customersLoading ? <span className="text-xs text-slate-500">Carregando…</span> : null}
+            </label>
+          </div>
+        </section>
+
+        {/* 6 — Pagamento */}
         <section className="space-y-4">
-          <StepHeading step="5" title="Pagamento" description="Escolha a forma e confirme a venda." />
+          <StepHeading step="6" title="Pagamento" description="Escolha a forma e confirme a venda." />
           <div className="grid gap-3 md:grid-cols-2">
             <label className="flex flex-col gap-1 md:max-w-xs">
               <span className="text-xs font-medium text-slate-600">Forma de pagamento</span>
@@ -426,14 +530,17 @@ export function SalesFormCard({
               >
                 <option value="PIX">PIX</option>
                 <option value="CASH">Dinheiro</option>
-                <option value="CREDIT_CARD">Cartao credito</option>
-                <option value="DEBIT_CARD">Cartao debito</option>
-                <option value="INSTALLMENT">Parcelado</option>
+                <option value="CREDIT_CARD">Cartão crédito</option>
+                <option value="DEBIT_CARD">Cartão débito</option>
+                <option value="INSTALLMENT">Cartão parcelado</option>
               </Select>
+              <span className="text-xs text-slate-500">
+                Fiado ou pagar depois? Use o menu Crediário.
+              </span>
             </label>
             {form.paymentMethod === "INSTALLMENT" ? (
               <label className="flex max-w-xs flex-col gap-1">
-                <span className="text-xs font-medium text-slate-600">Numero de parcelas</span>
+                <span className="text-xs font-medium text-slate-600">Número de parcelas</span>
                 <Input
                   type="number"
                   min={2}
@@ -441,7 +548,7 @@ export function SalesFormCard({
                   value={form.installments}
                   onChange={(e) => setForm((prev) => ({ ...prev, installments: e.target.value }))}
                 />
-                <span className="text-xs text-slate-500">Minimo 2 parcelas.</span>
+                <span className="text-xs text-slate-500">Mínimo 2 parcelas (cartão). Fiado fica no Crediário.</span>
               </label>
             ) : null}
           </div>
@@ -455,7 +562,7 @@ export function SalesFormCard({
                 onChange={(e) => setForm((prev) => ({ ...prev, emitNfce: e.target.checked }))}
               />
               <span>
-                <span className="text-sm font-medium text-slate-800">Emitir NFC-e apos finalizar</span>
+                <span className="text-sm font-medium text-slate-800">Emitir nota fiscal (NFC-e) ao finalizar</span>
                 <span className="mt-0.5 block text-xs text-slate-500">
                   Desmarque para registrar apenas a venda e estoque, sem nota fiscal.
                 </span>
@@ -464,14 +571,14 @@ export function SalesFormCard({
           ) : null}
         </section>
 
-        {/* 6 — Finalizar */}
+        {/* 7 — Finalizar */}
         <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4">
           <Button className="min-w-[180px] text-sm" disabled={loading || items.length === 0}>
-            {editingSaleId ? "Salvar edicao" : "Finalizar venda"}
+            {editingSaleId ? "Salvar edição" : "Finalizar venda"}
           </Button>
           {editingSaleId ? (
             <Button type="button" variant="secondary" className="text-sm" onClick={cancelEdit}>
-              Cancelar edicao
+              Cancelar edição
             </Button>
           ) : null}
         </div>

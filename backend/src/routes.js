@@ -13,10 +13,17 @@ import { reportsRoutes } from "./modules/reports/reports.routes.js";
 import { crediarioRoutes } from "./modules/crediario/crediario.routes.js";
 import { supplierRoutes } from "./modules/suppliers/supplier.routes.js";
 import { nfeImportRoutes } from "./modules/nfeImports/nfeImport.routes.js";
+import { billingRoutes } from "./modules/billing/billing.routes.js";
+import { userRoutes } from "./modules/users/user.routes.js";
+import { cashRoutes } from "./modules/cash/cash.routes.js";
+import { stockAlertRoutes } from "./modules/stockAlerts/stockAlert.routes.js";
+
 const router = Router();
 
 router.get("/health", (_req, res) => res.json({ ok: true }));
 router.use("/auth", authRoutes);
+router.use("/billing", billingRoutes);
+router.use("/users", userRoutes);
 router.use("/customers", customerRoutes);
 router.use("/categories", categoryRoutes);
 router.use("/brands", brandRoutes);
@@ -30,5 +37,7 @@ router.use("/reports", reportsRoutes);
 router.use("/crediario", crediarioRoutes);
 router.use("/suppliers", supplierRoutes);
 router.use("/nfe-imports", nfeImportRoutes);
+router.use("/cash", cashRoutes);
+router.use("/stock-alerts", stockAlertRoutes);
 
 export { router };

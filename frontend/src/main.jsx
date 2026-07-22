@@ -53,3 +53,11 @@ ReactDOM.createRoot(rootEl).render(
     </RootErrorBoundary>
   </React.StrictMode>
 );
+
+if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      /* PWA opcional — falha silenciosa em dev sem HTTPS/localhost quirks */
+    });
+  });
+}

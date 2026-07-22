@@ -2,6 +2,7 @@ import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "../features/auth/useAuth.jsx";
 import { LoginPage } from "../features/auth/LoginPage.jsx";
+import { RegisterPage } from "../features/auth/RegisterPage.jsx";
 import { AppShell } from "../shared/components/AppShell.jsx";
 import { PageLoader } from "../shared/components/PageLoader.jsx";
 import { ToastProvider } from "../shared/components/ToastProvider.jsx";
@@ -38,6 +39,18 @@ const CrediarioPage = lazy(() =>
 const CustomersPage = lazy(() =>
   import("../features/customers/CustomersPage.jsx").then((m) => ({ default: m.CustomersPage }))
 );
+const BillingPage = lazy(() =>
+  import("../features/billing/BillingPage.jsx").then((m) => ({ default: m.BillingPage }))
+);
+const UsersPage = lazy(() =>
+  import("../features/users/UsersPage.jsx").then((m) => ({ default: m.UsersPage }))
+);
+const CashPage = lazy(() =>
+  import("../features/cash/CashPage.jsx").then((m) => ({ default: m.CashPage }))
+);
+const StockAlertsPage = lazy(() =>
+  import("../features/stock/StockAlertsPage.jsx").then((m) => ({ default: m.StockAlertsPage }))
+);
 function PrivateRoute({ children }) {
   const { token } = useAuth();
   return token ? children : <Navigate to="/login" replace />;
@@ -58,6 +71,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/cadastro" element={<RegisterPage />} />
       <Route path="/" element={<PrivateShell><AdminDashboardPage /></PrivateShell>} />
       <Route path="/catalog/categories" element={<PrivateShell><CategoriesPage /></PrivateShell>} />
       <Route path="/catalog/brands" element={<PrivateShell><BrandsPage /></PrivateShell>} />
@@ -71,7 +85,11 @@ function AppRoutes() {
       <Route path="/clientes" element={<PrivateShell><CustomersPage /></PrivateShell>} />
       <Route path="/estoque/movimentos" element={<PrivateShell><StockMovementsPage /></PrivateShell>} />
       <Route path="/estoque/importar-nfe" element={<PrivateShell><NfeImportPage /></PrivateShell>} />
+      <Route path="/estoque/alertas" element={<PrivateShell><StockAlertsPage /></PrivateShell>} />
+      <Route path="/caixa" element={<PrivateShell><CashPage /></PrivateShell>} />
       <Route path="/relatorios" element={<PrivateShell><ReportsPage /></PrivateShell>} />
+      <Route path="/assinatura" element={<PrivateShell><BillingPage /></PrivateShell>} />
+      <Route path="/usuarios" element={<PrivateShell><UsersPage /></PrivateShell>} />
     </Routes>
   );
 }

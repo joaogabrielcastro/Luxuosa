@@ -110,6 +110,7 @@ export const productService = {
     return products
       .map((product) => {
         const currentStock = product.variations.reduce((acc, item) => acc + item.stock, 0);
+        const severity = currentStock === 0 ? "critical" : "low";
         return {
           id: product.id,
           name: product.name,
@@ -117,7 +118,8 @@ export const productService = {
           category: product.category?.name || null,
           brand: product.brand?.name || null,
           minStock: product.minStock,
-          currentStock
+          currentStock,
+          severity
         };
       })
       .filter((product) => product.currentStock <= product.minStock);

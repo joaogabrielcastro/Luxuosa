@@ -29,6 +29,11 @@ export function useInvalidateLuxuosa(token) {
     return queryClient.invalidateQueries({ queryKey: queryKeys.customers.list(token) });
   }, [queryClient, token]);
 
+  const invalidateUsers = useCallback(() => {
+    if (!token) return Promise.resolve();
+    return queryClient.invalidateQueries({ queryKey: queryKeys.users.list(token) });
+  }, [queryClient, token]);
+
   const invalidateCrediario = useCallback(() => {
     if (!token) return Promise.resolve();
     return queryClient.invalidateQueries({ queryKey: queryKeys.crediario.all(token) });
@@ -65,6 +70,7 @@ export function useInvalidateLuxuosa(token) {
     invalidateSales,
     invalidateProducts,
     invalidateCustomers,
+    invalidateUsers,
     invalidateCrediario,
     invalidateStock,
     invalidateReports,

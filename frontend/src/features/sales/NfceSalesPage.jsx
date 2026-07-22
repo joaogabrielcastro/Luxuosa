@@ -10,7 +10,7 @@ import { nfceJobStatusLabel, paymentLabel, saleStatusLabel } from "./sales.utils
 import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
 import { Modal } from "../../shared/components/ui/Modal.jsx";
 
-/** Página de vendas (NFC-e consumidor final, sem seleção de cliente na UI). */
+/** Página de vendas (PDV) com cliente opcional e atalhos de teclado. */
 export function SalesPage() {
   const { token, tenant } = useAuth();
   const enableNfceEmission = tenant?.enableNfceEmission === true;
@@ -70,6 +70,7 @@ export function SalesPage() {
         }
       />
       <SalesFormCard
+        token={token}
         editingSaleId={editingSaleId}
         form={form}
         setForm={setForm}

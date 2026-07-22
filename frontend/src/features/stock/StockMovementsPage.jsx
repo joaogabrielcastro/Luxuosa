@@ -103,29 +103,29 @@ export function StockMovementsPage() {
   return (
     <div className="ui-page">
       <PageHeader
-        title="Movimentacoes de estoque"
-        description="Ajustes manuais e historico operacional."
+        title="Ajustar estoque"
+        description="Entrada ou saída manual. Notas de compra do fornecedor ficam em Entrada por NF-e."
       />
       <div className="mb-1">
         <Link to="/estoque/importar-nfe">
           <Button type="button" variant="secondary" className="text-sm">
-            Importar XML NF-e
+            Entrada por NF-e (XML)
           </Button>
         </Link>
       </div>
       <section className="grid gap-3 sm:grid-cols-3">
-        <StatCard label="Movimentacoes na pagina" value={movements.length} />
+        <StatCard label="Movimentações na página" value={movements.length} />
         <StatCard label="Entradas" value={movements.filter((m) => m.type === "ENTRY").length} />
-        <StatCard label="Saidas" value={movements.filter((m) => m.type === "EXIT").length} />
+        <StatCard label="Saídas" value={movements.filter((m) => m.type === "EXIT").length} />
       </section>
-      <SectionCard title="Nova movimentacao">
+      <SectionCard title="Nova movimentação">
         <p className="text-sm text-slate-600">
-          Ajuste manual de estoque (entrada de mercadoria ou saida para uso interno). Vendas continuam baixando
+          Ajuste manual de estoque (entrada de mercadoria ou saída para uso interno). Vendas continuam baixando
           estoque automaticamente.
         </p>
         <form className="mt-4 grid max-w-xl gap-3" onSubmit={handleSubmit}>
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-slate-600">Produto / variacao</span>
+            <span className="text-xs font-medium text-slate-600">Produto / variação</span>
             <Select
               value={form.productVariationId}
               onChange={(e) => setForm((p) => ({ ...p, productVariationId: e.target.value }))}
@@ -166,9 +166,9 @@ export function StockMovementsPage() {
         </form>
       </SectionCard>
 
-      <SectionCard title="Historico recente">
+      <SectionCard title="Histórico recente">
         <div className="mb-3 flex items-center justify-between text-xs text-slate-600">
-          <span>{listLoading ? "Carregando..." : `Mostrando ${movements.length} movimentacoes`}</span>
+          <span>{listLoading ? "Carregando..." : `Mostrando ${movements.length} movimentações`}</span>
           <div className="flex gap-2">
             <Button
               type="button"
@@ -204,7 +204,10 @@ export function StockMovementsPage() {
               {movements.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="py-4 text-slate-500">
-                    <EmptyState description="Nenhuma movimentacao manual ainda." />
+                    <EmptyState
+                      title="Nenhum ajuste ainda"
+                      description="Registre uma entrada ou saída no formulário acima, ou use Entrada por NF-e para notas do fornecedor."
+                    />
                   </td>
                 </tr>
               ) : (
@@ -213,7 +216,7 @@ export function StockMovementsPage() {
                     <td className="py-2 pr-2 whitespace-nowrap">{formatDateTimeBR(m.occurredAt)}</td>
                     <td className="py-2 pr-2">
                       <Badge variant={m.type === "ENTRY" ? "success" : "warning"}>
-                        {m.type === "ENTRY" ? "Entrada" : "Saida"}
+                        {m.type === "ENTRY" ? "Entrada" : "Saída"}
                       </Badge>
                     </td>
                     <td className="py-2 pr-2">{m.quantity}</td>
