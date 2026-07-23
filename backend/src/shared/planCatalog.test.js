@@ -4,6 +4,7 @@ import {
   FEATURE_MIN_PLAN,
   normalizeStripePlan,
   planAtLeast,
+  PLAN_CATALOG,
   PLAN_RANK
 } from "./planCatalog.js";
 
@@ -27,6 +28,30 @@ describe("planAtLeast", () => {
     assert.equal(PLAN_RANK[FEATURE_MIN_PLAN.nfeImport], PLAN_RANK.PRO);
     assert.equal(PLAN_RANK[FEATURE_MIN_PLAN.nfceEmission], PLAN_RANK.PRO);
     assert.equal(PLAN_RANK[FEATURE_MIN_PLAN.stockAlerts], PLAN_RANK.PRO);
+  });
+});
+
+describe("PLAN_CATALOG precos", () => {
+  it("PRO R$ 97 e ENTERPRISE R$ 250", () => {
+    assert.equal(PLAN_CATALOG.PRO.amountCents, 9700);
+    assert.equal(PLAN_CATALOG.PRO.priceLabel, "R$ 97/mes");
+    assert.equal(PLAN_CATALOG.ENTERPRISE.amountCents, 25000);
+    assert.equal(PLAN_CATALOG.ENTERPRISE.priceLabel, "R$ 250/mes");
+    assert.equal(PLAN_CATALOG.BASIC.amountCents, 0);
+  });
+});
+
+describe("normalizeStripePlan", () => {
+  it("normaliza ids validos", () => {
+    assert.equal(normalizeStripePlan("pro"), "PRO");
+    assert.equal(normalizeStripePlan("ENTERPRISE"), "ENTERPRISE");
+    assert.equal(normalizeStripePlan("BASIC"), "BASIC");
+  });
+
+  it("retorna null para invalido", () => {
+    assert.equal(normalizeStripePlan(""), null);
+    assert.equal(normalizeStripePlan("GOLD"), null);
+    assert.equal(normalizeStripePlan(undefined), null);
   });
 });
 

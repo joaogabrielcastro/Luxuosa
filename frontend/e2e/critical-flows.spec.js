@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
-
-const API = process.env.E2E_API_URL || "http://localhost:3001/api/v1";
+import { API, loginAsDemoAdmin } from "./helpers.js";
 
 function uniqueCnpj() {
   const stamp = String(Date.now()).slice(-10);
@@ -15,11 +14,7 @@ test.describe("fluxos criticos", () => {
   });
 
   test("login com credenciais demo", async ({ page }) => {
-    await page.goto("/login");
-    await page.locator("#login-email").fill("admin@luxuosa.com");
-    await page.locator("#login-password").fill("123456");
-    await page.getByRole("button", { name: /^entrar$/i }).click();
-    await expect(page).toHaveURL(/\/vendas/, { timeout: 20_000 });
+    await loginAsDemoAdmin(page);
     await expect(page.getByRole("heading", { name: "Vendas", exact: true })).toBeVisible();
   });
 
@@ -39,10 +34,7 @@ test.describe("fluxos criticos", () => {
   });
 
   test("apos login, PDV carrega busca de produtos", async ({ page }) => {
-    await page.goto("/login");
-    await page.locator("#login-email").fill("admin@luxuosa.com");
-    await page.locator("#login-password").fill("123456");
-    await page.getByRole("button", { name: /^entrar$/i }).click();
+    await loginAsDemoAdmin(page);
     await expect(page).toHaveURL(/\/vendas/);
 
     const barcode = page.locator("#sale-barcode-input");

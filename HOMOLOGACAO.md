@@ -25,7 +25,6 @@ docker compose restart backend nfce-worker
 | Postgres | localhost:5434 |
 | Redis | localhost:6380 (host) → 6379 no container |
 
-Variáveis críticas em `.env.compose` (não versionar):
 
 - `JWT_SECRET`
 - `STRIPE_SECRET_KEY` (+ opcional `STRIPE_PRICE_PRO` / `STRIPE_PRICE_ENTERPRISE`)
@@ -45,7 +44,8 @@ Coloque o `whsec_...` em `STRIPE_WEBHOOK_SECRET`. Sem webhook, o app usa `POST /
 
 ```bash
 # na raiz — build FE + rotas + unit + integração API (nao inclui e2e)
-npm run check
+npm run checkVariáveis críticas em `.env.compose` (não versionar):
+
 
 # so unitarios (shared: salePayload, pagination, nfeXmlParser, planCatalog, tenantIsolation…)
 npm test --prefix backend
@@ -59,10 +59,11 @@ npm run test:coverage --prefix backend
 
 # e2e Playwright (opcional; nao bloqueia `check` se browsers faltarem)
 # API em :3001; front sobe sozinho, ou reuse docker front:
+# cobre shells (app-flows / critical-flows) + fluxos profundos (venda, caixa, estoque, CSV, NF-e CTA, billing)
 E2E_SKIP_WEBSERVER=1 npm run test:e2e
 ```
 
-**O que a cobertura automatizada cobre:** contratos HTTP dos módulos montados (auth, users, catalog, customers, sales, stock, crediário, suppliers, reports, dashboard, billing, NF-e import, invoices shells) + utilitários compartilhados + shells Playwright das páginas principais.
+**O que a cobertura automatizada cobre:** contratos HTTP dos módulos montados (auth, users, catalog, customers, sales, stock, crediário, suppliers, reports, dashboard, billing, NF-e import, invoices shells) + utilitários compartilhados (incl. preços PRO 97 / ENTERPRISE 250) + Playwright shells e deep flows (venda, caixa, estoque ENTRY, crediário form, export CSV, alertas/NF-e CTA Pro, dashboard, assinatura).
 
 **Ainda manual:** NFC-e autorizada na SEFAZ/Nuvem Fiscal, Checkout/Portal Stripe com cartão real de teste, webhook Stripe em tempo real.
 

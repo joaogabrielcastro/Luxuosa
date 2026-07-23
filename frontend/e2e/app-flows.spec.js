@@ -1,14 +1,5 @@
 import { expect, test } from "@playwright/test";
-
-const API = process.env.E2E_API_URL || "http://localhost:3001/api/v1";
-
-async function loginAsDemoAdmin(page) {
-  await page.goto("/login");
-  await page.locator("#login-email").fill("admin@luxuosa.com");
-  await page.locator("#login-password").fill("123456");
-  await page.getByRole("button", { name: /^entrar$/i }).click();
-  await expect(page).toHaveURL(/\/vendas/, { timeout: 20_000 });
-}
+import { API, loginAsDemoAdmin } from "./helpers.js";
 
 test.describe("fluxos da aplicacao", () => {
   test.beforeAll(async ({ request }) => {

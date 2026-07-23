@@ -29,6 +29,7 @@ frontend/test-results/
 frontend/playwright-report/
 frontend/blob-report/
 frontend/playwright/.cache/
+frontend/e2e/.auth-*.json
 
 # Env files
 .env
