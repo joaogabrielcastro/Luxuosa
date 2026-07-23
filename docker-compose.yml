@@ -52,6 +52,9 @@ services:
       PORT: 3001
       DATABASE_URL: postgresql://postgres:postgres@db:5432/luxuosa
       REDIS_URL: redis://redis:6379
+      # Local/e2e: limite mais alto (default 30/15min bloqueia Playwright com varios logins).
+      LOGIN_RATE_LIMIT_MAX: "200"
+      LOGIN_RATE_LIMIT_WINDOW_MS: "900000"
       FRONTEND_URL: http://localhost:3006
       JWT_SECRET: change-me-in-production
       JWT_EXPIRES_IN: 1d

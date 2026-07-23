@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect } from "@playwright/test";
@@ -7,6 +8,33 @@ export const API = process.env.E2E_API_URL || "http://localhost:3001/api/v1";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BACKEND_ROOT = path.resolve(__dirname, "../../backend");
+export const DEMO_AUTH_FILE = path.join(__dirname, ".auth-demo-admin.json");
+
+/**
+ * Garante storageState demo (1 login). Reutiliza arquivo se ja tiver token.
+ * @param {import('@playwright/test').Browser} browser
+ */
+export async function ensureDemoAuthFile(browser) {
+  fs.mkdirSync(path.dirname(DEMO_AUTH_FILE), { recursive: true });
+  try {
+    const raw = fs.readFileSync(DEMO_AUTH_FILE, "utf8");
+    const state = JSON.parse(raw);
+    const origin = state?.origins?.find((o) => String(o.origin || "").includes("localhost:3006"));
+    const hasToken = origin?.localStorage?.some(
+      (e) => e.name === "luxuosa_session" && String(e.value || "").includes('"token"')
+    );
+    if (hasToken) return DEMO_AUTH_FILE;
+  } catch {
+    /* regenera */
+  }
+
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await loginAsDemoAdmin(page);
+  await context.storageState({ path: DEMO_AUTH_FILE });
+  await context.close();
+  return DEMO_AUTH_FILE;
+}
 
 /**
  * Login demo admin. Prefers API + localStorage (1 request) e faz retry em 429.

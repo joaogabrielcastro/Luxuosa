@@ -30,6 +30,7 @@ frontend/playwright-report/
 frontend/blob-report/
 frontend/playwright/.cache/
 frontend/e2e/.auth-*.json
+frontend/e2e/.tmp-nfe-*.xml
 
 # Env files
 .env

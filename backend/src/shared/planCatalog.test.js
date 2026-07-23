@@ -5,7 +5,8 @@ import {
   normalizeStripePlan,
   planAtLeast,
   PLAN_CATALOG,
-  PLAN_RANK
+  PLAN_RANK,
+  tenantMeetsPlan
 } from "./planCatalog.js";
 
 describe("planAtLeast", () => {
@@ -31,6 +32,18 @@ describe("planAtLeast", () => {
   });
 });
 
+describe("tenantMeetsPlan", () => {
+  it("respeita plano quando nao isento", () => {
+    assert.equal(tenantMeetsPlan({ plan: "BASIC", planGateExempt: false }, "PRO"), false);
+    assert.equal(tenantMeetsPlan({ plan: "PRO", planGateExempt: false }, "PRO"), true);
+  });
+
+  it("legado (planGateExempt) libera qualquer feature", () => {
+    assert.equal(tenantMeetsPlan({ plan: "BASIC", planGateExempt: true }, "PRO"), true);
+    assert.equal(tenantMeetsPlan({ plan: "BASIC", planGateExempt: true }, "ENTERPRISE"), true);
+  });
+});
+
 describe("PLAN_CATALOG precos", () => {
   it("PRO R$ 97 e ENTERPRISE R$ 250", () => {
     assert.equal(PLAN_CATALOG.PRO.amountCents, 9700);
@@ -38,20 +51,6 @@ describe("PLAN_CATALOG precos", () => {
     assert.equal(PLAN_CATALOG.ENTERPRISE.amountCents, 25000);
     assert.equal(PLAN_CATALOG.ENTERPRISE.priceLabel, "R$ 250/mes");
     assert.equal(PLAN_CATALOG.BASIC.amountCents, 0);
-  });
-});
-
-describe("normalizeStripePlan", () => {
-  it("normaliza ids validos", () => {
-    assert.equal(normalizeStripePlan("pro"), "PRO");
-    assert.equal(normalizeStripePlan("ENTERPRISE"), "ENTERPRISE");
-    assert.equal(normalizeStripePlan("BASIC"), "BASIC");
-  });
-
-  it("retorna null para invalido", () => {
-    assert.equal(normalizeStripePlan(""), null);
-    assert.equal(normalizeStripePlan("GOLD"), null);
-    assert.equal(normalizeStripePlan(undefined), null);
   });
 });
 

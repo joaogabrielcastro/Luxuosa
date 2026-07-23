@@ -81,6 +81,8 @@ model Tenant {
   email            String
   phone            String?
   plan             Plan     @default(BASIC)
+  /** Lojas legadas: nao aplica bloqueio por plano (NFC-e, import NF-e, alertas). Novos cadastros ficam false. */
+  planGateExempt   Boolean  @default(false)
   /** Emissao NFC-e (Nuvem Fiscal). So habilite na loja com CNPJ/config na Nuvem — evita emitir pelo emitente errado. */
   enableNfceEmission Boolean @default(false)
   /** Customer Stripe (cus_...). */

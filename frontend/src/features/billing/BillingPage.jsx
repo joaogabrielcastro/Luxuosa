@@ -127,6 +127,12 @@ export function BillingPage() {
       />
 
       {error ? <Alert variant="danger">{error}</Alert> : null}
+      {status?.planGateExempt ? (
+        <Alert variant="info">
+          Esta loja está liberada dos bloqueios de plano por enquanto (cliente já existente). Você
+          pode assinar quando quiser; os recursos continuam disponíveis.
+        </Alert>
+      ) : null}
       {!status?.configured ? (
         <Alert variant="warning">
           Pagamentos ainda não estão configurados nesta loja. Contate o suporte.

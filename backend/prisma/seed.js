@@ -130,6 +130,8 @@ async function main() {
 
       phone: "11911111111",
 
+      plan: Plan.PRO,
+
       enableNfceEmission: false,
 
       users: [{ name: "Mariana Pavin", email: "marianapavin@admin.com" }]
@@ -198,8 +200,8 @@ async function main() {
 
         phone: tenantCfg.phone,
 
-        plan: Plan.BASIC,
-
+        plan: tenantCfg.plan ?? Plan.BASIC,
+        planGateExempt: true,
         enableNfceEmission: Boolean(tenantCfg.enableNfceEmission)
 
       },
@@ -214,8 +216,9 @@ async function main() {
 
         phone: tenantCfg.phone,
 
-        plan: Plan.BASIC,
+        plan: tenantCfg.plan ?? Plan.BASIC,
 
+        planGateExempt: true,
         enableNfceEmission: Boolean(tenantCfg.enableNfceEmission)
 
       }

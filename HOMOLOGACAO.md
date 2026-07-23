@@ -133,6 +133,8 @@ Webhook Stripe (Dashboard):
 | PRO | R$ 97/mês | NFC-e (se `enableNfceEmission`), import NF-e |
 | ENTERPRISE | R$ 250/mês | Tudo do Pro + roadmap multi-loja |
 
+**Clientes já existentes:** tenants com `planGateExempt=true` **não são bloqueados** por plano (NFC-e, import NF-e, alertas). A migração marca todas as lojas atuais como isentas; **novos cadastros** self-serve nascem com `planGateExempt=false` e passam pelo gate (BASIC → upgrade).
+
 Habilitar emissão NFC-e **por loja** (`Tenant.enableNfceEmission`) só depois do CNPJ configurado na Nuvem Fiscal — evita emitir com emitente errado.
 
 ## 6. Critérios de “homologado”

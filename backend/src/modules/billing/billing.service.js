@@ -4,8 +4,8 @@ import { getStripe, isStripeConfigured } from "../../shared/stripeClient.js";
 import {
   PLAN_CATALOG,
   STRIPE_PLAN_LOOKUP_KEYS,
-  normalizeStripePlan,
-  planAtLeast
+  tenantMeetsPlan,
+  normalizeStripePlan
 } from "../../shared/planCatalog.js";
 
 /**
@@ -104,6 +104,7 @@ export const billingService = {
         id: true,
         name: true,
         plan: true,
+        planGateExempt: true,
         stripeCustomerId: true,
         stripeSubscriptionId: true,
         stripeSubscriptionStatus: true,
@@ -120,12 +121,13 @@ export const billingService = {
     return {
       configured: isStripeConfigured(),
       currentPlan: tenant.plan,
+      planGateExempt: Boolean(tenant.planGateExempt),
       subscriptionStatus: tenant.stripeSubscriptionStatus,
       planPeriodEnd: tenant.planPeriodEnd,
       hasStripeCustomer: Boolean(tenant.stripeCustomerId),
       entitlements: {
-        nfeImport: planAtLeast(tenant.plan, "PRO"),
-        nfceEmission: planAtLeast(tenant.plan, "PRO") && tenant.enableNfceEmission
+        nfeImport: tenantMeetsPlan(tenant, "PRO"),
+        nfceEmission: tenantMeetsPlan(tenant, "PRO") && tenant.enableNfceEmission
       },
       plans: Object.values(PLAN_CATALOG).map((p) => ({
         ...p,
