@@ -139,11 +139,26 @@ Habilitar emissão NFC-e **por loja** (`Tenant.enableNfceEmission`) só depois d
 
 ## 6. Critérios de “homologado”
 
-- [ ] Health OK + Redis up
-- [ ] Cadastro de loja funciona
-- [ ] Venda baixa estoque
-- [ ] NFC-e autoriza em homologação (loja com flag ligada)
-- [ ] Import NF-e sobe estoque
-- [ ] Checkout Stripe Pro atualiza `Tenant.plan`
-- [ ] `npm run check` verde
-- [ ] Segredos não estão no Git
+- [x] Health OK + Redis up *(local Docker verificado)*
+- [ ] Cadastro de loja funciona *(manual no front)*
+- [x] Venda baixa estoque *(coberto por testes de integração)*
+- [ ] NFC-e autoriza em homologação (loja com flag ligada) *(manual SEFAZ — ver §3C)*
+- [x] Import NF-e sobe estoque *(coberto por testes de integração)*
+- [ ] Checkout Stripe Pro atualiza `Tenant.plan` *(manual — webhook ou POST /billing/sync)*
+- [x] `npm run check` verde
+- [x] Segredos não estão no Git *(`.env.example` sem secrets; use `.env` / `.env.compose`)*
+
+### Status técnico (automático)
+
+| Checagem | Resultado |
+|----------|-----------|
+| `GET /api/v1/health` | ok |
+| Stripe Products/Prices (`npm run stripe:setup`) | PRO + ENTERPRISE via `lookup_key` |
+| Nuvem Fiscal OAuth + GET empresas | ok (sandbox; Luxuosa Presentes cadastrada) |
+| CI GitHub Actions | workflow `.github/workflows/ci.yml` |
+
+### Ainda precisa de você (manual)
+
+1. **NFC-e real:** login Luxuosa → venda com “Emitir NFC-e” → PDF autorizado (worker + SEFAZ homologação).
+2. **Stripe checkout:** Assinatura → Pro → cartão `4242…` → voltar com plano atualizado. Para webhook local: `stripe listen --forward-to localhost:3001/api/v1/billing/webhook` e colocar `whsec_…` em `STRIPE_WEBHOOK_SECRET`.
+3. **Produção (Coolify):** após 1–2 ok, aplicar envs da §4, `prisma migrate deploy`, webhook Stripe live, `NUVEM_FISCAL_AMBIENTE=producao` só quando for emitir real.
