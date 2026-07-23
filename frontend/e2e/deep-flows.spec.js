@@ -5,17 +5,36 @@ import { expect, test } from "@playwright/test";
 import {
   API,
   apiJson,
+  DEMO_AUTH_FILE,
   ensureCatalog,
+  ensureDemoAuthFile,
   forcePlanPro,
-  loginAsDemoAdmin,
-  loginWithSession,
-  registerFreshTenant,
   sessionToken
 } from "./helpers.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SAMPLE_NFE = path.resolve(__dirname, "../../backend/src/shared/fixtures/sample-nfe.xml");
-const AUTH_FILE = path.join(__dirname, ".auth-demo-admin.json");
+const AUTH_FILE = DEMO_AUTH_FILE;
+
+function uniqueAccessKey() {
+  const stamp = String(Date.now());
+  const rnd = String(Math.floor(Math.random() * 1e10)).padStart(10, "0");
+  return `${stamp}${rnd}`.replace(/\D/g, "").slice(0, 44).padEnd(44, "0");
+}
+
+/** Gera XML temporario com chave unica (evita conflito @@unique tenant+accessKey). */
+function writeUniqueSampleNfe() {
+  const sample = fs.readFileSync(SAMPLE_NFE, "utf8");
+  const accessKey = uniqueAccessKey();
+  const nNF = String(100000 + Math.floor(Math.random() * 800000));
+  const xml = sample
+    .replace(/Id="NFe\d+"/g, `Id="NFe${accessKey}"`)
+    .replace(/<chNFe>\d+<\/chNFe>/g, `<chNFe>${accessKey}</chNFe>`)
+    .replace(/<nNF>\d+<\/nNF>/g, `<nNF>${nNF}</nNF>`);
+  const out = path.join(__dirname, `.tmp-nfe-${accessKey.slice(-8)}.xml`);
+  fs.writeFileSync(out, xml, "utf8");
+  return out;
+}
 
 // Placeholder para o Playwright carregar storageState antes do beforeAll gravar a sessao real.
 if (!fs.existsSync(AUTH_FILE)) {
@@ -28,13 +47,7 @@ test.describe("fluxos profundos", () => {
   test.beforeAll(async ({ browser, request }) => {
     const health = await request.get(`${API}/health`);
     expect(health.ok(), "API precisa estar no ar (docker compose / backend)").toBeTruthy();
-
-    fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true });
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    await loginAsDemoAdmin(page);
-    await context.storageState({ path: AUTH_FILE });
-    await context.close();
+    await ensureDemoAuthFile(browser);
   });
 
   test.use({ storageState: AUTH_FILE });
@@ -245,14 +258,15 @@ test.describe("fluxos profundos", () => {
       timeout: 15_000
     });
     const productName = `Produto UI ${stamp}`;
-    await page.getByPlaceholder("Nome").fill(productName);
-    await page.getByPlaceholder("SKU (opcional)").fill(`SKU${stamp}`);
-    await page.getByPlaceholder("Preco").fill("99,90");
-    await page.getByPlaceholder("Custo").fill("40,00");
-    await page.getByPlaceholder(/Quantidade atual/i).fill("3");
-    await page.locator("form select").nth(0).selectOption(cat.data.id);
-    await page.locator("form select").nth(1).selectOption(brand.data.id);
-    await page.getByRole("button", { name: /Salvar produto/i }).click();
+    const form = page.locator("form").filter({ has: page.getByRole("button", { name: /Salvar produto/i }) });
+    await form.getByPlaceholder("Nome", { exact: true }).fill(productName);
+    await form.getByPlaceholder("SKU (opcional)").fill(`SKU${stamp}`);
+    await form.getByPlaceholder("Preco").fill("99,90");
+    await form.getByPlaceholder("Custo").fill("40,00");
+    await form.getByPlaceholder(/Quantidade atual/i).fill("3");
+    await form.locator("select").nth(0).selectOption(cat.data.id);
+    await form.locator("select").nth(1).selectOption(brand.data.id);
+    await form.getByRole("button", { name: /Salvar produto/i }).click();
     await expect(page.getByText(productName).first()).toBeVisible({ timeout: 15_000 });
   });
 
@@ -272,23 +286,23 @@ test.describe("fluxos profundos", () => {
   });
 });
 
-test.describe("fluxos PRO (tenant isolado)", () => {
+test.describe("fluxos PRO (demo + forcePlanPro)", () => {
   test.setTimeout(120_000);
 
-  test.beforeAll(async ({ request }) => {
+  test.beforeAll(async ({ browser, request }) => {
     const health = await request.get(`${API}/health`);
     expect(health.ok(), "API precisa estar no ar").toBeTruthy();
+    await ensureDemoAuthFile(browser);
   });
 
+  test.use({ storageState: AUTH_FILE });
+
   test("avisos de estoque: salvar e verificar", async ({ page, request }) => {
-    const session = await registerFreshTenant(request);
-    await forcePlanPro(session.tenantId);
-    await ensureCatalog(request, session.token, { stock: 0, forceNew: true });
-    await loginWithSession(page, {
-      token: session.token,
-      user: session.user,
-      tenant: session.tenant
-    });
+    await page.goto("/vendas");
+    const token = await sessionToken(page);
+    const session = await page.evaluate(() => JSON.parse(localStorage.getItem("luxuosa_session")));
+    await forcePlanPro(session.tenant.id);
+    await ensureCatalog(request, token, { stock: 0, forceNew: true });
 
     await page.goto("/estoque/alertas");
     await expect(page.getByRole("heading", { name: "Avisos de estoque", exact: true })).toBeVisible({
@@ -307,43 +321,53 @@ test.describe("fluxos PRO (tenant isolado)", () => {
     ).toBeVisible({ timeout: 15_000 });
   });
 
-  test("entrada NF-e: preview e confirmar estoque", async ({ page, request }) => {
-    const session = await registerFreshTenant(request);
-    await forcePlanPro(session.tenantId);
-    await loginWithSession(page, {
-      token: session.token,
-      user: session.user,
-      tenant: session.tenant
-    });
+  test("entrada NF-e: preview e confirmar estoque", async ({ page }) => {
+    await page.goto("/vendas");
+    const session = await page.evaluate(() => JSON.parse(localStorage.getItem("luxuosa_session")));
+    await forcePlanPro(session.tenant.id);
 
-    await page.goto("/estoque/importar-nfe");
-    await expect(page.getByRole("heading", { name: /Entrada por NF-e/i })).toBeVisible({
-      timeout: 15_000
-    });
+    const tmpXml = writeUniqueSampleNfe();
+    try {
+      await page.goto("/estoque/importar-nfe");
+      await expect(page.getByRole("heading", { name: /Entrada por NF-e/i })).toBeVisible({
+        timeout: 15_000
+      });
 
-    await page.locator('input[type="file"]').setInputFiles(SAMPLE_NFE);
-    await expect(page.getByText(/Arquivo:/i)).toBeVisible({ timeout: 10_000 });
+      await page.locator('input[type="file"]').setInputFiles(tmpXml);
+      await expect(page.getByText(/Arquivo:/i)).toBeVisible({ timeout: 10_000 });
 
-    await page.getByRole("button", { name: /Ler nota e continuar/i }).click();
-    await expect(
-      page
-        .getByText(/Produto encontrado|Produto novo|Necessita vinculacao|Revis|Fornecedor|Conferencia/i)
-        .first()
-    ).toBeVisible({ timeout: 20_000 });
+      await page.getByRole("button", { name: /Ler nota e continuar/i }).click();
+      await expect(
+        page
+          .getByText(/Produto encontrado|Produto novo|Necessita vinculacao|Revis|Fornecedor|Conferencia/i)
+          .first()
+      ).toBeVisible({ timeout: 20_000 });
 
-    const priceInputs = page.locator("label").filter({ hasText: /Preco venda/i }).locator("input");
-    const count = await priceInputs.count();
-    for (let i = 0; i < count; i += 1) {
-      const el = priceInputs.nth(i);
-      const val = await el.inputValue();
-      if (!String(val || "").trim()) {
-        await el.fill("49,90");
+      const priceInputs = page.locator("label").filter({ hasText: /Preco venda/i }).locator("input");
+      const count = await priceInputs.count();
+      for (let i = 0; i < count; i += 1) {
+        const el = priceInputs.nth(i);
+        const val = await el.inputValue();
+        if (!String(val || "").trim()) {
+          await el.fill("49,90");
+        }
+      }
+
+      await page.getByRole("button", { name: /Confirmar e atualizar estoque/i }).click();
+      await expect(
+        page.getByText(/NF-e importada|estoque atualizado|Importacao concluida|Concluida/i).first()
+      ).toBeVisible({ timeout: 25_000 });
+    } finally {
+      try {
+        fs.unlinkSync(tmpXml);
+      } catch {
+        /* ignore */
+      }
+      try {
+        await forcePlanPro(session.tenant.id, "BASIC");
+      } catch {
+        /* ignore */
       }
     }
-
-    await page.getByRole("button", { name: /Confirmar e atualizar estoque/i }).click();
-    await expect(
-      page.getByText(/NF-e importada|estoque atualizado|Importacao concluida|Concluida/i).first()
-    ).toBeVisible({ timeout: 25_000 });
   });
 });

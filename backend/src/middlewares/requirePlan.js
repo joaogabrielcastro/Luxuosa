@@ -1,8 +1,9 @@
 import { prisma } from "../config/prisma.js";
-import { planAtLeast } from "../shared/planCatalog.js";
+import { tenantMeetsPlan } from "../shared/planCatalog.js";
 
 /**
  * Exige plano minimo do tenant (BASIC < PRO < ENTERPRISE).
+ * Tenants com planGateExempt (clientes legados) nao sao bloqueados.
  * @param {"BASIC"|"PRO"|"ENTERPRISE"} minPlan
  */
 export function requirePlan(minPlan) {
@@ -16,14 +17,14 @@ export function requirePlan(minPlan) {
       }
       const tenant = await prisma.tenant.findUnique({
         where: { id: tenantId },
-        select: { plan: true }
+        select: { plan: true, planGateExempt: true }
       });
       if (!tenant) {
         const err = new Error("Loja nao encontrada.");
         err.statusCode = 404;
         return next(err);
       }
-      if (!planAtLeast(tenant.plan, minPlan)) {
+      if (!tenantMeetsPlan(tenant, minPlan)) {
         const err = new Error(
           `Recurso disponivel a partir do plano ${minPlan}. Atualize em Assinatura.`
         );
@@ -33,6 +34,7 @@ export function requirePlan(minPlan) {
         return next(err);
       }
       req.tenantPlan = tenant.plan;
+      req.planGateExempt = Boolean(tenant.planGateExempt);
       return next();
     } catch (error) {
       return next(error);

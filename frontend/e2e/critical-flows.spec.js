@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { API, loginAsDemoAdmin } from "./helpers.js";
+import { API, DEMO_AUTH_FILE, ensureDemoAuthFile, loginAsDemoAdmin } from "./helpers.js";
 
 function uniqueCnpj() {
   const stamp = String(Date.now()).slice(-10);
@@ -8,14 +8,20 @@ function uniqueCnpj() {
 }
 
 test.describe("fluxos criticos", () => {
-  test.beforeAll(async ({ request }) => {
+  test.beforeAll(async ({ browser, request }) => {
     const health = await request.get(`${API}/health`);
     expect(health.ok(), "API precisa estar no ar (docker compose / backend)").toBeTruthy();
+    await ensureDemoAuthFile(browser);
   });
 
-  test("login com credenciais demo", async ({ page }) => {
-    await loginAsDemoAdmin(page);
-    await expect(page.getByRole("heading", { name: "Vendas", exact: true })).toBeVisible();
+  test("login com credenciais demo", async ({ browser }) => {
+    const context = await browser.newContext({ storageState: DEMO_AUTH_FILE });
+    const page = await context.newPage();
+    await page.goto("/vendas");
+    await expect(page.getByRole("heading", { name: "Vendas", exact: true })).toBeVisible({
+      timeout: 15_000
+    });
+    await context.close();
   });
 
   test("cadastro self-serve cria loja e entra", async ({ page }) => {
@@ -33,11 +39,13 @@ test.describe("fluxos criticos", () => {
     await expect(page).toHaveURL(/\/vendas/, { timeout: 25_000 });
   });
 
-  test("apos login, PDV carrega busca de produtos", async ({ page }) => {
-    await loginAsDemoAdmin(page);
+  test("apos login, PDV carrega busca de produtos", async ({ browser }) => {
+    const context = await browser.newContext({ storageState: DEMO_AUTH_FILE });
+    const page = await context.newPage();
+    await page.goto("/vendas");
     await expect(page).toHaveURL(/\/vendas/);
-
     const barcode = page.locator("#sale-barcode-input");
     await expect(barcode).toBeVisible({ timeout: 15_000 });
+    await context.close();
   });
 });

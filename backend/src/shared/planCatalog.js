@@ -83,6 +83,17 @@ export function planAtLeast(currentPlan, requiredPlan) {
 }
 
 /**
+ * Acesso efetivo ao recurso: plano minimo OU loja legada (planGateExempt).
+ * @param {{ plan?: string|null, planGateExempt?: boolean|null }|null|undefined} tenant
+ * @param {PlanId|string} requiredPlan
+ * @returns {boolean}
+ */
+export function tenantMeetsPlan(tenant, requiredPlan) {
+  if (tenant?.planGateExempt) return true;
+  return planAtLeast(tenant?.plan, requiredPlan);
+}
+
+/**
  * @param {unknown} value
  * @returns {PlanId|null}
  */

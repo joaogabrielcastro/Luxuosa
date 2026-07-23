@@ -182,6 +182,7 @@ describe("API integration", { skip: !runDb }, () => {
     const status = await api(server.baseUrl, "/billing/status", { token: session.token });
     assert.equal(status.status, 200);
     assert.equal(status.data.currentPlan, "BASIC");
+    assert.equal(status.data.planGateExempt, false);
     assert.equal(typeof status.data.configured, "boolean");
     assert.equal(status.data.entitlements.nfeImport, false);
 
@@ -204,6 +205,28 @@ describe("API integration", { skip: !runDb }, () => {
       body: { xml: "<nfe/>" }
     });
     assert.notEqual(previewPro.status, 402);
+  });
+
+  it("tenant legado (planGateExempt) nao e bloqueado no BASIC", async () => {
+    const session = await registerTenant(server.baseUrl);
+    tenantIds.push(session.tenantId);
+
+    await prisma.tenant.update({
+      where: { id: session.tenantId },
+      data: { plan: "BASIC", planGateExempt: true }
+    });
+
+    const status = await api(server.baseUrl, "/billing/status", { token: session.token });
+    assert.equal(status.status, 200);
+    assert.equal(status.data.planGateExempt, true);
+    assert.equal(status.data.entitlements.nfeImport, true);
+
+    const preview = await api(server.baseUrl, "/nfe-imports/preview", {
+      method: "POST",
+      token: session.token,
+      body: { xml: "<nfe/>" }
+    });
+    assert.notEqual(preview.status, 402);
   });
 
   it("movimentacao manual de estoque ENTRY", async () => {
