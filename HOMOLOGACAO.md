@@ -162,3 +162,12 @@ Habilitar emissão NFC-e **por loja** (`Tenant.enableNfceEmission`) só depois d
 1. **NFC-e real:** login Luxuosa → venda com “Emitir NFC-e” → PDF autorizado (worker + SEFAZ homologação).
 2. **Stripe checkout:** Assinatura → Pro → cartão `4242…` → voltar com plano atualizado. Para webhook local: `stripe listen --forward-to localhost:3001/api/v1/billing/webhook` e colocar `whsec_…` em `STRIPE_WEBHOOK_SECRET`.
 3. **Produção (Coolify):** após 1–2 ok, aplicar envs da §4, `prisma migrate deploy`, webhook Stripe live, `NUVEM_FISCAL_AMBIENTE=producao` só quando for emitir real.
+
+### Multi-tenant NFC-e (checklist Coolify / Nuvem)
+
+- [ ] Remover `NUVEM_FISCAL_EMITENTE_CNPJ` e `NUVEM_FISCAL_EMITENTE_IE` do Coolify
+- [ ] Cada loja: `Tenant.cnpj` = Empresa na Nuvem (mesmo CNPJ) + certificado/CSC na Empresa
+- [ ] `enableNfceEmission=true` só nas lojas prontas
+- [ ] Worker NFC-e separado com `NFCE_PROCESS_IN_API=true`
+- [ ] `RESP_TEC_*` = dados da software house (não da loja cliente)
+- [ ] Smoke: emitir com 2 lojas/CNPJs diferentes e confirmar DANFE de cada uma

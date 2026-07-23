@@ -11,7 +11,10 @@ import {
 import { buildNfceRequestBody, digitsOnly } from "../../shared/nuvemFiscal/nuvemFiscalNfceBuilder.js";
 import {
   formatCnpjBr,
-  resolveEmitenteCnpj
+  resolveEmitenteCnpj,
+  requireTenantEmitenteCnpj,
+  assertEmpresaCnpjMatchesTenant,
+  assertNfcePayloadEmitente
 } from "../../shared/nuvemFiscal/nuvemFiscalEmitente.js";
 import { saleRepository } from "../sales/sale.repository.js";
 
@@ -28,10 +31,11 @@ function normalizeEmpresaResponse(body) {
 
 const EMISSION_LEASE_MS = 120000;
 
-async function acquireEmissionLease(saleId, { silent }) {
+async function acquireEmissionLease(tenantId, saleId, { silent }) {
   const cutoff = new Date(Date.now() - EMISSION_LEASE_MS);
   const r = await prisma.invoice.updateMany({
     where: {
+      tenantId,
       saleId,
       OR: [{ emissionStartedAt: null }, { emissionStartedAt: { lt: cutoff } }]
     },
@@ -39,7 +43,7 @@ async function acquireEmissionLease(saleId, { silent }) {
   });
   if (r.count > 0) return true;
 
-  const inv = await prisma.invoice.findUnique({ where: { saleId } });
+  const inv = await prisma.invoice.findFirst({ where: { tenantId, saleId } });
   if (inv?.status === InvoiceStatus.ISSUED) {
     const err = new Error("Ja existe NFC-e emitida para esta venda.");
     err.statusCode = 409;
@@ -52,14 +56,21 @@ async function acquireEmissionLease(saleId, { silent }) {
   throw err;
 }
 
-async function releaseEmissionLease(saleId) {
+async function releaseEmissionLease(tenantId, saleId) {
   await prisma.invoice.updateMany({
-    where: { saleId },
+    where: { tenantId, saleId },
     data: { emissionStartedAt: null }
   });
 }
 
 async function ensureInvoiceRow(tenantId, saleId) {
+  const existing = await prisma.invoice.findUnique({ where: { saleId } });
+  if (existing && existing.tenantId !== tenantId) {
+    const err = new Error("Invoice pertence a outra loja.");
+    err.statusCode = 403;
+    err.code = "NFCE_INVOICE_TENANT_MISMATCH";
+    throw err;
+  }
   return prisma.invoice.upsert({
     where: { saleId },
     create: { tenantId, saleId, status: InvoiceStatus.PENDING },
@@ -74,6 +85,18 @@ async function ensureInvoiceRow(tenantId, saleId) {
       issuedAt: null
     }
   });
+}
+
+async function updateInvoiceForTenant(tenantId, saleId, data) {
+  const r = await prisma.invoice.updateMany({
+    where: { tenantId, saleId },
+    data
+  });
+  if (r.count === 0) {
+    const err = new Error("Invoice nao encontrada para esta loja.");
+    err.statusCode = 404;
+    throw err;
+  }
 }
 
 async function pollNfceStatus(nf, docId) {
@@ -124,9 +147,9 @@ async function connectionTest(tenantId) {
       `NUVEM_FISCAL_EMITENTE_CNPJ no servidor (${formatCnpjBr(env.nuvemFiscal.emitenteCnpj)}) é ignorado: a NFC-e usa o CNPJ desta loja (${formatCnpjBr(resolved.emitCnpj)}).`
     );
   }
-  if (resolved.source === "env") {
+  if (resolved.source === "invalid") {
     warnings.push(
-      "CNPJ da loja no cadastro é inválido; a emissão usaria NUVEM_FISCAL_EMITENTE_CNPJ do servidor. Corrija o CNPJ do tenant."
+      "CNPJ da loja no cadastro é inválido (precisa de 14 dígitos). NUVEM_FISCAL_EMITENTE_CNPJ não é usado como emitente — corrija o Tenant.cnpj e cadastre a mesma Empresa na Nuvem Fiscal."
     );
   }
   if (resolved.emitCnpj.length !== 14) {
@@ -260,7 +283,7 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
   if (sale.invoice?.status === InvoiceStatus.ISSUED) {
     const invoiceRef = sale.invoice.externalId || sale.invoice.key;
     if (!invoiceRef) {
-      if (silent) return prisma.invoice.findUnique({ where: { saleId } });
+      if (silent) return prisma.invoice.findFirst({ where: { tenantId, saleId } });
       const err = new Error("Ja existe NFC-e emitida para esta venda.");
       err.statusCode = 409;
       throw err;
@@ -277,7 +300,7 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
     const codigo = remote.body?.autorizacao?.codigo_status;
     const autorizada = codigo === 100 || codigo === 150;
     if (autorizada) {
-      if (silent) return prisma.invoice.findUnique({ where: { saleId } });
+      if (silent) return prisma.invoice.findFirst({ where: { tenantId, saleId } });
       const err = new Error("Ja existe NFC-e emitida para esta venda.");
       err.statusCode = 409;
       throw err;
@@ -288,27 +311,18 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
     const motivo =
       remote.body?.autorizacao?.motivo_status ||
       "NFC-e nao autorizada na Nuvem Fiscal. Reemissao liberada.";
-    await prisma.invoice.update({
-      where: { saleId },
-      data: {
-        status: InvoiceStatus.ERROR,
-        lastError: String(motivo).slice(0, 65000),
-        externalId: null,
-        key: null,
-        number: null,
-        pdfUrl: null,
-        issuedAt: null
-      }
+    await updateInvoiceForTenant(tenantId, saleId, {
+      status: InvoiceStatus.ERROR,
+      lastError: String(motivo).slice(0, 65000),
+      externalId: null,
+      key: null,
+      number: null,
+      pdfUrl: null,
+      issuedAt: null
     });
   }
 
-  const { emitCnpj } = resolveEmitenteCnpj(tenantPolicy.cnpj);
-
-  if (emitCnpj.length !== 14) {
-    const err = new Error("CNPJ do emitente invalido. Cadastre 14 digitos no CNPJ da loja (Tenant).");
-    err.statusCode = 400;
-    throw err;
-  }
+  const emitCnpj = requireTenantEmitenteCnpj(tenantPolicy.cnpj);
 
   const ambiente = nf.ambiente === "producao" ? "producao" : "homologacao";
 
@@ -325,11 +339,10 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
     err.statusCode = 502;
     throw err;
   }
+  assertEmpresaCnpjMatchesTenant(empresa, emitCnpj);
 
-  const ieOverride = digitsOnly(nf.emitenteIe || "");
-  if (ieOverride.length >= 2 && ieOverride.length <= 14) {
-    empresa.inscricao_estadual = ieOverride;
-  }
+  // IE vem sempre da Empresa na Nuvem Fiscal (por CNPJ do tenant).
+  // NUVEM_FISCAL_EMITENTE_IE global foi removido da emissao para nao misturar IE entre lojas.
 
   const nfceCfgRes = await getEmpresaNfceConfig(nf, emitCnpj);
   const empresaNfce = nfceCfgRes.ok ? nfceCfgRes.body : null;
@@ -376,10 +389,11 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
     referencia: sale.id,
     csrt
   });
+  assertNfcePayloadEmitente(payload, emitCnpj);
 
   await ensureInvoiceRow(tenantId, saleId);
 
-  const gotLease = await acquireEmissionLease(saleId, { silent });
+  const gotLease = await acquireEmissionLease(tenantId, saleId, { silent });
   if (!gotLease) {
     return null;
   }
@@ -388,9 +402,9 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
     const postRes = await postNfce(nf, payload);
     if (!postRes.ok) {
       const msg = JSON.stringify(postRes.body);
-      await prisma.invoice.update({
-        where: { saleId },
-        data: { status: InvoiceStatus.ERROR, lastError: msg.slice(0, 65000) }
+      await updateInvoiceForTenant(tenantId, saleId, {
+        status: InvoiceStatus.ERROR,
+        lastError: msg.slice(0, 65000)
       });
       const err = new Error("Nuvem Fiscal rejeitou a emissao da NFC-e.");
       err.statusCode = 502;
@@ -406,16 +420,13 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
       throw err;
     }
 
-    await prisma.invoice.update({
-      where: { saleId },
-      data: { externalId: docId }
-    });
+    await updateInvoiceForTenant(tenantId, saleId, { externalId: docId });
 
     const polled = await pollNfceStatus(nf, docId);
     if (polled.error) {
-      await prisma.invoice.update({
-        where: { saleId },
-        data: { status: InvoiceStatus.ERROR, lastError: polled.error }
+      await updateInvoiceForTenant(tenantId, saleId, {
+        status: InvoiceStatus.ERROR,
+        lastError: polled.error
       });
       const err = new Error(polled.error);
       err.statusCode = 504;
@@ -432,9 +443,9 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
 
     if (!autorizada) {
       const motivo = final?.autorizacao?.motivo_status || JSON.stringify(final).slice(0, 2000);
-      await prisma.invoice.update({
-        where: { saleId },
-        data: { status: InvoiceStatus.ERROR, lastError: motivo.slice(0, 65000) }
+      await updateInvoiceForTenant(tenantId, saleId, {
+        status: InvoiceStatus.ERROR,
+        lastError: motivo.slice(0, 65000)
       });
       const err = new Error(motivo);
       err.statusCode = 502;
@@ -445,21 +456,18 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
 
     const pdfPath = `/nfce/${encodeURIComponent(docId)}/pdf`;
 
-    await prisma.invoice.update({
-      where: { saleId },
-      data: {
-        status: InvoiceStatus.ISSUED,
-        key: chave || null,
-        number: numero,
-        issuedAt: new Date(),
-        lastError: null,
-        pdfUrl: pdfPath,
-        emissionStartedAt: null
-      }
+    await updateInvoiceForTenant(tenantId, saleId, {
+      status: InvoiceStatus.ISSUED,
+      key: chave || null,
+      number: numero,
+      issuedAt: new Date(),
+      lastError: null,
+      pdfUrl: pdfPath,
+      emissionStartedAt: null
     });
 
     await prisma.nfceIssueJob.updateMany({
-      where: { saleId },
+      where: { tenantId, saleId },
       data: {
         status: NfceIssueJobStatus.COMPLETED,
         lastError: null,
@@ -467,9 +475,9 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
       }
     });
 
-    return prisma.invoice.findUnique({ where: { saleId } });
+    return prisma.invoice.findFirst({ where: { tenantId, saleId } });
   } finally {
-    await releaseEmissionLease(saleId);
+    await releaseEmissionLease(tenantId, saleId);
   }
 }
 
