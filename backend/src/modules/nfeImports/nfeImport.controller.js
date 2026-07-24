@@ -23,12 +23,12 @@ const itemDecisionSchema = z.object({
   description: z.string().max(500).optional().nullable(),
   categoryId: z.string().min(1).optional().nullable(),
   brandId: z.string().min(1).optional().nullable(),
-  useDefaultTaxonomy: z.boolean().optional(),
   price: z.coerce.number().nonnegative().optional(),
   sku: z.string().max(80).optional().nullable(),
   minStock: z.coerce.number().int().nonnegative().optional(),
   quantityEntered: z.coerce.number().int().positive().optional(),
-  updateCost: z.boolean().optional()
+  updateCost: z.boolean().optional(),
+  updatePrice: z.boolean().optional()
 });
 
 const confirmSchema = z.object({

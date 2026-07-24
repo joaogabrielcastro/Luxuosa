@@ -51,32 +51,39 @@ function statusBadge(row) {
 }
 
 function buildInitialRows(preview) {
-  return (preview.items || []).map((item) => ({
-    lineNumber: item.lineNumber,
-    supplierCode: item.supplierCode,
-    ean: item.ean,
-    description: item.description,
-    ncm: item.ncm,
-    cfop: item.cfop,
-    unit: item.unit,
-    quantity: item.quantity,
-    quantityEntered: item.quantityEntered || Math.max(1, Math.round(Number(item.quantity) || 1)),
-    unitValue: item.unitValue,
-    totalValue: item.totalValue,
-    matchStatus: item.matchStatus,
-    matchBy: item.matchBy,
-    matchedProduct: item.matchedProduct,
-    action: item.suggestedAction === "link" ? "link" : "create",
-    productId: item.matchedProduct?.id || "",
-    name: item.description,
-    price: amountToCurrencyInput(item.unitValue),
-    categoryId: "",
-    brandId: "",
-    useDefaultTaxonomy: true,
-    updateCost: true,
-    sku: item.ean || "",
-    warnings: item.warnings || []
-  }));
+  return (preview.items || []).map((item) => {
+    const matchedPrice = item.matchedProduct?.price;
+    const salePrice =
+      matchedPrice != null && Number.isFinite(Number(matchedPrice))
+        ? Number(matchedPrice)
+        : item.unitValue;
+    return {
+      lineNumber: item.lineNumber,
+      supplierCode: item.supplierCode,
+      ean: item.ean,
+      description: item.description,
+      ncm: item.ncm,
+      cfop: item.cfop,
+      unit: item.unit,
+      quantity: item.quantity,
+      quantityEntered: item.quantityEntered || Math.max(1, Math.round(Number(item.quantity) || 1)),
+      unitValue: item.unitValue,
+      totalValue: item.totalValue,
+      matchStatus: item.matchStatus,
+      matchBy: item.matchBy,
+      matchedProduct: item.matchedProduct,
+      action: item.suggestedAction === "link" ? "link" : "create",
+      productId: item.matchedProduct?.id || "",
+      name: item.description,
+      price: amountToCurrencyInput(salePrice),
+      categoryId: "",
+      brandId: "",
+      updateCost: true,
+      updatePrice: false,
+      sku: item.ean || item.supplierCode || "",
+      warnings: item.warnings || []
+    };
+  });
 }
 
 export function NfeImportPage() {
@@ -103,6 +110,8 @@ export function NfeImportPage() {
   const [detailId, setDetailId] = useState(null);
   const [historySkip, setHistorySkip] = useState(0);
   const [planUpgradeRequired, setPlanUpgradeRequired] = useState(false);
+  const [bulkCategoryId, setBulkCategoryId] = useState("");
+  const [bulkBrandId, setBulkBrandId] = useState("");
   const historyPageSize = 20;
 
   const productsQuery = useQuery({
@@ -194,12 +203,32 @@ export function NfeImportPage() {
     setRows((prev) => prev.map((r) => (r.lineNumber === lineNumber ? { ...r, ...patch } : r)));
   }
 
+  function applyTaxonomyToCreateRows() {
+    if (!bulkCategoryId || !bulkBrandId) {
+      showToast("Selecione categoria e marca para aplicar em todos.", "error");
+      return;
+    }
+    setRows((prev) =>
+      prev.map((r) =>
+        r.action === "create" ? { ...r, categoryId: bulkCategoryId, brandId: bulkBrandId } : r
+      )
+    );
+    showToast("Categoria e marca aplicadas nos itens novos.");
+  }
+
   function validateReview() {
     for (const row of rows) {
       if (row.action === "ignore") continue;
       if (row.action === "link" && !row.productId) {
         showToast(`Item ${row.lineNumber}: selecione o produto para vincular.`, "error");
         return false;
+      }
+      if (row.action === "link" && row.updatePrice) {
+        const price = parseCurrencyInput(row.price);
+        if (!Number.isFinite(price) || price < 0) {
+          showToast(`Item ${row.lineNumber}: informe o preco de venda.`, "error");
+          return false;
+        }
       }
       if (row.action === "create") {
         if (!row.name || row.name.trim().length < 2) {
@@ -211,7 +240,7 @@ export function NfeImportPage() {
           showToast(`Item ${row.lineNumber}: informe o preco de venda.`, "error");
           return false;
         }
-        if (!row.useDefaultTaxonomy && (!row.categoryId || !row.brandId)) {
+        if (!row.categoryId || !row.brandId) {
           showToast(`Item ${row.lineNumber}: selecione categoria e marca.`, "error");
           return false;
         }
@@ -250,13 +279,16 @@ export function NfeImportPage() {
           action: row.action,
           productId: row.action === "link" ? row.productId : undefined,
           name: row.action === "create" ? row.name.trim() : undefined,
-          price: row.action === "create" ? parseCurrencyInput(row.price) : undefined,
-          categoryId: row.action === "create" && !row.useDefaultTaxonomy ? row.categoryId : undefined,
-          brandId: row.action === "create" && !row.useDefaultTaxonomy ? row.brandId : undefined,
-          useDefaultTaxonomy: row.action === "create" ? Boolean(row.useDefaultTaxonomy) : undefined,
+          price:
+            row.action === "create" || (row.action === "link" && row.updatePrice)
+              ? parseCurrencyInput(row.price)
+              : undefined,
+          categoryId: row.action === "create" ? row.categoryId : undefined,
+          brandId: row.action === "create" ? row.brandId : undefined,
           sku: row.action === "create" ? row.sku || null : undefined,
           quantityEntered: Math.floor(Number(row.quantityEntered)),
-          updateCost: row.action === "link" ? row.updateCost : undefined
+          updateCost: row.action === "link" ? row.updateCost : undefined,
+          updatePrice: row.action === "link" ? Boolean(row.updatePrice) : undefined
         }))
       };
       const imported = await apiClient("/nfe-imports/confirm", {
@@ -297,6 +329,8 @@ export function NfeImportPage() {
     setRows([]);
     setResult(null);
     setDuplicateInfo(null);
+    setBulkCategoryId("");
+    setBulkBrandId("");
   }
 
   const reviewStats = useMemo(() => {
@@ -611,6 +645,42 @@ export function NfeImportPage() {
           </section>
 
           <SectionCard title="Conferencia de produtos">
+            {reviewStats.create > 0 ? (
+              <div className="mb-4 grid gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 sm:grid-cols-3">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-slate-600">Categoria (itens novos)</span>
+                  <Select value={bulkCategoryId} onChange={(e) => setBulkCategoryId(e.target.value)}>
+                    <option value="">Selecione</option>
+                    {sortedCategories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-slate-600">Marca (itens novos)</span>
+                  <Select value={bulkBrandId} onChange={(e) => setBulkBrandId(e.target.value)}>
+                    <option value="">Selecione</option>
+                    {sortedBrands.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                <div className="flex items-end">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full text-sm"
+                    onClick={applyTaxonomyToCreateRows}
+                  >
+                    Aplicar em todos os itens novos
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             <div className="space-y-4">
               {rows.map((row) => (
                 <div
@@ -626,6 +696,7 @@ export function NfeImportPage() {
                         EAN {row.ean || "—"} · Cod. forn. {row.supplierCode || "—"} · NCM{" "}
                         {row.ncm || "—"} · {row.quantity} {row.unit || "UN"} ×{" "}
                         {formatCurrencyBRL(row.unitValue)}
+                        {row.matchBy ? ` · Match: ${row.matchBy}` : ""}
                       </p>
                     </div>
                     {statusBadge(row)}
@@ -686,9 +757,16 @@ export function NfeImportPage() {
                             </span>
                             <Select
                               value={row.productId}
-                              onChange={(e) =>
-                                updateRow(row.lineNumber, { productId: e.target.value })
-                              }
+                              onChange={(e) => {
+                                const productId = e.target.value;
+                                const product = products.find((p) => p.id === productId);
+                                updateRow(row.lineNumber, {
+                                  productId,
+                                  ...(product?.price != null
+                                    ? { price: amountToCurrencyInput(product.price) }
+                                    : {})
+                                });
+                              }}
                             >
                               <option value="">Selecione</option>
                               {products.map((p) => (
@@ -709,6 +787,29 @@ export function NfeImportPage() {
                             />
                             Atualizar custo
                           </label>
+                          <label className="flex items-center gap-2 pt-5 text-xs text-slate-600">
+                            <input
+                              type="checkbox"
+                              checked={row.updatePrice}
+                              onChange={(e) =>
+                                updateRow(row.lineNumber, { updatePrice: e.target.checked })
+                              }
+                            />
+                            Atualizar preco de venda
+                          </label>
+                          {row.updatePrice ? (
+                            <label className="flex flex-col gap-1">
+                              <span className="text-xs font-medium text-slate-600">Preco venda</span>
+                              <Input
+                                value={row.price}
+                                onChange={(e) =>
+                                  updateRow(row.lineNumber, {
+                                    price: maskCurrencyInput(e.target.value)
+                                  })
+                                }
+                              />
+                            </label>
+                          ) : null}
                         </>
                       ) : null}
 
@@ -739,54 +840,38 @@ export function NfeImportPage() {
                               onChange={(e) => updateRow(row.lineNumber, { sku: e.target.value })}
                             />
                           </label>
-                          <label className="flex items-center gap-2 text-xs text-slate-600 sm:col-span-2">
-                            <input
-                              type="checkbox"
-                              checked={row.useDefaultTaxonomy}
+                          <label className="flex flex-col gap-1">
+                            <span className="text-xs font-medium text-slate-600">Categoria</span>
+                            <Select
+                              value={row.categoryId}
                               onChange={(e) =>
-                                updateRow(row.lineNumber, {
-                                  useDefaultTaxonomy: e.target.checked
-                                })
+                                updateRow(row.lineNumber, { categoryId: e.target.value })
                               }
-                            />
-                            Usar categoria/marca &quot;Importacao NF-e&quot; (criada automaticamente)
+                            >
+                              <option value="">Selecione</option>
+                              {sortedCategories.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.name}
+                                </option>
+                              ))}
+                            </Select>
                           </label>
-                          {!row.useDefaultTaxonomy ? (
-                            <>
-                              <label className="flex flex-col gap-1">
-                                <span className="text-xs font-medium text-slate-600">Categoria</span>
-                                <Select
-                                  value={row.categoryId}
-                                  onChange={(e) =>
-                                    updateRow(row.lineNumber, { categoryId: e.target.value })
-                                  }
-                                >
-                                  <option value="">Selecione</option>
-                                  {sortedCategories.map((c) => (
-                                    <option key={c.id} value={c.id}>
-                                      {c.name}
-                                    </option>
-                                  ))}
-                                </Select>
-                              </label>
-                              <label className="flex flex-col gap-1">
-                                <span className="text-xs font-medium text-slate-600">Marca</span>
-                                <Select
-                                  value={row.brandId}
-                                  onChange={(e) =>
-                                    updateRow(row.lineNumber, { brandId: e.target.value })
-                                  }
-                                >
-                                  <option value="">Selecione</option>
-                                  {sortedBrands.map((b) => (
-                                    <option key={b.id} value={b.id}>
-                                      {b.name}
-                                    </option>
-                                  ))}
-                                </Select>
-                              </label>
-                            </>
-                          ) : null}
+                          <label className="flex flex-col gap-1">
+                            <span className="text-xs font-medium text-slate-600">Marca</span>
+                            <Select
+                              value={row.brandId}
+                              onChange={(e) =>
+                                updateRow(row.lineNumber, { brandId: e.target.value })
+                              }
+                            >
+                              <option value="">Selecione</option>
+                              {sortedBrands.map((b) => (
+                                <option key={b.id} value={b.id}>
+                                  {b.name}
+                                </option>
+                              ))}
+                            </Select>
+                          </label>
                         </>
                       ) : null}
                     </div>
