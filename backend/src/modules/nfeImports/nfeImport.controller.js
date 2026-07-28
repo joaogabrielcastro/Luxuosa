@@ -28,7 +28,10 @@ const itemDecisionSchema = z.object({
   minStock: z.coerce.number().int().nonnegative().optional(),
   quantityEntered: z.coerce.number().int().positive().optional(),
   updateCost: z.boolean().optional(),
-  updatePrice: z.boolean().optional()
+  updatePrice: z.boolean().optional(),
+  variationId: z.string().min(1).optional().nullable(),
+  size: z.string().max(60).optional().nullable(),
+  color: z.string().max(60).optional().nullable()
 });
 
 const confirmSchema = z.object({

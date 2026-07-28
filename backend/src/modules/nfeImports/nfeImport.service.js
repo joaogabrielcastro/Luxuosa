@@ -72,6 +72,56 @@ async function getOrCreateDefaultVariation(tx, tenantId, productId) {
   return variation;
 }
 
+function normalizeSizeColor(decision) {
+  const size = decision?.size != null ? String(decision.size).trim() : "";
+  const color = decision?.color != null ? String(decision.color).trim() : "";
+  return { size, color };
+}
+
+function assertSizeColorCoherence(size, color, lineNumber) {
+  if ((size === "" && color !== "") || (size !== "" && color === "")) {
+    throw createAppError(
+      `Item ${lineNumber}: preencha Tamanho e Cor juntos, ou deixe ambos em branco.`,
+      400,
+      ERROR_CODES.VALIDATION
+    );
+  }
+}
+
+/** Resolve variacao: variationId, size+color (cria se preciso) ou padrao vazia. */
+async function resolveVariationForEntry(tx, tenantId, productId, decision, lineNumber) {
+  if (decision?.variationId) {
+    const variation = await tx.productVariation.findFirst({
+      where: { tenantId, id: decision.variationId, productId }
+    });
+    if (!variation) {
+      throw createAppError(
+        `Item ${lineNumber}: variacao selecionada nao pertence a este produto.`,
+        400,
+        ERROR_CODES.VALIDATION
+      );
+    }
+    return variation;
+  }
+
+  const { size, color } = normalizeSizeColor(decision);
+  assertSizeColorCoherence(size, color, lineNumber);
+
+  if (size === "" && color === "") {
+    return getOrCreateDefaultVariation(tx, tenantId, productId);
+  }
+
+  let variation = await tx.productVariation.findFirst({
+    where: { tenantId, productId, size, color }
+  });
+  if (!variation) {
+    variation = await tx.productVariation.create({
+      data: { tenantId, productId, size, color, stock: 0 }
+    });
+  }
+  return variation;
+}
+
 export const nfeImportService = {
   async list(tenantId, { take = 50, skip = 0 } = {}) {
     const limit = Math.min(Math.max(Number(take) || 50, 1), 200);
@@ -452,9 +502,7 @@ export const nfeImportService = {
           }
 
           let sku =
-            decision.sku != null
-              ? String(decision.sku).trim()
-              : item.ean || item.supplierCode || null;
+            decision.sku != null ? String(decision.sku).trim() : item.ean || null;
           if (sku === "") sku = null;
           if (sku && sku.length < 2) {
             throw createAppError(
@@ -507,7 +555,13 @@ export const nfeImportService = {
           itemAction = NfeImportItemAction.CREATED;
         }
 
-        const variation = await getOrCreateDefaultVariation(tx, tenantId, product.id);
+        const variation = await resolveVariationForEntry(
+          tx,
+          tenantId,
+          product.id,
+          decision,
+          item.lineNumber
+        );
 
         await tx.productVariation.update({
           where: { id: variation.id },

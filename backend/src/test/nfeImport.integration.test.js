@@ -106,7 +106,7 @@ describe("nfeImport integration", { skip: !runDb }, () => {
       categoryId,
       brandId,
       price: Number(item.unitValue) || 10,
-      sku: item.ean || item.supplierCode || null,
+      sku: item.ean || null,
       quantityEntered: Math.max(1, Math.round(Number(item.quantity) || 1))
     }));
     assert.ok(items.length >= 1);
@@ -328,7 +328,7 @@ describe("nfeImport integration", { skip: !runDb }, () => {
         categoryId,
         brandId,
         price: Number(item.unitValue) || 10,
-        sku: item.ean || item.supplierCode || `SKU-${item.lineNumber}-${Date.now()}`,
+        sku: item.ean || `SKU-${item.lineNumber}-${Date.now()}`,
         quantityEntered: Math.max(1, Math.round(Number(item.quantity) || 1))
       };
     });
@@ -349,5 +349,65 @@ describe("nfeImport integration", { skip: !runDb }, () => {
     });
     assert.equal(Number(product.cost), 20);
     assert.equal(Number(product.price), 99.9);
+  });
+
+  it("create com tamanho/cor e SKU sem fallback de cProd", async () => {
+    const session = await registerTenant(server.baseUrl);
+    tenantIds.push(session.tenantId);
+    await enablePro(session.tenantId);
+
+    const { categoryId, brandId } = await createTaxonomy(server.baseUrl, session.token);
+    const sample = readFileSync(samplePath, "utf8");
+    const xmlContent = mutateSampleXml(sample);
+
+    const preview = await api(server.baseUrl, "/nfe-imports/preview", {
+      method: "POST",
+      token: session.token,
+      body: { xmlContent }
+    });
+    assert.equal(preview.status, 200);
+
+    const items = (preview.data.items || []).map((item) => ({
+      lineNumber: item.lineNumber,
+      action: "create",
+      name: item.description || `Item ${item.lineNumber}`,
+      categoryId,
+      brandId,
+      price: Number(item.unitValue) || 10,
+      // Item 2 do fixture nao tem EAN: SKU deve ficar null (nao usar cProd)
+      sku: item.ean || null,
+      size: "M",
+      color: "Preto",
+      quantityEntered: Math.max(1, Math.round(Number(item.quantity) || 1))
+    }));
+
+    const confirm = await api(server.baseUrl, "/nfe-imports/confirm", {
+      method: "POST",
+      token: session.token,
+      body: {
+        xmlContent,
+        supplierDecision: { action: "create", name: "FORNECEDOR EXEMPLO LTDA" },
+        items
+      }
+    });
+    assert.equal(confirm.status, 201, JSON.stringify(confirm.data));
+
+    const created = await prisma.product.findMany({
+      where: { tenantId: session.tenantId },
+      include: { variations: true }
+    });
+    assert.ok(created.length >= 2);
+
+    const sized = created.filter((p) =>
+      p.variations.some((v) => v.size === "M" && v.color === "Preto" && v.stock >= 1)
+    );
+    assert.ok(sized.length >= 2, "cada item deve ter variacao M/Preto com estoque");
+
+    const noEanItem = preview.data.items.find((i) => !i.ean);
+    assert.ok(noEanItem);
+    const productNoEan = created.find((p) => p.name === noEanItem.description);
+    assert.ok(productNoEan);
+    assert.equal(productNoEan.sku, null);
+    assert.notEqual(productNoEan.sku, noEanItem.supplierCode);
   });
 });
