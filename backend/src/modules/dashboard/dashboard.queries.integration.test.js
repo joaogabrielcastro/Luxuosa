@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { after, before, describe, it } from "node:test";
 import { prisma } from "../../config/prisma.js";
+import { destroyTenant, uniqueTestCnpj } from "../../test/helpers.js";
 import {
   productsWithoutSalesAggregated,
   profitByProductAggregated,
@@ -11,9 +12,28 @@ import {
 const runDbTests = Boolean(process.env.DATABASE_URL) && process.env.SKIP_DB_TESTS !== "1";
 
 describe("dashboard.queries (integracao)", { skip: !runDbTests }, () => {
+  /** @type {string | null} */
+  let tenantId = null;
+
+  before(async () => {
+    const cnpj = uniqueTestCnpj();
+    const tenant = await prisma.tenant.create({
+      data: {
+        name: `Dashboard Query ${cnpj.slice(-4)}`,
+        cnpj,
+        email: `dash.${cnpj}@luxuosa.test`,
+        plan: "BASIC"
+      }
+    });
+    tenantId = tenant.id;
+  });
+
+  after(async () => {
+    if (tenantId) await destroyTenant(tenantId);
+  });
+
   it("agregacoes retornam arrays para um tenant existente", async () => {
-    const tenant = await prisma.tenant.findFirst({ select: { id: true } });
-    assert.ok(tenant, "seed necessario: nenhum tenant no banco");
+    assert.ok(tenantId);
 
     const monthStart = new Date();
     monthStart.setDate(1);
@@ -22,10 +42,10 @@ describe("dashboard.queries (integracao)", { skip: !runDbTests }, () => {
     noSalesSince.setDate(noSalesSince.getDate() - 30);
 
     const [byPeriod, profit, stock, inactive] = await Promise.all([
-      salesByPeriodAggregated(tenant.id, monthStart),
-      profitByProductAggregated(tenant.id),
-      stockConsolidatedAggregated(tenant.id),
-      productsWithoutSalesAggregated(tenant.id, noSalesSince)
+      salesByPeriodAggregated(tenantId, monthStart),
+      profitByProductAggregated(tenantId),
+      stockConsolidatedAggregated(tenantId),
+      productsWithoutSalesAggregated(tenantId, noSalesSince)
     ]);
 
     assert.ok(Array.isArray(byPeriod));

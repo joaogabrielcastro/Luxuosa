@@ -8,10 +8,10 @@
   },
   "scripts": {
     "check:backend": "node -e \"import('./src/routes.js').then(()=>console.log('backend routes ok')).catch(e=>{console.error(e);process.exit(1)})\"",
-    "test": "node --test src/shared/salePayload.test.js src/shared/salePayload.customer.test.js src/shared/pagination.test.js src/shared/nfeXmlParser.test.js src/shared/tenantIsolation.test.js src/shared/planCatalog.test.js src/shared/nuvemFiscal/nuvemFiscalApi.mock.test.js",
+    "test": "node --test src/shared/salePayload.test.js src/shared/salePayload.customer.test.js src/shared/pagination.test.js src/shared/nfeXmlParser.test.js src/shared/tenantIsolation.test.js src/shared/planCatalog.test.js src/shared/nuvemFiscal/nuvemFiscalApi.mock.test.js src/shared/nuvemFiscal/nuvemFiscalEmitente.test.js src/modules/nfeImports/nfeImportMatch.test.js",
     "test:integration": "node --import ./src/test/setupEnv.js --test --test-concurrency=1 src/modules/dashboard/dashboard.queries.integration.test.js src/test/*.integration.test.js",
     "test:all": "npm test && npm run test:integration",
-    "test:coverage": "c8 --reporter=text --reporter=lcov node --import ./src/test/setupEnv.js --test --test-concurrency=1 src/shared/salePayload.test.js src/shared/salePayload.customer.test.js src/shared/pagination.test.js src/shared/nfeXmlParser.test.js src/shared/tenantIsolation.test.js src/shared/planCatalog.test.js src/shared/nuvemFiscal/nuvemFiscalApi.mock.test.js src/modules/dashboard/dashboard.queries.integration.test.js src/test/*.integration.test.js",
+    "test:coverage": "c8 --reporter=text --reporter=lcov node --import ./src/test/setupEnv.js --test --test-concurrency=1 src/shared/salePayload.test.js src/shared/salePayload.customer.test.js src/shared/pagination.test.js src/shared/nfeXmlParser.test.js src/shared/tenantIsolation.test.js src/shared/planCatalog.test.js src/shared/nuvemFiscal/nuvemFiscalApi.mock.test.js src/shared/nuvemFiscal/nuvemFiscalEmitente.test.js src/modules/nfeImports/nfeImportMatch.test.js src/modules/dashboard/dashboard.queries.integration.test.js src/test/*.integration.test.js",
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "start:prod": "npx prisma migrate deploy && node src/server.js",

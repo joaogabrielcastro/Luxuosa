@@ -16,7 +16,7 @@ async function main() {
   console.log("\n=== Auditoria fiscal multi-tenant ===\n");
   if (envCnpj.length === 14) {
     console.log(
-      `NUVEM_FISCAL_EMITENTE_CNPJ no .env: ${formatCnpjBr(envCnpj)} (só usado se o tenant não tiver CNPJ válido)\n`
+      `NUVEM_FISCAL_EMITENTE_CNPJ no .env: ${formatCnpjBr(envCnpj)} (DEPRECADO — nao e usado como emitente; so auditoria)\n`
     );
   }
 
@@ -48,7 +48,9 @@ async function main() {
 
   const withNfce = tenants.filter((t) => Boolean(t.enableNfceEmission));
   const emitentesNfce = new Set(
-    withNfce.map((t) => buildTenantFiscalContext(t).emitCnpj).filter((c) => c && c.length === 14)
+    withNfce
+      .map((t) => buildTenantFiscalContext(t).emitenteCnpj)
+      .filter((c) => c && c.length === 14)
   );
   console.log(`\nLojas com NFC-e ativa: ${withNfce.length}`);
   console.log(`CNPJs distintos entre elas: ${emitentesNfce.size}`);

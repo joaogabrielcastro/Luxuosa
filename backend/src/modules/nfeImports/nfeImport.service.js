@@ -2,9 +2,7 @@ import { NfeImportItemAction, NfeImportStatus, StockMovementType } from "@prisma
 import { prisma } from "../../config/prisma.js";
 import { parseNfeXml } from "../../shared/nfeXmlParser.js";
 import { createAppError, ERROR_CODES } from "../../utils/appErrors.js";
-
-const DEFAULT_CATEGORY_NAME = "Importacao NF-e";
-const DEFAULT_BRAND_NAME = "Importacao NF-e";
+import { matchProductForItem } from "./nfeImportMatch.js";
 
 function formatDateBR(isoOrDate) {
   const d = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate);
@@ -49,25 +47,6 @@ function serializeImport(row) {
   };
 }
 
-async function findProductByEan(tx, tenantId, ean) {
-  if (!ean) return null;
-  return tx.product.findFirst({
-    where: { tenantId, sku: ean },
-    include: { variations: true, category: true, brand: true }
-  });
-}
-
-async function findProductBySupplierCode(tx, tenantId, supplierId, code) {
-  if (!supplierId || !code) return null;
-  const link = await tx.productSupplierCode.findFirst({
-    where: { tenantId, supplierId, code },
-    include: {
-      product: { include: { variations: true, category: true, brand: true } }
-    }
-  });
-  return link?.product || null;
-}
-
 function pickDefaultVariation(product) {
   if (!product?.variations?.length) return null;
   const def = product.variations.find(
@@ -81,26 +60,6 @@ function matchStatus(matchedProduct) {
   return "NEEDS_LINK";
 }
 
-async function ensureDefaultTaxonomy(tx, tenantId) {
-  let category = await tx.category.findFirst({
-    where: { tenantId, name: DEFAULT_CATEGORY_NAME }
-  });
-  if (!category) {
-    category = await tx.category.create({
-      data: { tenantId, name: DEFAULT_CATEGORY_NAME }
-    });
-  }
-  let brand = await tx.brand.findFirst({
-    where: { tenantId, name: DEFAULT_BRAND_NAME }
-  });
-  if (!brand) {
-    brand = await tx.brand.create({
-      data: { tenantId, name: DEFAULT_BRAND_NAME }
-    });
-  }
-  return { category, brand };
-}
-
 async function getOrCreateDefaultVariation(tx, tenantId, productId) {
   let variation = await tx.productVariation.findFirst({
     where: { tenantId, productId, size: "", color: "" }
@@ -108,6 +67,56 @@ async function getOrCreateDefaultVariation(tx, tenantId, productId) {
   if (!variation) {
     variation = await tx.productVariation.create({
       data: { tenantId, productId, size: "", color: "", stock: 0 }
+    });
+  }
+  return variation;
+}
+
+function normalizeSizeColor(decision) {
+  const size = decision?.size != null ? String(decision.size).trim() : "";
+  const color = decision?.color != null ? String(decision.color).trim() : "";
+  return { size, color };
+}
+
+function assertSizeColorCoherence(size, color, lineNumber) {
+  if ((size === "" && color !== "") || (size !== "" && color === "")) {
+    throw createAppError(
+      `Item ${lineNumber}: preencha Tamanho e Cor juntos, ou deixe ambos em branco.`,
+      400,
+      ERROR_CODES.VALIDATION
+    );
+  }
+}
+
+/** Resolve variacao: variationId, size+color (cria se preciso) ou padrao vazia. */
+async function resolveVariationForEntry(tx, tenantId, productId, decision, lineNumber) {
+  if (decision?.variationId) {
+    const variation = await tx.productVariation.findFirst({
+      where: { tenantId, id: decision.variationId, productId }
+    });
+    if (!variation) {
+      throw createAppError(
+        `Item ${lineNumber}: variacao selecionada nao pertence a este produto.`,
+        400,
+        ERROR_CODES.VALIDATION
+      );
+    }
+    return variation;
+  }
+
+  const { size, color } = normalizeSizeColor(decision);
+  assertSizeColorCoherence(size, color, lineNumber);
+
+  if (size === "" && color === "") {
+    return getOrCreateDefaultVariation(tx, tenantId, productId);
+  }
+
+  let variation = await tx.productVariation.findFirst({
+    where: { tenantId, productId, size, color }
+  });
+  if (!variation) {
+    variation = await tx.productVariation.create({
+      data: { tenantId, productId, size, color, stock: 0 }
     });
   }
   return variation;
@@ -187,17 +196,12 @@ export const nfeImportService = {
 
     const matchedItems = [];
     for (const item of parsed.items) {
-      let matched = null;
-      let matchBy = null;
-
-      if (item.ean) {
-        matched = await findProductByEan(prisma, tenantId, item.ean);
-        if (matched) matchBy = "EAN";
-      }
-      if (!matched && supplier && item.supplierCode) {
-        matched = await findProductBySupplierCode(prisma, tenantId, supplier.id, item.supplierCode);
-        if (matched) matchBy = "SUPPLIER_CODE";
-      }
+      const { product: matched, matchBy } = await matchProductForItem(
+        prisma,
+        tenantId,
+        item,
+        supplier
+      );
 
       const variation = pickDefaultVariation(matched);
       const qty = toStockQty(item.quantity);
@@ -328,13 +332,27 @@ export const nfeImportService = {
               ERROR_CODES.VALIDATION
             );
           }
-          if (decision.categoryId == null && decision.useDefaultTaxonomy !== true) {
-            // permitido usar default
+          if (!decision.categoryId || !decision.brandId) {
+            throw createAppError(
+              `Item ${item.lineNumber}: categoria e marca sao obrigatorias para criar produto.`,
+              400,
+              ERROR_CODES.VALIDATION
+            );
           }
           const price = Number(decision.price);
           if (!Number.isFinite(price) || price < 0) {
             throw createAppError(
               `Item ${item.lineNumber}: informe o preco de venda (>= 0).`,
+              400,
+              ERROR_CODES.VALIDATION
+            );
+          }
+        }
+        if (action === "link" && decision.updatePrice === true) {
+          const price = Number(decision.price);
+          if (!Number.isFinite(price) || price < 0) {
+            throw createAppError(
+              `Item ${item.lineNumber}: informe o preco de venda (>= 0) para atualizar.`,
               400,
               ERROR_CODES.VALIDATION
             );
@@ -382,8 +400,6 @@ export const nfeImportService = {
       } else if (supplierAction === "skip") {
         supplier = null;
       }
-
-      const defaults = await ensureDefaultTaxonomy(tx, tenantId);
 
       const nfeImport = await tx.nfeImport.update({
         where: { id: draftId },
@@ -450,19 +466,22 @@ export const nfeImportService = {
           }
           itemAction = NfeImportItemAction.LINKED;
 
+          const linkPatch = {};
           if (decision.updateCost !== false) {
+            linkPatch.cost = item.unitValue;
+          }
+          if (decision.updatePrice === true) {
+            linkPatch.price = Number(decision.price);
+          }
+          if (Object.keys(linkPatch).length > 0) {
             await tx.product.update({
               where: { id: product.id },
-              data: { cost: item.unitValue }
+              data: linkPatch
             });
           }
         } else if (action === "create") {
-          const categoryId =
-            decision.categoryId ||
-            (decision.useDefaultTaxonomy !== false ? defaults.category.id : null);
-          const brandId =
-            decision.brandId ||
-            (decision.useDefaultTaxonomy !== false ? defaults.brand.id : null);
+          const categoryId = decision.categoryId;
+          const brandId = decision.brandId;
 
           if (!categoryId || !brandId) {
             throw createAppError(
@@ -482,7 +501,8 @@ export const nfeImportService = {
             );
           }
 
-          let sku = decision.sku != null ? String(decision.sku).trim() : item.ean || null;
+          let sku =
+            decision.sku != null ? String(decision.sku).trim() : item.ean || null;
           if (sku === "") sku = null;
           if (sku && sku.length < 2) {
             throw createAppError(
@@ -535,7 +555,13 @@ export const nfeImportService = {
           itemAction = NfeImportItemAction.CREATED;
         }
 
-        const variation = await getOrCreateDefaultVariation(tx, tenantId, product.id);
+        const variation = await resolveVariationForEntry(
+          tx,
+          tenantId,
+          product.id,
+          decision,
+          item.lineNumber
+        );
 
         await tx.productVariation.update({
           where: { id: variation.id },

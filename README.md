@@ -82,9 +82,9 @@ Copie `backend/.env.example` para `backend/.env`. Principais chaves:
 | `NUVEM_FISCAL_API_BASE` | Sandbox: `https://api.sandbox.nuvemfiscal.com.br` |
 | `NUVEM_FISCAL_OAUTH_SCOPE` | Padrão: `empresa nfe nfce` |
 | `NUVEM_FISCAL_AMBIENTE` | `homologacao` ou `producao` (igual à empresa no console Nuvem) |
-| `NUVEM_FISCAL_EMITENTE_CNPJ` | Opcional; fallback só se `Tenant.cnpj` inválido. **Multi-tenant: sempre usa o CNPJ da loja logada** |
-| `NUVEM_FISCAL_EMITENTE_IE` | Opcional; IE só dígitos. Sobrescreve a IE vinda da Nuvem se a SEFAZ rejeitar vínculo CNPJ/IE |
-| `NUVEM_FISCAL_RESP_TEC_CNPJ` | CNPJ do responsável técnico (infRespTec), quando exigido pela SEFAZ |
+| `NUVEM_FISCAL_EMITENTE_CNPJ` | **Deprecado** — não é usado como emitente. Emitente = `Tenant.cnpj` |
+| `NUVEM_FISCAL_EMITENTE_IE` | **Deprecado** na emissão — IE vem da Empresa na Nuvem (por CNPJ do tenant) |
+| `NUVEM_FISCAL_RESP_TEC_CNPJ` | CNPJ do responsável técnico / software house (infRespTec), global |
 | `NUVEM_FISCAL_RESP_TEC_CONTATO` | Nome do contato técnico |
 | `NUVEM_FISCAL_RESP_TEC_EMAIL` | Email do responsável técnico |
 | `NUVEM_FISCAL_RESP_TEC_FONE` | Telefone (somente dígitos) do responsável técnico |
@@ -173,19 +173,19 @@ Prefixo global: **`/api/v1`**.
 ### Troubleshooting rápido (NFC-e)
 
 - **`Nao informado o grupo de informacoes do responsavel tecnico`**: no Coolify use os nomes exatos `NUVEM_FISCAL_RESP_TEC_CNPJ` (14 dígitos), `NUVEM_FISCAL_RESP_TEC_EMAIL` e `NUVEM_FISCAL_RESP_TEC_CONTATO` (não `..._CONTA`). Em **Paraná / produção** (desde 01/04/2026) costuma ser obrigatório também **CSRT**: `NUVEM_FISCAL_RESP_TEC_ID_CSRT` + `NUVEM_FISCAL_CSRT` (solicitados na SEFAZ para o sistema emissor).
-- **`IE do emitente nao vinculada ao CNPJ`**: a IE na nota tem de ser a **mesma** que a SEFAZ tem para esse CNPJ. Corrija em **Nuvem Fiscal → Empresa → Dados** (inscrição estadual) ou defina **`NUVEM_FISCAL_EMITENTE_IE`** (só dígitos) no backend até alinhar o cadastro na Nuvem. Confirme a IE no **cadastro estadual** (ex.: portal Receita/SEFAZ PR).
+- **`IE do emitente nao vinculada ao CNPJ`**: a IE na nota vem da **Empresa** na Nuvem Fiscal (mesmo CNPJ do `Tenant`). Corrija em **Nuvem Fiscal → Empresa → Dados** (inscrição estadual). Confirme a IE no cadastro estadual (ex.: portal Receita/SEFAZ PR). `NUVEM_FISCAL_EMITENTE_IE` **não** é mais aplicado na emissão.
 - **`Ja existe NFC-e emitida` + sem PDF**: o backend já reconcilia estado local vs Nuvem e libera reemissão quando a autorização remota não for 100/150.
 - **`Nuvem Fiscal retornou 404 ao baixar PDF`**: pode ser atraso de disponibilização; o backend já faz retry e valida autorização antes de baixar.
 
 Documentação oficial: [Autenticação](https://dev.nuvemfiscal.com.br/docs/autenticacao).
 
-**NFC-e automática:** ao criar uma venda (`POST /sales`), o backend enfileira emissão na Nuvem Fiscal. No fluxo atual do app, a venda **não** vincula cliente (`customerId` nulo), então a nota é **CONSUMIDOR FINAL**. Se `customerId` for enviado pela API e o cliente tiver dados fiscais completos, o destinatário pode usar CPF/CNPJ do cadastro. **PDF:** `GET /api/v1/invoices/sale/:saleId/pdf` (JWT). Produtos: `ncm`, `cfop`, `icmsOrig`, `icmsCsosn` (padrões: `61091000`, `5102`, `0`, `102`). CNPJ emitente: **`Tenant.cnpj` da loja** (cadastre a mesma empresa na conta Nuvem Fiscal do `CLIENT_ID`/`SECRET`). `NUVEM_FISCAL_EMITENTE_CNPJ` só se o tenant não tiver CNPJ válido. Ambiente na Nuvem = `NUVEM_FISCAL_AMBIENTE`. OAuth **scope** `empresa nfe nfce`.
+**NFC-e automática:** ao criar uma venda (`POST /sales`), o backend enfileira emissão na Nuvem Fiscal. No fluxo atual do app, a venda **não** vincula cliente (`customerId` nulo), então a nota é **CONSUMIDOR FINAL**. Se `customerId` for enviado pela API e o cliente tiver dados fiscais completos, o destinatário pode usar CPF/CNPJ do cadastro. **PDF:** `GET /api/v1/invoices/sale/:saleId/pdf` (JWT). Produtos: `ncm`, `cfop`, `icmsOrig`, `icmsCsosn` (padrões: `61091000`, `5102`, `0`, `102`). **Emitente:** somente `Tenant.cnpj` da loja autenticada (cadastre a mesma Empresa + certificado/CSC na conta Nuvem). `NUVEM_FISCAL_EMITENTE_CNPJ` / `_IE` estão deprecados e **não** entram na emissão. Ambiente = `NUVEM_FISCAL_AMBIENTE`. OAuth **scope** `empresa nfe nfce`.
 
 Nunca commite `Client Secret`. Se exposto, revogue e gere novas credenciais.
 
 ### Várias lojas (multi-tenant) — cada cliente com CNPJ diferente
 
-Cada **login** está ligado a um `Tenant` no banco. Na emissão de NFC-e o sistema usa **sempre o `Tenant.cnpj` da loja logada** (não mistura com outra loja).
+Cada **login** está ligado a um `Tenant` no banco. Na emissão de NFC-e o sistema usa **sempre o `Tenant.cnpj` da loja logada** e valida empresa Nuvem + payload `emit.CNPJ` contra esse tenant (não mistura com outra loja). Certificados ficam **por Empresa no console Nuvem**, não no banco Luxuosa.
 
 | Como conferir | O que fazer |
 |---------------|-------------|
@@ -198,7 +198,7 @@ Cada **login** está ligado a um `Tenant` no banco. Na emissão de NFC-e o siste
 1. `Tenant.cnpj` no PostgreSQL = CNPJ real da loja (14 dígitos).
 2. Mesma empresa cadastrada na **Nuvem Fiscal** (conta das credenciais `NUVEM_FISCAL_*`).
 3. `enableNfceEmission = true` só nas lojas que emitem nota; as outras ficam sem fila NFC-e.
-4. **Não** use `NUVEM_FISCAL_EMITENTE_CNPJ` em produção multi-tenant (forçaria um único CNPJ para todos).
+4. **Remova** `NUVEM_FISCAL_EMITENTE_CNPJ` do Coolify (não é mais emitente).
 
 Se o mesmo e-mail existir em mais de uma loja, o login pede o **CNPJ da loja** para escolher o tenant certo.
 

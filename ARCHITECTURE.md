@@ -96,7 +96,7 @@ Enums relevantes: `Plan`, `UserType`, `PaymentMethod`, `SaleStatus`, `StockMovem
 - **API:** `shared/nuvemFiscal/nuvemFiscalApi.js` — `GET /empresas`, `GET /empresas/:cnpj`, `GET /empresas/:cnpj/nfce`, `POST /nfce`, `GET /nfce/:id`.
 - **Payload:** `shared/nuvemFiscal/nuvemFiscalNfceBuilder.js` monta `infNFe` (modelo **65** NFC-e, ICMS CSOSN 102, PIS/COFINS CST 07).
 - **Emissão:** `invoice.service.issueFromSale` chama `POST /nfce`, polling até autorização, persiste chave/número em `Invoice`; PDF via `GET /nfce/:id/pdf` (proxy em `GET /invoices/sale/:saleId/pdf`).
-- **Variáveis:** incluem `NUVEM_FISCAL_AMBIENTE` e `NUVEM_FISCAL_EMITENTE_CNPJ` (opcional; senão usa `Tenant.cnpj`).
+- **Variáveis:** OAuth global da conta SaaS; emitente = **sempre** `Tenant.cnpj` (sem fallback `NUVEM_FISCAL_EMITENTE_CNPJ` / IE global). Certificado/CSC ficam na Empresa na Nuvem. `RESP_TEC_*` = software house.
 - **Rotas:** `GET /invoices/connection-test` (admin); `POST /invoices/issue/:saleId` e `GET /invoices/sale/:saleId/pdf` (usuário da loja).
 
 ## 7. Mapa de rotas HTTP (referência)

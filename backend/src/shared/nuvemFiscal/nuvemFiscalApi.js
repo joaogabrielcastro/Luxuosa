@@ -1,6 +1,21 @@
 import { env } from "../../config/env.js";
 import { getNuvemFiscalAccessToken } from "./nuvemFiscalAuth.js";
 
+/** @type {{ emitCnpj: string, referencia: string|null, at: number }[]} */
+const mockEmissions = [];
+
+export function clearMockNfceEmissions() {
+  mockEmissions.length = 0;
+}
+
+export function getMockNfceEmissions() {
+  return mockEmissions.map((e) => ({ ...e }));
+}
+
+function digitsOnly(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
 function mockChave() {
   const prefix = "3524";
   let rest = "";
@@ -28,7 +43,7 @@ function mockAuthorizedBody(overrides = {}) {
 }
 
 function mockEmpresaBody(cnpjDigits) {
-  const cnpj = String(cnpjDigits || "").replace(/\D/g, "") || "00000000000000";
+  const cnpj = digitsOnly(cnpjDigits) || "00000000000000";
   return {
     cnpj,
     cpf_cnpj: cnpj,
@@ -94,6 +109,12 @@ export function getEmpresaNfceConfig(config, cnpjDigits) {
 
 export function postNfce(config, payload) {
   if (env.nfceMock) {
+    const emitCnpj = digitsOnly(payload?.infNFe?.emit?.CNPJ);
+    mockEmissions.push({
+      emitCnpj,
+      referencia: payload?.referencia ? String(payload.referencia) : null,
+      at: Date.now()
+    });
     return Promise.resolve({
       ok: true,
       status: 200,

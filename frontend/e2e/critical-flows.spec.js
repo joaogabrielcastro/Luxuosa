@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { API, DEMO_AUTH_FILE, ensureDemoAuthFile, loginAsDemoAdmin } from "./helpers.js";
+import { API, DEMO_AUTH_FILE, ensureDemoAuthFile } from "./helpers.js";
 
 function uniqueCnpj() {
   const stamp = String(Date.now()).slice(-10);

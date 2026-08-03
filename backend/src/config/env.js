@@ -56,10 +56,11 @@ export const env = {
     /** homologacao | producao — deve coincidir com a configuração da empresa na Nuvem Fiscal */
     ambiente: trimEnv(process.env.NUVEM_FISCAL_AMBIENTE || "homologacao"),
     /** CNPJ só dígitos — fallback se Tenant.cnpj inválido; em multi-tenant a loja logada tem prioridade */
+    /** @deprecated Nao usado como emitente. Emitente = Tenant.cnpj. */
     emitenteCnpj: trimEnv(process.env.NUVEM_FISCAL_EMITENTE_CNPJ || ""),
-    /** IE só dígitos; se vazio, usa inscricao_estadual retornada pela Nuvem (GET empresa). */
+    /** @deprecated IE na emissao vem da Empresa Nuvem do CNPJ do tenant. */
     emitenteIe: trimEnv(process.env.NUVEM_FISCAL_EMITENTE_IE || ""),
-    /** Responsavel tecnico (infRespTec) — alguns estados exigem este grupo em NFC-e. */
+    /** Responsavel tecnico (infRespTec) — software house, global para todos os tenants. */
     respTecCnpj: trimEnv(process.env.NUVEM_FISCAL_RESP_TEC_CNPJ || ""),
     respTecContato: trimEnv(process.env.NUVEM_FISCAL_RESP_TEC_CONTATO || ""),
     respTecEmail: trimEnv(process.env.NUVEM_FISCAL_RESP_TEC_EMAIL || ""),
