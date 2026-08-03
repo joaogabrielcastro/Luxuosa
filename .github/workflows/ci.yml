@@ -56,11 +56,14 @@ jobs:
           npm ci --prefix frontend
           npm ci --prefix backend
 
-      - name: Prisma generate + migrate
+      - name: Prisma generate + schema (CI)
         working-directory: backend
         run: |
           npx prisma generate
-          npx prisma migrate deploy
+          # Historico de migrations nao inclui baseline (schema inicial).
+          # Em Postgres vazio do CI, migrate deploy falha em User inexistente.
+          # Producao com DB ja baselined continua usando migrate deploy no start:prod.
+          npx prisma db push --accept-data-loss
 
       - name: Check (build FE + routes + unit + integration)
         run: npm run check
