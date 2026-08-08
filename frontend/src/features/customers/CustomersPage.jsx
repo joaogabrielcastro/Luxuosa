@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { apiClient } from "../../shared/apiClient.js";
 import { useApiQuery } from "../../shared/hooks/useApiQuery.js";
 import { useInvalidateLuxuosa } from "../../shared/hooks/useInvalidateLuxuosa.js";
 import { queryKeys } from "../../shared/queryKeys.js";
+import { digitsOnlyCep, lookupCep, maskCepInput } from "../../shared/viaCep.js";
 import { useAuth } from "../auth/useAuth.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
 import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
@@ -101,14 +102,52 @@ export function CustomersPage() {
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [cepLoading, setCepLoading] = useState(false);
+  const lastLookedUpCep = useRef("");
 
   const filteredCount = useMemo(
     () => items.filter((c) => matchesCustomerQuery(c, query)).length,
     [items, query]
   );
 
+  async function handleCepChange(raw) {
+    const masked = maskCepInput(raw);
+    setForm((f) => ({ ...f, cep: masked }));
+    const digits = digitsOnlyCep(masked);
+    if (digits.length !== 8) {
+      lastLookedUpCep.current = "";
+      return;
+    }
+    if (digits === lastLookedUpCep.current) return;
+    lastLookedUpCep.current = digits;
+    setCepLoading(true);
+    try {
+      const found = await lookupCep(digits);
+      if (!found) {
+        showToast("CEP nao encontrado.", "error");
+        return;
+      }
+      const addressLine = [found.street, found.neighborhood, found.city]
+        .filter(Boolean)
+        .join(", ");
+      setForm((f) => ({
+        ...f,
+        cep: maskCepInput(found.cep),
+        uf: found.uf || f.uf,
+        address: addressLine || f.address
+      }));
+      showToast("Endereco preenchido pelo CEP. Confira o numero.");
+    } catch (err) {
+      lastLookedUpCep.current = "";
+      showToast(err.message || "Falha ao buscar CEP.", "error");
+    } finally {
+      setCepLoading(false);
+    }
+  }
+
   function startEdit(c) {
     setEditingId(c.id);
+    lastLookedUpCep.current = digitsOnlyCep(c.cep || "");
     setForm({
       name: c.name || "",
       cpfCnpj: c.cpfCnpj || "",
@@ -116,12 +155,13 @@ export function CustomersPage() {
       email: c.email || "",
       address: c.address || "",
       uf: c.uf || "",
-      cep: c.cep || ""
+      cep: c.cep ? maskCepInput(c.cep) : ""
     });
   }
 
   function cancelEdit() {
     setEditingId("");
+    lastLookedUpCep.current = "";
     setForm(emptyForm());
   }
 
@@ -231,13 +271,19 @@ export function CustomersPage() {
               placeholder="opcional"
             />
           </label>
-          <label className="flex flex-col gap-1 md:col-span-2">
-            <span className="text-xs font-medium text-slate-600">Endereco</span>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-slate-600">CEP</span>
             <Input
-              value={form.address}
-              onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
-              placeholder="Rua, numero, bairro..."
+              value={form.cep}
+              onChange={(e) => handleCepChange(e.target.value)}
+              placeholder="00000-000"
+              inputMode="numeric"
+              autoComplete="postal-code"
+              disabled={cepLoading}
             />
+            <span className="text-[10px] text-slate-500">
+              {cepLoading ? "Buscando endereco..." : "Ao completar 8 digitos, preenche endereco e UF."}
+            </span>
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-slate-600">UF</span>
@@ -253,12 +299,12 @@ export function CustomersPage() {
               ))}
             </Select>
           </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-slate-600">CEP</span>
+          <label className="flex flex-col gap-1 md:col-span-2">
+            <span className="text-xs font-medium text-slate-600">Endereco</span>
             <Input
-              value={form.cep}
-              onChange={(e) => setForm((f) => ({ ...f, cep: e.target.value }))}
-              placeholder="8 digitos"
+              value={form.address}
+              onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+              placeholder="Rua, numero, bairro, cidade..."
             />
           </label>
           <div className="flex flex-wrap gap-2 md:col-span-2">
