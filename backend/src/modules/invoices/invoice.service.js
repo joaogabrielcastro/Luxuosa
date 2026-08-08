@@ -1,32 +1,17 @@
 import { InvoiceStatus, NfceIssueJobStatus } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
 import { env } from "../../config/env.js";
-import { getNuvemFiscalAccessToken } from "../../shared/nuvemFiscal/nuvemFiscalAuth.js";
-import {
-  getEmpresa,
-  getEmpresaNfceConfig,
-  postNfce,
-  getNfceById
-} from "../../shared/nuvemFiscal/nuvemFiscalApi.js";
-import { buildNfceRequestBody, digitsOnly } from "../../shared/nuvemFiscal/nuvemFiscalNfceBuilder.js";
+import { postNfeEmitir, getNfeStatus, getNfeDanfe, pingNotaasApiKey } from "../../shared/notaas/notaasApi.js";
+import { buildNotaasNfcePayload, digitsOnly } from "../../shared/notaas/notaasNfceBuilder.js";
 import {
   formatCnpjBr,
   resolveEmitenteCnpj,
-  requireTenantEmitenteCnpj,
-  assertEmpresaCnpjMatchesTenant,
-  assertNfcePayloadEmitente
+  requireTenantEmitenteCnpj
 } from "../../shared/nuvemFiscal/nuvemFiscalEmitente.js";
 import { saleRepository } from "../sales/sale.repository.js";
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
-}
-
-function normalizeEmpresaResponse(body) {
-  if (!body) return null;
-  if (body.nome_razao_social) return body;
-  if (Array.isArray(body.data) && body.data[0]) return body.data[0];
-  return body;
 }
 
 const EMISSION_LEASE_MS = 120000;
@@ -99,39 +84,52 @@ async function updateInvoiceForTenant(tenantId, saleId, data) {
   }
 }
 
-async function pollNfceStatus(nf, docId) {
+async function pollNotaasStatus(apiKey, invoiceId) {
   const max = 60;
   for (let i = 0; i < max; i += 1) {
-    const { ok, body } = await getNfceById(nf, docId);
+    const { ok, body } = await getNfeStatus(apiKey, invoiceId);
     if (!ok) {
-      return { error: "Falha ao consultar NFC-e na Nuvem Fiscal.", body };
+      return { error: "Falha ao consultar NFC-e no Notaas.", body };
     }
-    const st = body?.status;
-    if (st !== "pendente" && st !== "processando") {
+    const st = String(body?.status || "").toLowerCase();
+    if (st === "issued" || st === "error" || st === "cancelled" || st === "inutilized") {
       return { body };
     }
     await sleep(2000);
   }
-  return { error: "Timeout aguardando processamento na SEFAZ." };
+  return { error: "Timeout aguardando processamento na SEFAZ (Notaas)." };
+}
+
+function requireTenantNotaasApiKey(tenant, { silent }) {
+  const key = String(tenant?.notaasApiKey || "").trim();
+  if (env.nfceMock) {
+    return key || "ntaas_mock_key";
+  }
+  if (!key || !key.startsWith("ntaas_")) {
+    if (silent) return null;
+    const err = new Error(
+      "API Key Notaas nao configurada nesta loja. Cadastre o projeto no Notaas e grave Tenant.notaasApiKey (ntaas_...)."
+    );
+    err.statusCode = 503;
+    err.code = "NOTAAS_API_KEY_MISSING";
+    throw err;
+  }
+  return key;
 }
 
 /**
- * Valida OAuth e se o CNPJ **desta loja** está cadastrado na conta Nuvem Fiscal.
- * Não usa outra empresa da conta sandbox como emitente.
+ * Valida CNPJ da loja + API Key Notaas do tenant.
  */
 async function connectionTest(tenantId) {
-  const nf = env.nuvemFiscal;
-  if (!nf.clientId || !nf.clientSecret) {
-    const err = new Error(
-      "Nuvem Fiscal nao configurado. Defina NUVEM_FISCAL_CLIENT_ID e NUVEM_FISCAL_CLIENT_SECRET."
-    );
-    err.statusCode = 503;
-    throw err;
-  }
-
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { name: true, cnpj: true, enableNfceEmission: true }
+    select: {
+      name: true,
+      cnpj: true,
+      enableNfceEmission: true,
+      notaasApiKey: true,
+      notaasProjectId: true
+    }
   });
   if (!tenant) {
     const err = new Error("Loja nao encontrada.");
@@ -141,132 +139,82 @@ async function connectionTest(tenantId) {
 
   const resolved = resolveEmitenteCnpj(tenant.cnpj);
   const warnings = [];
+  const hasKey = Boolean(String(tenant.notaasApiKey || "").trim());
 
-  if (resolved.envOverrideIgnored) {
-    warnings.push(
-      `NUVEM_FISCAL_EMITENTE_CNPJ no servidor (${formatCnpjBr(env.nuvemFiscal.emitenteCnpj)}) é ignorado: a NFC-e usa o CNPJ desta loja (${formatCnpjBr(resolved.emitCnpj)}).`
-    );
-  }
   if (resolved.source === "invalid") {
-    warnings.push(
-      "CNPJ da loja no cadastro é inválido (precisa de 14 dígitos). NUVEM_FISCAL_EMITENTE_CNPJ não é usado como emitente — corrija o Tenant.cnpj e cadastre a mesma Empresa na Nuvem Fiscal."
-    );
-  }
-  if (resolved.emitCnpj.length !== 14) {
-    warnings.push("CNPJ do emitente inválido (precisa de 14 dígitos).");
+    warnings.push("CNPJ da loja no cadastro e invalido (precisa de 14 digitos).");
   }
   if (!tenant.enableNfceEmission) {
-    warnings.push("NFC-e desligada para esta loja (enableNfceEmission). Vendas não enfileiram nota.");
+    warnings.push("NFC-e desligada para esta loja (enableNfceEmission).");
+  }
+  if (!hasKey && !env.nfceMock) {
+    warnings.push(
+      "Tenant.notaasApiKey ausente. Crie o projeto da loja no Notaas (mesmo CNPJ), configure certificado/CSC e cole a API Key ntaas_..."
+    );
   }
 
-  const token = await getNuvemFiscalAccessToken(nf);
-  const listRes = await fetch(`${nf.apiBase}/empresas`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }
-  });
-  const listText = await listRes.text();
-  let listBody;
-  try {
-    listBody = JSON.parse(listText);
-  } catch {
-    listBody = { raw: listText };
-  }
-
-  if (!listRes.ok) {
-    const err = new Error(`Nuvem Fiscal API retornou ${listRes.status}.`);
-    err.statusCode = 502;
-    err.details = listBody;
-    throw err;
-  }
-
-  let empresa = null;
-  let nfceConfig = null;
-  let empresaFound = false;
-
-  if (resolved.emitCnpj.length === 14) {
-    const empRes = await getEmpresa(nf, resolved.emitCnpj);
-    if (empRes.ok) {
-      empresaFound = true;
-      empresa = normalizeEmpresaResponse(empRes.body);
-      const nfceRes = await getEmpresaNfceConfig(nf, resolved.emitCnpj);
-      if (nfceRes.ok) nfceConfig = nfceRes.body;
-    } else {
-      warnings.push(
-        `CNPJ ${formatCnpjBr(resolved.emitCnpj)} não está cadastrado nesta conta Nuvem Fiscal. Cadastre a empresa no console com o mesmo Client ID/Secret do servidor.`
-      );
-    }
-
-    const ambienteConfig = nf.ambiente === "producao" ? "producao" : "homologacao";
-    if (nfceConfig?.ambiente && nfceConfig.ambiente !== ambienteConfig) {
-      warnings.push(
-        `Ambiente NFC-e na Nuvem (${nfceConfig.ambiente}) difere de NUVEM_FISCAL_AMBIENTE (${ambienteConfig}).`
-      );
+  let keyOk = false;
+  if (hasKey || env.nfceMock) {
+    const apiKey = requireTenantNotaasApiKey(tenant, { silent: false });
+    const ping = await pingNotaasApiKey(apiKey);
+    keyOk = ping.ok;
+    if (!ping.ok) {
+      warnings.push(`API Key Notaas rejeitada (${ping.status}). Gere outra key no projeto da loja.`);
     }
   }
 
-  const ok =
-    resolved.emitCnpj.length === 14 &&
-    empresaFound &&
-    Boolean(empresa?.endereco) &&
-    (!nfceConfig?.ambiente ||
-      nfceConfig.ambiente === (nf.ambiente === "producao" ? "producao" : "homologacao"));
+  const ok = resolved.emitCnpj.length === 14 && (keyOk || env.nfceMock) && tenant.enableNfceEmission;
 
   return {
     ok,
-    provider: "nuvemfiscal",
-    environment: nf.apiBase.includes("sandbox") ? "sandbox" : "producao",
-    ambienteConfig: nf.ambiente === "producao" ? "producao" : "homologacao",
+    provider: "notaas",
+    environment: env.notaas.ambiente === "producao" ? "producao" : "homologacao",
+    apiBase: env.notaas.apiBase,
     tenant: {
       name: tenant.name,
       cnpj: digitsOnly(tenant.cnpj),
       cnpjFormatado: formatCnpjBr(tenant.cnpj),
-      enableNfceEmission: tenant.enableNfceEmission
+      enableNfceEmission: tenant.enableNfceEmission,
+      notaasProjectId: tenant.notaasProjectId || null,
+      hasNotaasApiKey: hasKey || env.nfceMock
     },
     emitente: {
       cnpj: resolved.emitCnpj,
       cnpjFormatado: formatCnpjBr(resolved.emitCnpj),
-      source: resolved.source,
-      razaoSocial: empresa?.nome_razao_social || null,
-      nomeFantasia: empresa?.nome_fantasia || null,
-      cadastradoNaNuvem: empresaFound
+      source: resolved.source
     },
-    nfce: nfceConfig
-      ? {
-          ambiente: nfceConfig.ambiente || null,
-          serie: nfceConfig.serie ?? null
-        }
-      : null,
     warnings
   };
 }
 
 /**
- * Emite NFC-e (modelo 65) via Nuvem Fiscal e grava Invoice.
- * @param {boolean} [opts.silent] — se true, nao lanca quando credenciais ausentes (emissao automatica pos-venda).
+ * Emite NFC-e (modelo 65) via Notaas e grava Invoice.
+ * @param {boolean} [opts.silent]
  */
 async function issueFromSale(tenantId, saleId, opts = {}) {
   const silent = opts.silent === true;
-  const nf = env.nuvemFiscal;
 
   const tenantPolicy = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { enableNfceEmission: true, cnpj: true }
+    select: {
+      enableNfceEmission: true,
+      cnpj: true,
+      notaasApiKey: true,
+      notaasProjectId: true
+    }
   });
   if (!tenantPolicy?.enableNfceEmission) {
     if (silent) return null;
     const err = new Error(
-      "Emissao de NFC-e nao habilitada para esta loja. Configure o CNPJ na Nuvem Fiscal ou use venda sem nota."
+      "Emissao de NFC-e nao habilitada para esta loja. Configure o Notaas (projeto + API Key) ou use venda sem nota."
     );
     err.statusCode = 403;
     err.code = "NFCE_TENANT_DISABLED";
     throw err;
   }
 
-  if (!env.nfceMock && (!nf.clientId || !nf.clientSecret)) {
-    if (silent) return null;
-    const err = new Error("Nuvem Fiscal nao configurado.");
-    err.statusCode = 503;
-    throw err;
-  }
+  const apiKey = requireTenantNotaasApiKey(tenantPolicy, { silent });
+  if (!apiKey) return null;
 
   const sale = await saleRepository.findForNfe(tenantId, saleId);
   if (!sale) {
@@ -281,7 +229,7 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
   }
 
   if (sale.invoice?.status === InvoiceStatus.ISSUED) {
-    const invoiceRef = sale.invoice.externalId || sale.invoice.key;
+    const invoiceRef = sale.invoice.externalId;
     if (!invoiceRef) {
       if (silent) return prisma.invoice.findFirst({ where: { tenantId, saleId } });
       const err = new Error("Ja existe NFC-e emitida para esta venda.");
@@ -289,28 +237,18 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
       throw err;
     }
 
-    const remote = await getNfceById(nf, invoiceRef);
-    if (!remote.ok) {
-      if (silent) return null;
-      const err = new Error("Ja existe NFC-e emitida para esta venda.");
-      err.statusCode = 409;
-      throw err;
-    }
-
-    const codigo = remote.body?.autorizacao?.codigo_status;
-    const autorizada = codigo === 100 || codigo === 150;
-    if (autorizada) {
+    const remote = await getNfeStatus(apiKey, invoiceRef);
+    if (remote.ok && String(remote.body?.status).toLowerCase() === "issued") {
       if (silent) return prisma.invoice.findFirst({ where: { tenantId, saleId } });
       const err = new Error("Ja existe NFC-e emitida para esta venda.");
       err.statusCode = 409;
       throw err;
     }
 
-    // Estado local ficou ISSUED, mas na Nuvem a nota nao esta autorizada (rejeitada/cancelada).
-    // Reabre a invoice para permitir nova emissao.
     const motivo =
-      remote.body?.autorizacao?.motivo_status ||
-      "NFC-e nao autorizada na Nuvem Fiscal. Reemissao liberada.";
+      remote.body?.error ||
+      remote.body?.message ||
+      "NFC-e nao autorizada no Notaas. Reemissao liberada.";
     await updateInvoiceForTenant(tenantId, saleId, {
       status: InvoiceStatus.ERROR,
       lastError: String(motivo).slice(0, 65000),
@@ -322,74 +260,9 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
     });
   }
 
-  const emitCnpj = requireTenantEmitenteCnpj(tenantPolicy.cnpj);
+  requireTenantEmitenteCnpj(tenantPolicy.cnpj);
 
-  const ambiente = nf.ambiente === "producao" ? "producao" : "homologacao";
-
-  const empRes = await getEmpresa(nf, emitCnpj);
-  if (!empRes.ok) {
-    const err = new Error(`Nuvem Fiscal: empresa ${emitCnpj} nao encontrada ou sem acesso.`);
-    err.statusCode = 502;
-    err.details = empRes.body;
-    throw err;
-  }
-  const empresa = normalizeEmpresaResponse(empRes.body);
-  if (!empresa?.endereco) {
-    const err = new Error("Resposta Nuvem Fiscal sem dados de endereco do emitente.");
-    err.statusCode = 502;
-    throw err;
-  }
-  assertEmpresaCnpjMatchesTenant(empresa, emitCnpj);
-
-  // IE vem sempre da Empresa na Nuvem Fiscal (por CNPJ do tenant).
-  // NUVEM_FISCAL_EMITENTE_IE global foi removido da emissao para nao misturar IE entre lojas.
-
-  const nfceCfgRes = await getEmpresaNfceConfig(nf, emitCnpj);
-  const empresaNfce = nfceCfgRes.ok ? nfceCfgRes.body : null;
-
-  if (empresaNfce?.ambiente && empresaNfce.ambiente !== ambiente) {
-    const err = new Error(
-      `Ambiente Nuvem da empresa (${empresaNfce.ambiente}) difere de NUVEM_FISCAL_AMBIENTE (${ambiente}). Ajuste no console ou no .env.`
-    );
-    err.statusCode = 409;
-    throw err;
-  }
-
-  const respTecCnpj = digitsOnly(nf.respTecCnpj);
-  const respTecFone = digitsOnly(nf.respTecFone);
-  const respTecEmail = String(nf.respTecEmail || "").trim();
-  const respTecContato = String(nf.respTecContato || "").trim();
-  const infRespTec =
-    respTecCnpj.length === 14 && respTecEmail
-      ? {
-          CNPJ: respTecCnpj,
-          xContato: respTecContato || "Suporte Luxuosa",
-          email: respTecEmail,
-          ...(respTecFone ? { fone: respTecFone } : {})
-        }
-      : null;
-
-  const empresaNfceMerged = { ...(empresaNfce || {}) };
-  if (infRespTec) {
-    empresaNfceMerged.respTec = infRespTec;
-  } else {
-    delete empresaNfceMerged.respTec;
-  }
-
-  const csrtId = String(nf.respTecIdCsrt || "").trim();
-  const csrtSecret = String(nf.csrt || "").trim();
-  const csrt =
-    csrtId && csrtSecret ? { id: csrtId, secret: csrtSecret } : null;
-
-  const payload = buildNfceRequestBody({
-    sale,
-    empresa,
-    empresaNfce: empresaNfceMerged,
-    ambiente,
-    referencia: sale.id,
-    csrt
-  });
-  assertNfcePayloadEmitente(payload, emitCnpj);
+  const payload = buildNotaasNfcePayload({ sale });
 
   await ensureInvoiceRow(tenantId, saleId);
 
@@ -399,30 +272,30 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
   }
 
   try {
-    const postRes = await postNfce(nf, payload);
+    const postRes = await postNfeEmitir(apiKey, payload);
     if (!postRes.ok) {
       const msg = JSON.stringify(postRes.body);
       await updateInvoiceForTenant(tenantId, saleId, {
         status: InvoiceStatus.ERROR,
         lastError: msg.slice(0, 65000)
       });
-      const err = new Error("Nuvem Fiscal rejeitou a emissao da NFC-e.");
+      const err = new Error("Notaas rejeitou a emissao da NFC-e.");
       err.statusCode = 502;
       err.details = postRes.body;
       if (silent) return null;
       throw err;
     }
 
-    const docId = postRes.body?.id;
+    const docId = postRes.body?.invoiceId || postRes.body?.id;
     if (!docId) {
-      const err = new Error("Resposta Nuvem Fiscal sem id do documento.");
+      const err = new Error("Resposta Notaas sem invoiceId.");
       err.statusCode = 502;
       throw err;
     }
 
-    await updateInvoiceForTenant(tenantId, saleId, { externalId: docId });
+    await updateInvoiceForTenant(tenantId, saleId, { externalId: String(docId) });
 
-    const polled = await pollNfceStatus(nf, docId);
+    const polled = await pollNotaasStatus(apiKey, String(docId));
     if (polled.error) {
       await updateInvoiceForTenant(tenantId, saleId, {
         status: InvoiceStatus.ERROR,
@@ -435,34 +308,34 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
     }
 
     const final = polled.body;
-    const chave = final?.chave || final?.autorizacao?.chave_acesso;
+    const st = String(final?.status || "").toLowerCase();
+    const chave = final?.chaveAcesso || final?.chave || null;
     const numero = final?.numero != null ? String(final.numero) : null;
-    const codigo = final?.autorizacao?.codigo_status;
 
-    const autorizada = codigo === 100 || codigo === 150;
-
-    if (!autorizada) {
-      const motivo = final?.autorizacao?.motivo_status || JSON.stringify(final).slice(0, 2000);
+    if (st !== "issued") {
+      const motivo =
+        final?.error ||
+        final?.message ||
+        final?.motivo ||
+        JSON.stringify(final).slice(0, 2000);
       await updateInvoiceForTenant(tenantId, saleId, {
         status: InvoiceStatus.ERROR,
-        lastError: motivo.slice(0, 65000)
+        lastError: String(motivo).slice(0, 65000)
       });
-      const err = new Error(motivo);
+      const err = new Error(String(motivo));
       err.statusCode = 502;
       err.details = final;
       if (silent) return null;
       throw err;
     }
 
-    const pdfPath = `/nfce/${encodeURIComponent(docId)}/pdf`;
-
     await updateInvoiceForTenant(tenantId, saleId, {
       status: InvoiceStatus.ISSUED,
-      key: chave || null,
+      key: chave,
       number: numero,
       issuedAt: new Date(),
       lastError: null,
-      pdfUrl: pdfPath,
+      pdfUrl: final?.pdfUrl || `/nfe/invoices/${encodeURIComponent(docId)}/danfe`,
       emissionStartedAt: null
     });
 
@@ -481,9 +354,6 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
   }
 }
 
-/**
- * Baixa PDF da NFC-e na Nuvem Fiscal (uso interno do controller).
- */
 async function fetchNfcePdfBuffer(tenantId, saleId) {
   const invoice = await prisma.invoice.findFirst({
     where: { tenantId, saleId, status: InvoiceStatus.ISSUED }
@@ -494,74 +364,92 @@ async function fetchNfcePdfBuffer(tenantId, saleId) {
     throw err;
   }
 
-  if (env.nfceMock) {
-    // Minimal valid-looking PDF stub for tests / mock mode.
-    const stub = Buffer.from(
-      "%PDF-1.1\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n",
-      "utf8"
-    );
-    return { buf: stub, filename: `nfce-${invoice.number || saleId}.pdf` };
-  }
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { notaasApiKey: true }
+  });
+  const apiKey = requireTenantNotaasApiKey(tenant, { silent: false });
 
-  const nf = env.nuvemFiscal;
-  if (!nf.clientId || !nf.clientSecret) {
-    const err = new Error("Nuvem Fiscal nao configurado.");
-    err.statusCode = 503;
-    throw err;
-  }
-
-  const token = await getNuvemFiscalAccessToken(nf);
-  const docStatus = await getNfceById(nf, invoice.externalId);
-  if (docStatus.ok) {
-    const codigo = docStatus.body?.autorizacao?.codigo_status;
-    const autorizado = codigo === 100 || codigo === 150;
-    if (!autorizado) {
-      const motivo =
-        docStatus.body?.autorizacao?.motivo_status ||
-        "NFC-e ainda nao autorizada para disponibilizar PDF.";
-      const err = new Error(motivo);
-      err.statusCode = 409;
-      throw err;
-    }
-  }
-
-  const candidates = [invoice.externalId, invoice.key].filter(Boolean);
   let res;
   let lastStatus = 404;
-  let lastBody = null;
-
-  // O PDF (DANFE) pode demorar alguns segundos para ficar disponivel apos autorizacao.
-  for (const docRef of candidates) {
-    const url = `${nf.apiBase}/nfce/${encodeURIComponent(docRef)}/pdf`;
-    for (let attempt = 1; attempt <= 6; attempt += 1) {
-      res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/pdf" }
-      });
-      if (res.ok) break;
-      lastStatus = res.status;
-      const maybeText = await res.text().catch(() => "");
-      lastBody = maybeText || lastBody;
-      if (res.status !== 404 || attempt === 6) break;
-      await sleep(1500);
-    }
-    if (res?.ok) break;
+  for (let attempt = 1; attempt <= 6; attempt += 1) {
+    res = await getNfeDanfe(apiKey, invoice.externalId);
+    if (res.ok) break;
+    lastStatus = res.status;
+    if (res.status !== 404 || attempt === 6) break;
+    await sleep(1500);
   }
 
   if (!res?.ok) {
-    const err = new Error(`Nuvem Fiscal retornou ${lastStatus} ao baixar PDF.`);
+    const err = new Error(`Notaas retornou ${lastStatus} ao baixar DANFE.`);
     err.statusCode = 502;
-    if (lastBody) err.details = lastBody.slice(0, 1000);
     throw err;
   }
 
-  const buf = Buffer.from(await res.arrayBuffer());
+  const buf = Buffer.isBuffer(res.body) ? res.body : Buffer.from(res.body || []);
   return { buf, filename: `nfce-${invoice.number || saleId}.pdf` };
+}
+
+function maskNotaasApiKey(key) {
+  const k = String(key || "").trim();
+  if (!k) return null;
+  if (k.length <= 12) return `${k.slice(0, 4)}…`;
+  return `${k.slice(0, 10)}…${k.slice(-4)}`;
+}
+
+/**
+ * Admin: grava API Key / project id Notaas da loja (multi-tenant).
+ */
+async function updateTenantNotaasConfig(tenantId, { notaasApiKey, notaasProjectId, enableNfceEmission }) {
+  const data = {};
+  if (notaasApiKey !== undefined) {
+    const key = notaasApiKey == null ? null : String(notaasApiKey).trim();
+    if (key && !key.startsWith("ntaas_")) {
+      const err = new Error("notaasApiKey deve comecar com ntaas_.");
+      err.statusCode = 400;
+      throw err;
+    }
+    data.notaasApiKey = key || null;
+  }
+  if (notaasProjectId !== undefined) {
+    data.notaasProjectId = notaasProjectId == null ? null : String(notaasProjectId).trim() || null;
+  }
+  if (enableNfceEmission !== undefined) {
+    data.enableNfceEmission = Boolean(enableNfceEmission);
+  }
+  if (!Object.keys(data).length) {
+    const err = new Error("Nada para atualizar.");
+    err.statusCode = 400;
+    throw err;
+  }
+  const updated = await prisma.tenant.update({
+    where: { id: tenantId },
+    data,
+    select: {
+      id: true,
+      name: true,
+      cnpj: true,
+      enableNfceEmission: true,
+      notaasProjectId: true,
+      notaasApiKey: true
+    }
+  });
+  return {
+    id: updated.id,
+    name: updated.name,
+    cnpj: updated.cnpj,
+    enableNfceEmission: updated.enableNfceEmission,
+    notaasProjectId: updated.notaasProjectId,
+    hasNotaasApiKey: Boolean(String(updated.notaasApiKey || "").trim()),
+    notaasApiKeyMasked: maskNotaasApiKey(updated.notaasApiKey)
+  };
 }
 
 export const invoiceService = {
   connectionTest,
   issueFromSale,
   fetchNfcePdfBuffer,
+  updateTenantNotaasConfig,
   async getIssueJobStatus(tenantId, saleId) {
     return prisma.nfceIssueJob.findFirst({
       where: { tenantId, saleId },

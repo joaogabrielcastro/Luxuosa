@@ -38,5 +38,14 @@ export const invoiceController = {
     } catch (error) {
       return next(error);
     }
+  },
+
+  async updateNotaasConfig(req, res, next) {
+    try {
+      const data = await invoiceService.updateTenantNotaasConfig(req.tenantId, req.body || {});
+      return res.json(data);
+    } catch (error) {
+      return next(error);
+    }
   }
 };

@@ -29,7 +29,7 @@ docker compose restart backend nfce-worker
 - `JWT_SECRET`
 - `STRIPE_SECRET_KEY` (+ opcional `STRIPE_PRICE_PRO` / `STRIPE_PRICE_ENTERPRISE`)
 - `FRONTEND_URL=http://localhost:3006`
-- Credenciais Nuvem Fiscal (`NUVEM_FISCAL_*`)
+- Notaas: `NOTAAS_API_BASE` / `NOTAAS_AMBIENTE` + por loja `Tenant.notaasApiKey`
 - `REDIS_URL` é injetado pelo `docker-compose.yml` no backend
 
 Opcional (webhook Stripe em tempo real):
@@ -65,7 +65,7 @@ E2E_SKIP_WEBSERVER=1 npm run test:e2e
 
 **O que a cobertura automatizada cobre:** contratos HTTP dos módulos montados (auth, users, catalog, customers, sales, stock, crediário, suppliers, reports, dashboard, billing, NF-e import, invoices shells) + utilitários compartilhados (incl. preços PRO 97 / ENTERPRISE 250) + Playwright shells e deep flows (venda, caixa, estoque ENTRY, crediário form, export CSV, alertas/NF-e CTA Pro, dashboard, assinatura).
 
-**Ainda manual:** NFC-e autorizada na SEFAZ/Nuvem Fiscal, Checkout/Portal Stripe com cartão real de teste, webhook Stripe em tempo real.
+**Ainda manual:** NFC-e autorizada na SEFAZ/Notaas, Checkout/Portal Stripe com cartão real de teste, webhook Stripe em tempo real.
 
 Esperado: frontend build OK, rotas OK, testes unitários + integração OK, `{ "ok": true }` no health.
 
@@ -135,7 +135,7 @@ Webhook Stripe (Dashboard):
 
 **Clientes já existentes:** tenants com `planGateExempt=true` **não são bloqueados** por plano (NFC-e, import NF-e, alertas). A migração marca todas as lojas atuais como isentas; **novos cadastros** self-serve nascem com `planGateExempt=false` e passam pelo gate (BASIC → upgrade).
 
-Habilitar emissão NFC-e **por loja** (`Tenant.enableNfceEmission`) só depois do CNPJ configurado na Nuvem Fiscal — evita emitir com emitente errado.
+Habilitar emissão NFC-e **por loja** (`Tenant.enableNfceEmission`) só depois do projeto Notaas (mesmo CNPJ) + `notaasApiKey` gravada — evita emitir com emitente errado.
 
 ## 6. Critérios de “homologado”
 
@@ -154,20 +154,21 @@ Habilitar emissão NFC-e **por loja** (`Tenant.enableNfceEmission`) só depois d
 |----------|-----------|
 | `GET /api/v1/health` | ok |
 | Stripe Products/Prices (`npm run stripe:setup`) | PRO + ENTERPRISE via `lookup_key` |
-| Nuvem Fiscal OAuth + GET empresas | ok (sandbox; Luxuosa Presentes cadastrada) |
+| Notaas (API Key por loja) | pendente — cadastrar Luxuosa Presentes no Notaas |
 | CI GitHub Actions | workflow `.github/workflows/ci.yml` |
 
 ### Ainda precisa de você (manual)
 
 1. **NFC-e real:** login Luxuosa → venda com “Emitir NFC-e” → PDF autorizado (worker + SEFAZ homologação).
 2. **Stripe checkout:** Assinatura → Pro → cartão `4242…` → voltar com plano atualizado. Para webhook local: `stripe listen --forward-to localhost:3001/api/v1/billing/webhook` e colocar `whsec_…` em `STRIPE_WEBHOOK_SECRET`.
-3. **Produção (Coolify):** após 1–2 ok, aplicar envs da §4, `prisma migrate deploy`, webhook Stripe live, `NUVEM_FISCAL_AMBIENTE=producao` só quando for emitir real.
+3. **Produção (Coolify):** após 1–2 ok, aplicar envs da §4, `prisma migrate deploy`, webhook Stripe live, `NOTAAS_AMBIENTE=producao` só quando for emitir real.
 
-### Multi-tenant NFC-e (checklist Coolify / Nuvem)
+### Multi-tenant NFC-e (checklist Coolify / Notaas)
 
-- [ ] Remover `NUVEM_FISCAL_EMITENTE_CNPJ` e `NUVEM_FISCAL_EMITENTE_IE` do Coolify
-- [ ] Cada loja: `Tenant.cnpj` = Empresa na Nuvem (mesmo CNPJ) + certificado/CSC na Empresa
+- [ ] Remover credenciais Nuvem Fiscal do Coolify (`NUVEM_FISCAL_*`)
+- [ ] Envs: `NOTAAS_API_BASE`, `NOTAAS_AMBIENTE`
+- [ ] Cada loja: projeto Notaas com o mesmo `Tenant.cnpj` + certificado/CSC no projeto + `Tenant.notaasApiKey`
+- [ ] Luxuosa Presentes: cadastrar no Notaas e gravar key (`PATCH /invoices/notaas-config` ou SQL)
 - [ ] `enableNfceEmission=true` só nas lojas prontas
 - [ ] Worker NFC-e separado com `NFCE_PROCESS_IN_API=true`
-- [ ] `RESP_TEC_*` = dados da software house (não da loja cliente)
-- [ ] Smoke: emitir com 2 lojas/CNPJs diferentes e confirmar DANFE de cada uma
+- [ ] Smoke: emitir com 2 lojas/API Keys diferentes e confirmar DANFE de cada uma

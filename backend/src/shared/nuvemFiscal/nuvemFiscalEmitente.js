@@ -41,7 +41,7 @@ export function requireTenantEmitenteCnpj(tenantCnpj) {
   const resolved = resolveEmitenteCnpj(tenantCnpj);
   if (resolved.source !== "tenant" || resolved.emitCnpj.length !== 14) {
     const err = new Error(
-      "CNPJ da loja invalido ou ausente. Cada tenant deve ter CNPJ proprio (14 digitos) cadastrado como Empresa na Nuvem Fiscal. NUVEM_FISCAL_EMITENTE_CNPJ nao e usado como emitente."
+      "CNPJ da loja invalido ou ausente. Cada tenant deve ter CNPJ proprio (14 digitos) e o mesmo CNPJ no projeto Notaas. NUVEM_FISCAL_EMITENTE_CNPJ nao e usado como emitente."
     );
     err.statusCode = 400;
     err.code = "NFCE_TENANT_CNPJ_REQUIRED";
@@ -97,6 +97,9 @@ export function buildTenantFiscalContext(tenant) {
   const resolved = resolveEmitenteCnpj(tenant?.cnpj);
   const enableNfce = Boolean(tenant?.enableNfceEmission);
   const validCnpj = resolved.source === "tenant" && resolved.emitCnpj.length === 14;
+  const hasNotaasKey = Boolean(
+    tenant?.hasNotaasApiKey ?? String(tenant?.notaasApiKey || "").trim()
+  );
 
   return {
     enableNfceEmission: enableNfce,
@@ -104,14 +107,15 @@ export function buildTenantFiscalContext(tenant) {
     emitenteCnpjFormatado: formatCnpjBr(resolved.emitCnpj),
     emitenteSource: resolved.source,
     envOverrideIgnored: resolved.envOverrideIgnored,
+    hasNotaasApiKey: hasNotaasKey,
     willEmitNfce: enableNfce && validCnpj,
     message: !enableNfce
       ? "NFC-e desligada nesta loja — vendas sem nota fiscal."
       : !validCnpj
-        ? "CNPJ da loja inválido — não é possível emitir NFC-e. Cadastre 14 dígitos no CNPJ do tenant e a mesma Empresa na Nuvem Fiscal."
-        : resolved.envOverrideIgnored
-          ? `NFC-e pelo CNPJ ${formatCnpjBr(resolved.emitCnpj)} desta loja (NUVEM_FISCAL_EMITENTE_CNPJ no servidor é ignorado).`
-          : `NFC-e será emitida pelo CNPJ ${formatCnpjBr(resolved.emitCnpj)} desta loja.`
+        ? "CNPJ da loja inválido — não é possível emitir NFC-e. Cadastre 14 dígitos no CNPJ do tenant e o mesmo CNPJ no projeto Notaas."
+        : !hasNotaasKey
+          ? `Emitente ${formatCnpjBr(resolved.emitCnpj)} — falta API Key Notaas (projeto da loja) para emitir.`
+          : `NFC-e será emitida pelo CNPJ ${formatCnpjBr(resolved.emitCnpj)} desta loja (Notaas).`
   };
 }
 

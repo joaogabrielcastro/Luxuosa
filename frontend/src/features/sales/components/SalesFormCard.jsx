@@ -56,7 +56,7 @@ export function SalesFormCard({
   addManualLine,
   loading,
   cancelEdit,
-  /** Só a loja com emitente na Nuvem Fiscal (ex.: Luxuosa demo) pode enfileirar NFC-e. */
+  /** Só a loja com NFC-e habilitada (Notaas + CNPJ) pode enfileirar emissão. */
   enableNfceEmission = false,
   /** (id) => quantidade ainda vendivel para a variacao; se omitido, nao filtra a busca rapida. */
   getRemainingUnits = null

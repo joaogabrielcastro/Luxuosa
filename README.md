@@ -13,7 +13,7 @@ Checklist operacional (Docker, Stripe, NFC-e, produção): ver [HOMOLOGACAO.md](
 | Backend | Node.js 20, Express, Prisma, Zod |
 | Frontend | React 18, Vite, TailwindCSS, React Router |
 | Banco | PostgreSQL 16 |
-| Fiscal (integração) | [Nuvem Fiscal](https://www.nuvemfiscal.com.br/) (OAuth2 + API REST) |
+| Fiscal (integração) | [Notaas](https://notaas.com.br/) (API key por loja / projeto) |
 
 ## O que já existe no produto
 
@@ -25,7 +25,7 @@ Checklist operacional (Docker, Stripe, NFC-e, produção): ver [HOMOLOGACAO.md](
 - **Movimentações de estoque manuais:** entrada e saída sem venda (`POST /stock-movements`), com histórico (`GET /stock-movements`). Saída não pode ultrapassar o estoque da variação.
 - **Relatórios (API):** vendas pagas por intervalo de datas (`GET /reports/sales?from=&to=`) e lista de produtos abaixo do mínimo (`GET /reports/low-stock`). O **dashboard admin** continua com visão mais rica (só admin).
 - **Dashboard (admin):** métricas agregadas (receita, ticket, vendas por período/atendente, lucro por produto, estoque consolidado, produtos sem venda recente, etc.).
-- **NFC-e (Nuvem Fiscal):** após registrar a venda, o backend enfileira emissão **modelo 65** em fila persistida no banco (`NfceIssueJob`) com serialização por `tenantId`; consulta SEFAZ e grava `Invoice`. **PDF (DANFE):** `GET /invoices/sale/:saleId/pdf`. Reemissão/forçar emissão: `POST /invoices/issue/:saleId` (só admin). Status do job por venda: `GET /invoices/sale/:saleId/job`. Teste de conexão OAuth: `GET /invoices/connection-test` (só admin). OAuth com scope `empresa nfe nfce`. Simples Nacional (CSOSN 102).
+- **NFC-e (Notaas):** após registrar a venda, o backend enfileira emissão **modelo 65** em fila persistida (`NfceIssueJob`) com serialização por `tenantId`; consulta status e grava `Invoice`. Cada loja usa seu projeto Notaas (`Tenant.notaasApiKey`). **PDF (DANFE):** `GET /invoices/sale/:saleId/pdf`. Reemissão: `POST /invoices/issue/:saleId` (admin). Config: `PATCH /invoices/notaas-config`. Teste: `GET /invoices/connection-test` (admin). Simples Nacional (CSOSN 102).
 
 ## O que ainda é esboço ou não existe
 
@@ -45,18 +45,19 @@ Luxuosa/
       seed.js
       migrations/
     scripts/
-      test-nuvemfiscal.mjs
+      list-tenant-fiscal.mjs
     src/
       app.js
       server.js
       jobs/
-        enqueueNfceIssue.js   # fila in-memory por tenant para NFC-e pós-venda
+        enqueueNfceIssue.js   # fila por tenant para NFC-e pós-venda
       config/
       middlewares/
       modules/          # auth, customers, categories, products, productVariations,
       #                 # dashboard, sales, invoices, stockMovements, reports
       shared/
-        nuvemFiscal/    # OAuth e API Nuvem Fiscal
+        notaas/         # API Notaas (NFC-e)
+        nuvemFiscal/    # legado (helpers de CNPJ emitente)
       utils/
     .env.example
   frontend/
@@ -77,22 +78,15 @@ Copie `backend/.env.example` para `backend/.env`. Principais chaves:
 | `DATABASE_URL` | Connection string PostgreSQL |
 | `JWT_SECRET` | Obrigatório; segredo de assinatura do JWT |
 | `JWT_EXPIRES_IN` | Ex.: `1d` |
-| `NUVEM_FISCAL_CLIENT_ID` | Credencial OAuth (Console Nuvem Fiscal) |
-| `NUVEM_FISCAL_CLIENT_SECRET` | Não versionar |
-| `NUVEM_FISCAL_API_BASE` | Sandbox: `https://api.sandbox.nuvemfiscal.com.br` |
-| `NUVEM_FISCAL_OAUTH_SCOPE` | Padrão: `empresa nfe nfce` |
-| `NUVEM_FISCAL_AMBIENTE` | `homologacao` ou `producao` (igual à empresa no console Nuvem) |
-| `NUVEM_FISCAL_EMITENTE_CNPJ` | **Deprecado** — não é usado como emitente. Emitente = `Tenant.cnpj` |
-| `NUVEM_FISCAL_EMITENTE_IE` | **Deprecado** na emissão — IE vem da Empresa na Nuvem (por CNPJ do tenant) |
-| `NUVEM_FISCAL_RESP_TEC_CNPJ` | CNPJ do responsável técnico / software house (infRespTec), global |
-| `NUVEM_FISCAL_RESP_TEC_CONTATO` | Nome do contato técnico |
-| `NUVEM_FISCAL_RESP_TEC_EMAIL` | Email do responsável técnico |
-| `NUVEM_FISCAL_RESP_TEC_FONE` | Telefone (somente dígitos) do responsável técnico |
-| `NUVEM_FISCAL_RESP_TEC_ID_CSRT` | Identificador do CSRT na SEFAZ (ex.: PR); usado com `NUVEM_FISCAL_CSRT` |
-| `NUVEM_FISCAL_CSRT` | Segredo CSRT (SEFAZ); o backend calcula `hashCSRT` por nota (NT 2018.005) |
+| `NOTAAS_API_BASE` | Padrão: `https://platform.notaas.com.br/api/v1` |
+| `NOTAAS_AMBIENTE` | `homologacao` ou `producao` (tpAmb no payload) |
+| `NOTAAS_ORG_TOKEN` | Opcional — gestão de projetos; **não** é emitente |
+| `NFCE_MOCK` | `true` em testes — não chama Notaas |
 | `NFCE_PROCESS_IN_API` | `false` na API e worker separado (`npm run worker:nfce`); `true` (padrão) processa fila no mesmo processo |
 | `NFCE_WORKER_POLL_MS` | Intervalo do worker NFC-e (padrão 5000 ms) |
 | `LOGIN_RATE_LIMIT_MAX` / `LOGIN_RATE_LIMIT_WINDOW_MS` | Limite de tentativas no `POST /auth/login` |
+
+Por loja (banco, não env): `Tenant.notaasApiKey` (`ntaas_...`), `Tenant.notaasProjectId`, `Tenant.enableNfceEmission`. Admin: `PATCH /invoices/notaas-config`.
 
 No fluxo com Docker deste repositório, o `backend` lê essas variáveis via `env_file` em `docker-compose.yml` (arquivo `/.env.compose`). O `docker-compose.yml` inclui o serviço **`nfce-worker`** com `NFCE_PROCESS_IN_API=true`; a API usa `NFCE_PROCESS_IN_API=false`.
 
@@ -138,7 +132,8 @@ Prefixo global: **`/api/v1`**.
 | `POST /stock-movements` | Body: `productVariationId`, `type` (`ENTRY` \| `EXIT`), `quantity` |
 | `GET /reports/sales?from=YYYY-MM-DD&to=YYYY-MM-DD` | Vendas pagas no intervalo (totais e por dia) |
 | `GET /reports/low-stock` | Produtos com estoque total ≤ mínimo cadastrado |
-| `GET /invoices/connection-test` | Só admin; testa OAuth + `GET /empresas` na Nuvem Fiscal |
+| `GET /invoices/connection-test` | Só admin; valida API Key Notaas da loja |
+| `PATCH /invoices/notaas-config` | Só admin; grava `notaasApiKey` / `notaasProjectId` / `enableNfceEmission` |
 | `POST /invoices/issue/:saleId` | Só admin; reemite/força NFC-e (venda paga) |
 | `GET /invoices/sale/:saleId/pdf` | PDF (DANFE) da NFC-e autorizada |
 | `GET /invoices/sale/:saleId/job` | Status da fila de emissão NFC-e para a venda |
@@ -162,43 +157,41 @@ Prefixo global: **`/api/v1`**.
 | `/relatorios` | Relatórios mínimos (vendas por período, estoque baixo) |
 | `/reports` | Redireciona para `/relatorios` |
 
-## NFC-e e Nuvem Fiscal
+## NFC-e e Notaas
 
-1. Crie credenciais no [Console](https://console.nuvemfiscal.com.br/) (recomenda-se **Sandbox** primeiro).
-2. Preencha `NUVEM_FISCAL_*` no `.env` conforme `backend/.env.example` (**scope** `empresa nfe nfce`).
-3. Teste sem subir o servidor: na pasta `backend`, `npm run test:nuvemfiscal` (OAuth + `GET /empresas`).
+1. Crie um **projeto** no Notaas para a loja (mesmo CNPJ do `Tenant`) e configure certificado + CSC.
+2. Copie a API Key do projeto (`ntaas_...`) e grave em `Tenant.notaasApiKey` (admin: `PATCH /api/v1/invoices/notaas-config` com `{ "notaasApiKey": "ntaas_...", "enableNfceEmission": true }`).
+3. No Coolify/`.env`: `NOTAAS_API_BASE` e `NOTAAS_AMBIENTE` (homologação primeiro).
 4. Com API rodando e JWT de **admin**: `GET /api/v1/invoices/connection-test`.
-5. **Venda de teste:** no frontend (**Vendas**), finalize uma venda; a NFC-e é processada na fila interna. A lista pode atualizar sozinha enquanto a nota estiver pendente; use **Baixar PDF** se autorizada, **Tentar novamente** / **Emitir agora** se necessário.
+5. **Venda de teste:** em **Vendas**, finalize com “Emitir NFC-e”; use **Baixar PDF** se autorizada.
 
 ### Troubleshooting rápido (NFC-e)
 
-- **`Nao informado o grupo de informacoes do responsavel tecnico`**: no Coolify use os nomes exatos `NUVEM_FISCAL_RESP_TEC_CNPJ` (14 dígitos), `NUVEM_FISCAL_RESP_TEC_EMAIL` e `NUVEM_FISCAL_RESP_TEC_CONTATO` (não `..._CONTA`). Em **Paraná / produção** (desde 01/04/2026) costuma ser obrigatório também **CSRT**: `NUVEM_FISCAL_RESP_TEC_ID_CSRT` + `NUVEM_FISCAL_CSRT` (solicitados na SEFAZ para o sistema emissor).
-- **`IE do emitente nao vinculada ao CNPJ`**: a IE na nota vem da **Empresa** na Nuvem Fiscal (mesmo CNPJ do `Tenant`). Corrija em **Nuvem Fiscal → Empresa → Dados** (inscrição estadual). Confirme a IE no cadastro estadual (ex.: portal Receita/SEFAZ PR). `NUVEM_FISCAL_EMITENTE_IE` **não** é mais aplicado na emissão.
-- **`Ja existe NFC-e emitida` + sem PDF**: o backend já reconcilia estado local vs Nuvem e libera reemissão quando a autorização remota não for 100/150.
-- **`Nuvem Fiscal retornou 404 ao baixar PDF`**: pode ser atraso de disponibilização; o backend já faz retry e valida autorização antes de baixar.
+- **`NOTAAS_API_KEY_MISSING`**: a loja não tem `notaasApiKey` — cadastre no Notaas e grave via `PATCH /invoices/notaas-config`.
+- **`NFCE_TENANT_CNPJ_REQUIRED`**: `Tenant.cnpj` inválido (precisa 14 dígitos).
+- **Erro de certificado/CSC no Notaas**: corrija no painel do projeto (mesmo CNPJ da loja).
+- **DANFE 404 / atraso**: o backend já faz retry ao baixar o PDF.
 
-Documentação oficial: [Autenticação](https://dev.nuvemfiscal.com.br/docs/autenticacao).
+**NFC-e automática:** ao criar venda com `emitNfce`, o backend enfileira emissão no Notaas com a API Key **daquela loja**. Consumidor final quando não há cliente. **PDF:** `GET /api/v1/invoices/sale/:saleId/pdf`. Produtos: `ncm`, `cfop`, `icmsCsosn` (padrões: `61091000`, `5102`, `102`).
 
-**NFC-e automática:** ao criar uma venda (`POST /sales`), o backend enfileira emissão na Nuvem Fiscal. No fluxo atual do app, a venda **não** vincula cliente (`customerId` nulo), então a nota é **CONSUMIDOR FINAL**. Se `customerId` for enviado pela API e o cliente tiver dados fiscais completos, o destinatário pode usar CPF/CNPJ do cadastro. **PDF:** `GET /api/v1/invoices/sale/:saleId/pdf` (JWT). Produtos: `ncm`, `cfop`, `icmsOrig`, `icmsCsosn` (padrões: `61091000`, `5102`, `0`, `102`). **Emitente:** somente `Tenant.cnpj` da loja autenticada (cadastre a mesma Empresa + certificado/CSC na conta Nuvem). `NUVEM_FISCAL_EMITENTE_CNPJ` / `_IE` estão deprecados e **não** entram na emissão. Ambiente = `NUVEM_FISCAL_AMBIENTE`. OAuth **scope** `empresa nfe nfce`.
+Nunca commite API Keys (`ntaas_...`). Se exposta, revogue no Notaas e gere outra.
 
-Nunca commite `Client Secret`. Se exposto, revogue e gere novas credenciais.
+### Várias lojas (multi-tenant) — cada cliente com CNPJ + projeto Notaas
 
-### Várias lojas (multi-tenant) — cada cliente com CNPJ diferente
-
-Cada **login** está ligado a um `Tenant` no banco. Na emissão de NFC-e o sistema usa **sempre o `Tenant.cnpj` da loja logada** e valida empresa Nuvem + payload `emit.CNPJ` contra esse tenant (não mistura com outra loja). Certificados ficam **por Empresa no console Nuvem**, não no banco Luxuosa.
+Cada login usa o `Tenant` da loja. A emissão usa `Tenant.notaasApiKey` (projeto Notaas daquele CNPJ). Certificado/CSC ficam no projeto Notaas, não no banco Luxuosa.
 
 | Como conferir | O que fazer |
 |---------------|-------------|
-| **No app** | Faça login em cada cliente: no topo das páginas aparece o banner **“NFC-e desta loja: XX.XXX.XXX/XXXX-XX”**. |
-| **Dashboard** | Admin → **Verificar configuração fiscal** (valida se aquele CNPJ existe na conta Nuvem). |
-| **No servidor** | `cd backend && npm run fiscal:list-tenants` — tabela com todas as lojas e o CNPJ que cada uma usaria. |
+| **No app** | Banner **“NFC-e desta loja: XX.XXX.XXX/XXXX-XX”** + aviso se faltar API Key. |
+| **API** | `GET /invoices/connection-test` (admin). |
+| **No servidor** | `cd backend && npm run fiscal:list-tenants` |
 
 **Cadastro de cada cliente:**
 
-1. `Tenant.cnpj` no PostgreSQL = CNPJ real da loja (14 dígitos).
-2. Mesma empresa cadastrada na **Nuvem Fiscal** (conta das credenciais `NUVEM_FISCAL_*`).
-3. `enableNfceEmission = true` só nas lojas que emitem nota; as outras ficam sem fila NFC-e.
-4. **Remova** `NUVEM_FISCAL_EMITENTE_CNPJ` do Coolify (não é mais emitente).
+1. `Tenant.cnpj` = CNPJ real (14 dígitos).
+2. Projeto Notaas com o **mesmo CNPJ** + certificado/CSC.
+3. `Tenant.notaasApiKey` + `enableNfceEmission = true`.
+4. Remova `NUVEM_FISCAL_*` do Coolify (legado).
 
 Se o mesmo e-mail existir em mais de uma loja, o login pede o **CNPJ da loja** para escolher o tenant certo.
 

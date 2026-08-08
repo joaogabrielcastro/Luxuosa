@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "notaasProjectId" TEXT;
+ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "notaasApiKey" TEXT;

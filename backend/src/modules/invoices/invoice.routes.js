@@ -8,6 +8,7 @@ const router = Router();
 
 router.use(authMiddleware, tenantMiddleware);
 router.get("/connection-test", requireAdmin, invoiceController.connectionTest);
+router.patch("/notaas-config", requireAdmin, invoiceController.updateNotaasConfig);
 router.post("/issue/:saleId", requireAdmin, requirePlan("PRO"), invoiceController.issue);
 router.get("/sale/:saleId/pdf", invoiceController.downloadPdf);
 router.get("/sale/:saleId/job", invoiceController.issueJobStatus);

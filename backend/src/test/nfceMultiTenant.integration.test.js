@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import {
-  clearMockNfceEmissions,
-  getMockNfceEmissions
-} from "../shared/nuvemFiscal/nuvemFiscalApi.js";
+  clearMockNotaasEmissions,
+  getMockNotaasEmissions
+} from "../shared/notaas/notaasApi.js";
 import {
   api,
   destroyTenant,
@@ -16,10 +16,14 @@ import {
 
 const runDb = Boolean(process.env.DATABASE_URL) && process.env.SKIP_DB_TESTS !== "1";
 
-async function enableNfcePro(tenantId) {
+async function enableNfcePro(tenantId, apiKey) {
   await prisma.tenant.update({
     where: { id: tenantId },
-    data: { plan: "PRO", enableNfceEmission: true }
+    data: {
+      plan: "PRO",
+      enableNfceEmission: true,
+      notaasApiKey: apiKey || `ntaas_test_${tenantId.slice(-8)}`
+    }
   });
 }
 
@@ -55,8 +59,8 @@ describe("nfce multi-tenant isolation", { skip: !runDb }, () => {
     await server.close();
   });
 
-  it("dois tenants emitem com CNPJs distintos e nao acessam nota um do outro", async () => {
-    clearMockNfceEmissions();
+  it("dois tenants emitem com API Keys Notaas distintas e nao acessam nota um do outro", async () => {
+    clearMockNotaasEmissions();
 
     const cnpjA = uniqueTestCnpj();
     const cnpjB = uniqueTestCnpj();
@@ -72,8 +76,10 @@ describe("nfce multi-tenant isolation", { skip: !runDb }, () => {
     });
     tenantIds.push(a.tenantId, b.tenantId);
 
-    await enableNfcePro(a.tenantId);
-    await enableNfcePro(b.tenantId);
+    const keyA = `ntaas_loja_a_${cnpjA}`;
+    const keyB = `ntaas_loja_b_${cnpjB}`;
+    await enableNfcePro(a.tenantId, keyA);
+    await enableNfcePro(b.tenantId, keyB);
 
     const catalogA = await seedCatalog(server.baseUrl, a.token, { stock: 5, price: 40 });
     const catalogB = await seedCatalog(server.baseUrl, b.token, { stock: 5, price: 40 });
@@ -95,12 +101,14 @@ describe("nfce multi-tenant isolation", { skip: !runDb }, () => {
     assert.equal(issueB.status, 201, JSON.stringify(issueB.data));
     assert.equal(issueB.data.status, "ISSUED");
 
-    const emissions = getMockNfceEmissions();
+    const emissions = getMockNotaasEmissions();
     assert.equal(emissions.length, 2);
-    assert.equal(emissions[0].emitCnpj, cnpjA);
-    assert.equal(emissions[1].emitCnpj, cnpjB);
+    assert.equal(emissions[0].apiKeyHint, keyA.slice(0, 12));
+    assert.equal(emissions[1].apiKeyHint, keyB.slice(0, 12));
+    assert.notEqual(emissions[0].apiKeyHint, emissions[1].apiKeyHint);
     assert.equal(emissions[0].referencia, saleA.id);
     assert.equal(emissions[1].referencia, saleB.id);
+    assert.equal(emissions[0].modelo, 65);
 
     const invA = await prisma.invoice.findFirst({
       where: { tenantId: a.tenantId, saleId: saleA.id }
@@ -112,7 +120,6 @@ describe("nfce multi-tenant isolation", { skip: !runDb }, () => {
     assert.equal(invB?.status, "ISSUED");
     assert.notEqual(invA?.id, invB?.id);
 
-    // Isolamento HTTP: A nao le job/invoice da venda de B
     const leakJob = await api(server.baseUrl, `/invoices/sale/${saleB.id}/job`, {
       token: a.token
     });
@@ -123,43 +130,38 @@ describe("nfce multi-tenant isolation", { skip: !runDb }, () => {
     });
     assert.ok(leakPdf.status === 404 || leakPdf.status === 403 || leakPdf.status === 400);
 
-    // B nao le venda/invoice de A via prisma scope no endpoint
     const leakJobB = await api(server.baseUrl, `/invoices/sale/${saleA.id}/job`, {
       token: b.token
     });
     assert.ok(leakJobB.status === 404 || leakJobB.status === 403);
   });
 
-  it("tenant com CNPJ invalido nao emite mesmo com NUVEM_FISCAL_EMITENTE_CNPJ no processo", async () => {
-    const { env } = await import("../config/env.js");
-    const prev = env.nuvemFiscal.emitenteCnpj;
-    env.nuvemFiscal.emitenteCnpj = "12440489000100";
+  it("tenant com CNPJ invalido nao emite", async () => {
+    const session = await registerTenant(server.baseUrl, {
+      cnpj: uniqueTestCnpj()
+    });
+    tenantIds.push(session.tenantId);
 
-    try {
-      const session = await registerTenant(server.baseUrl, {
-        cnpj: uniqueTestCnpj()
-      });
-      tenantIds.push(session.tenantId);
+    await prisma.tenant.update({
+      where: { id: session.tenantId },
+      data: {
+        cnpj: `BAD${Date.now()}`.slice(0, 12),
+        plan: "PRO",
+        enableNfceEmission: true,
+        notaasApiKey: "ntaas_test_invalid_cnpj"
+      }
+    });
 
-      // Forca CNPJ invalido apos o register (register exige 14 digitos)
-      await prisma.tenant.update({
-        where: { id: session.tenantId },
-        data: { cnpj: `BAD${Date.now()}`.slice(0, 12), plan: "PRO", enableNfceEmission: true }
-      });
+    const catalog = await seedCatalog(server.baseUrl, session.token, { stock: 3, price: 20 });
+    const sale = await createPaidSale(server.baseUrl, session.token, catalog);
 
-      const catalog = await seedCatalog(server.baseUrl, session.token, { stock: 3, price: 20 });
-      const sale = await createPaidSale(server.baseUrl, session.token, catalog);
-
-      clearMockNfceEmissions();
-      const issue = await api(server.baseUrl, `/invoices/issue/${sale.id}`, {
-        method: "POST",
-        token: session.token
-      });
-      assert.equal(issue.status, 400, JSON.stringify(issue.data));
-      assert.equal(issue.data?.code, "NFCE_TENANT_CNPJ_REQUIRED");
-      assert.equal(getMockNfceEmissions().length, 0);
-    } finally {
-      env.nuvemFiscal.emitenteCnpj = prev;
-    }
+    clearMockNotaasEmissions();
+    const issue = await api(server.baseUrl, `/invoices/issue/${sale.id}`, {
+      method: "POST",
+      token: session.token
+    });
+    assert.equal(issue.status, 400, JSON.stringify(issue.data));
+    assert.equal(issue.data?.code, "NFCE_TENANT_CNPJ_REQUIRED");
+    assert.equal(getMockNotaasEmissions().length, 0);
   });
 });

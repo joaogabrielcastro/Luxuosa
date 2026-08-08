@@ -34,7 +34,7 @@ describe("invoices integration", { skip: !runDb }, () => {
     const res = await api(server.baseUrl, "/invoices/connection-test", {
       token: session.token
     });
-    // Admin autenticado: nao e 401/403. Nuvem pode responder 200, 5xx ou erro OAuth.
+    // Admin autenticado: nao e 401/403. Sem API Key Notaas retorna configured:false.
     assert.notEqual(res.status, 401);
     assert.notEqual(res.status, 403);
   });

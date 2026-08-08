@@ -22,6 +22,7 @@ function buildAuthResponse(user, tenant) {
     }
   );
 
+  const hasNotaasApiKey = Boolean(String(tenant.notaasApiKey || "").trim());
   return {
     token,
     user: {
@@ -37,9 +38,11 @@ function buildAuthResponse(user, tenant) {
       cnpj: tenant.cnpj,
       plan: tenant.plan,
       enableNfceEmission: tenant.enableNfceEmission,
+      notaasProjectId: tenant.notaasProjectId ?? null,
+      hasNotaasApiKey,
       stripeSubscriptionStatus: tenant.stripeSubscriptionStatus ?? null,
       planPeriodEnd: tenant.planPeriodEnd ?? null,
-      fiscal: buildTenantFiscalContext(tenant)
+      fiscal: buildTenantFiscalContext({ ...tenant, hasNotaasApiKey })
     }
   };
 }
@@ -175,6 +178,8 @@ export const authService = {
           cnpj: true,
           plan: true,
           enableNfceEmission: true,
+          notaasProjectId: true,
+          notaasApiKey: true,
           stripeSubscriptionStatus: true,
           planPeriodEnd: true
         }
@@ -194,8 +199,14 @@ export const authService = {
       err.statusCode = 401;
       throw err;
     }
+    const hasNotaasApiKey = Boolean(String(tenant.notaasApiKey || "").trim());
+    const { notaasApiKey: _secret, ...tenantSafe } = tenant;
     return {
-      tenant: { ...tenant, fiscal: buildTenantFiscalContext(tenant) },
+      tenant: {
+        ...tenantSafe,
+        hasNotaasApiKey,
+        fiscal: buildTenantFiscalContext({ ...tenant, hasNotaasApiKey })
+      },
       user: profile
     };
   }

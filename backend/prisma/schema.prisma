@@ -83,8 +83,12 @@ model Tenant {
   plan             Plan     @default(BASIC)
   /** Lojas legadas: nao aplica bloqueio por plano (NFC-e, import NF-e, alertas). Novos cadastros ficam false. */
   planGateExempt   Boolean  @default(false)
-  /** Emissao NFC-e (Nuvem Fiscal). So habilite na loja com CNPJ/config na Nuvem — evita emitir pelo emitente errado. */
+  /** Emissao NFC-e. So habilite na loja com projeto/certificado/CSC no Notaas. */
   enableNfceEmission Boolean @default(false)
+  /** Projeto Notaas (empresa fiscal) — um CNPJ por loja. */
+  notaasProjectId  String?
+  /** API Key do projeto Notaas (ntaas_...). Nunca expor no frontend. */
+  notaasApiKey     String?
   /** Customer Stripe (cus_...). */
   stripeCustomerId String?  @unique
   /** Subscription Stripe ativa/mais recente (sub_...). */

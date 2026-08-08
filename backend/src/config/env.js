@@ -24,8 +24,19 @@ export const env = {
   redisUrl: trimEnv(process.env.REDIS_URL),
   /** false = API so enfileira jobs; processar em worker (NFCE_PROCESS_IN_API=false). */
   nfceProcessInApi: process.env.NFCE_PROCESS_IN_API !== "false",
-  /** true = respostas mock da Nuvem Fiscal (dev/testes). */
+  /** true = respostas mock do provedor fiscal (dev/testes). */
   nfceMock: process.env.NFCE_MOCK === "true",
+  /** Notaas — emissao NFC-e multi-tenant (API key por loja no Tenant). */
+  notaas: {
+    apiBase: trimEnv(process.env.NOTAAS_API_BASE || "https://platform.notaas.com.br/api/v1").replace(
+      /\/$/,
+      ""
+    ),
+    /** Org token opcional (ntaas_org_...) para gestao de projetos — nao usado na emissao. */
+    orgToken: trimEnv(process.env.NOTAAS_ORG_TOKEN || ""),
+    /** homologacao | producao (informativo; ambiente real e o do projeto no Notaas). */
+    ambiente: trimEnv(process.env.NOTAAS_AMBIENTE || "homologacao")
+  },
   loginRateLimitMax: Math.max(5, Number(process.env.LOGIN_RATE_LIMIT_MAX || 30)),
   loginRateLimitWindowMs: Math.max(60_000, Number(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || 900_000)),
   /** SMTP opcional para alertas de estoque. Sem config, emails sao logados. */

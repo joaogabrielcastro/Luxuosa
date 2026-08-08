@@ -55,7 +55,8 @@ Entidades principais no `schema.prisma`:
 - **Category**, **Product**, **ProductVariation** — catálogo e estoque; **Product** inclui `ncm`, `cfop`, `icmsOrig`, `icmsCsosn` (Simples Nacional / CSOSN 102 no emissor).
 - **StockMovement** — histórico: vendas (saída), cancelamentos (entrada), **e entradas/saídas manuais** via API de movimentação.
 - **Sale**, **SaleItem** — vendas e itens.
-- **Invoice** — NFC-e por venda (`saleId` único); `externalId` (id do documento na Nuvem), `key`, `number`, `pdfUrl` (caminho interno), `lastError`, `issuedAt`.
+- **Tenant** — também `notaasApiKey` / `notaasProjectId` (projeto Notaas da loja) e `enableNfceEmission`.
+- **Invoice** — NFC-e por venda (`saleId` único); `externalId` (invoiceId Notaas), `key`, `number`, `pdfUrl` (caminho interno), `lastError`, `issuedAt`.
 
 Enums relevantes: `Plan`, `UserType`, `PaymentMethod`, `SaleStatus`, `StockMovementType`, `InvoiceStatus`.
 
@@ -90,14 +91,13 @@ Enums relevantes: `Plan`, `UserType`, `PaymentMethod`, `SaleStatus`, `StockMovem
 
 - `GET /dashboard/admin` agrega vendas pagas, estoque baixo, séries temporais, desempenho por atendente, margem aproximada por produto (com base em custo cadastrado), entre outros. Apenas **admin**.
 
-### Integração fiscal (Nuvem Fiscal)
+### Integração fiscal (Notaas)
 
-- **OAuth:** `shared/nuvemFiscal/nuvemFiscalAuth.js` (cache do token).
-- **API:** `shared/nuvemFiscal/nuvemFiscalApi.js` — `GET /empresas`, `GET /empresas/:cnpj`, `GET /empresas/:cnpj/nfce`, `POST /nfce`, `GET /nfce/:id`.
-- **Payload:** `shared/nuvemFiscal/nuvemFiscalNfceBuilder.js` monta `infNFe` (modelo **65** NFC-e, ICMS CSOSN 102, PIS/COFINS CST 07).
-- **Emissão:** `invoice.service.issueFromSale` chama `POST /nfce`, polling até autorização, persiste chave/número em `Invoice`; PDF via `GET /nfce/:id/pdf` (proxy em `GET /invoices/sale/:saleId/pdf`).
-- **Variáveis:** OAuth global da conta SaaS; emitente = **sempre** `Tenant.cnpj` (sem fallback `NUVEM_FISCAL_EMITENTE_CNPJ` / IE global). Certificado/CSC ficam na Empresa na Nuvem. `RESP_TEC_*` = software house.
-- **Rotas:** `GET /invoices/connection-test` (admin); `POST /invoices/issue/:saleId` e `GET /invoices/sale/:saleId/pdf` (usuário da loja).
+- **API:** `shared/notaas/notaasApi.js` — `POST /nfe/emitir`, status, DANFE (`x-api-key` = `Tenant.notaasApiKey`).
+- **Payload:** `shared/notaas/notaasNfceBuilder.js` (modelo **65** NFC-e, CSOSN 102).
+- **Emissão:** `invoice.service.issueFromSale` emite no Notaas, faz polling, persiste chave/número em `Invoice`; PDF via DANFE (proxy em `GET /invoices/sale/:saleId/pdf`).
+- **Multi-tenant:** cada loja = projeto Notaas (mesmo CNPJ) + API Key no `Tenant`. Emitente = `Tenant.cnpj`. Env global: `NOTAAS_API_BASE`, `NOTAAS_AMBIENTE` (org token opcional).
+- **Rotas:** `GET /invoices/connection-test`, `PATCH /invoices/notaas-config` (admin); `POST /invoices/issue/:saleId` e PDF/job.
 
 ## 7. Mapa de rotas HTTP (referência)
 
@@ -115,7 +115,7 @@ Todas abaixo do prefixo **`/api/v1`**.
 | Vendas | `GET\|POST /sales`, `GET /sales/summary`, `GET /sales/:id`, `PUT /sales/:id`, `POST /sales/:id/cancel` |
 | Estoque (manual + listagem) | `GET /stock-movements`, `POST /stock-movements` |
 | Relatórios | `GET /reports/sales`, `GET /reports/low-stock` |
-| NFC-e | `GET /invoices/connection-test`, `POST /invoices/issue/:saleId`, `GET /invoices/sale/:saleId/pdf`, `GET /invoices/sale/:saleId/job` |
+| NFC-e | `GET /invoices/connection-test`, `PATCH /invoices/notaas-config`, `POST /invoices/issue/:saleId`, `GET /invoices/sale/:saleId/pdf`, `GET /invoices/sale/:saleId/job` |
 
 ## 8. Tratamento de erros e logging
 
@@ -126,14 +126,14 @@ Todas abaixo do prefixo **`/api/v1`**.
 
 - Senhas com hash (bcrypt).
 - JWT assinado com `JWT_SECRET` (obrigatório no boot).
-- Segredos de terceiros (Nuvem Fiscal) apenas em variáveis de ambiente; não versionar `.env`.
+- Segredos Notaas: API Keys por loja no banco (`notaasApiKey`); não versionar `.env` nem keys.
 - Em produção: endurecer CORS, rate limiting, rotação de chaves, e correlação de logs (`tenant_id` / `user_id` / `request_id` como evolução).
 
 ## 10. Escalabilidade e operações
 
 - Índices Prisma em `tenantId` (e compostos onde necessário) para filtros frequentes.
 - API stateless facilita réplicas atrás de load balancer.
-- NFC-e na Nuvem Fiscal pode ficar pendente; a fila persistida em Postgres (`NfceIssueJob`) serializa por tenant e aplica retries. Para alto volume/múltiplas instâncias, avaliar worker dedicado com Redis/Bull.
+- NFC-e no Notaas pode ficar pendente; a fila em Postgres (`NfceIssueJob`) serializa por tenant e aplica retries. Para alto volume/múltiplas instâncias, avaliar worker dedicado com Redis/Bull.
 - Agregações pesadas futuras podem usar cache ou leitura dedicada (read model), se necessário.
 
 ## 11. Roadmap técnico (pendências explícitas)

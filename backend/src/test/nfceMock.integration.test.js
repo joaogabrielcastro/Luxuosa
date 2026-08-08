@@ -34,7 +34,11 @@ describe("nfce mock integration", { skip: !runDb }, () => {
 
     await prisma.tenant.update({
       where: { id: session.tenantId },
-      data: { plan: "PRO", enableNfceEmission: true }
+      data: {
+        plan: "PRO",
+        enableNfceEmission: true,
+        notaasApiKey: "ntaas_mock_integration_key"
+      }
     });
 
     const catalog = await seedCatalog(server.baseUrl, session.token, { stock: 5, price: 40 });
