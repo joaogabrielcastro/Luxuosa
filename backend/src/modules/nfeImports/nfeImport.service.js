@@ -288,6 +288,7 @@ export const nfeImportService = {
           paymentInfo: parsed.paymentInfo,
           itemCount: parsed.itemCount,
           status: NfeImportStatus.DRAFT,
+          xmlContent: xmlContent.trim(),
           userId
         }
       });

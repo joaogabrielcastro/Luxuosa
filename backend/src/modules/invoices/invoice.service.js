@@ -1,7 +1,7 @@
 import { InvoiceStatus, NfceIssueJobStatus } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
 import { env } from "../../config/env.js";
-import { postNfeEmitir, getNfeStatus, getNfeDanfe, pingNotaasApiKey } from "../../shared/notaas/notaasApi.js";
+import { postNfeEmitir, getNfeStatus, getNfeDanfe, getNfeXml, pingNotaasApiKey } from "../../shared/notaas/notaasApi.js";
 import { buildNotaasNfcePayload, digitsOnly } from "../../shared/notaas/notaasNfceBuilder.js";
 import {
   formatCnpjBr,
@@ -329,6 +329,16 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
       throw err;
     }
 
+    let xmlContent = null;
+    try {
+      const xmlRes = await getNfeXml(apiKey, String(docId));
+      if (xmlRes.ok && typeof xmlRes.body === "string" && xmlRes.body.trim()) {
+        xmlContent = xmlRes.body.trim();
+      }
+    } catch {
+      /* XML opcional — export tenta baixar depois */
+    }
+
     await updateInvoiceForTenant(tenantId, saleId, {
       status: InvoiceStatus.ISSUED,
       key: chave,
@@ -336,6 +346,7 @@ async function issueFromSale(tenantId, saleId, opts = {}) {
       issuedAt: new Date(),
       lastError: null,
       pdfUrl: final?.pdfUrl || `/nfe/invoices/${encodeURIComponent(docId)}/danfe`,
+      xmlContent,
       emissionStartedAt: null
     });
 

@@ -47,6 +47,14 @@ async function notaasFetch(apiKey, path, init = {}) {
     const buf = Buffer.from(await res.arrayBuffer());
     return { ok: res.ok, status: res.status, body: buf, isBinary: true };
   }
+  if (
+    contentType.includes("application/xml") ||
+    contentType.includes("text/xml") ||
+    path.includes("/xml")
+  ) {
+    const text = await res.text();
+    return { ok: res.ok, status: res.status, body: text, isBinary: false, isXml: true };
+  }
   const text = await res.text();
   let body;
   try {
@@ -130,6 +138,22 @@ export async function getNfeDanfe(apiKey, invoiceId) {
   }
   return notaasFetch(apiKey, `/nfe/invoices/${encodeURIComponent(invoiceId)}/danfe`, {
     headers: { Accept: "application/pdf" }
+  });
+}
+
+/**
+ * Download XML autorizado da nota.
+ * @param {string} apiKey
+ * @param {string} invoiceId
+ */
+export async function getNfeXml(apiKey, invoiceId) {
+  if (env.nfceMock) {
+    const chave = mockChave();
+    const xml = `<?xml version="1.0" encoding="UTF-8"?><nfeProc versao="4.00"><NFe><infNFe Id="NFe${chave}"><ide><mod>65</mod></ide></infNFe></NFe></nfeProc>`;
+    return { ok: true, status: 200, body: xml, isBinary: false, isXml: true };
+  }
+  return notaasFetch(apiKey, `/nfe/invoices/${encodeURIComponent(invoiceId)}/xml`, {
+    headers: { Accept: "application/xml" }
   });
 }
 

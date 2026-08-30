@@ -17,6 +17,7 @@ import { billingRoutes } from "./modules/billing/billing.routes.js";
 import { userRoutes } from "./modules/users/user.routes.js";
 import { cashRoutes } from "./modules/cash/cash.routes.js";
 import { stockAlertRoutes } from "./modules/stockAlerts/stockAlert.routes.js";
+import { fiscalClosingRoutes } from "./modules/fiscalClosing/fiscalClosing.routes.js";
 
 const router = Router();
 
@@ -39,5 +40,6 @@ router.use("/suppliers", supplierRoutes);
 router.use("/nfe-imports", nfeImportRoutes);
 router.use("/cash", cashRoutes);
 router.use("/stock-alerts", stockAlertRoutes);
+router.use("/fiscal-closing", fiscalClosingRoutes);
 
 export { router };

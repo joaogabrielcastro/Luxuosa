@@ -317,6 +317,8 @@ model NfeImport {
   paymentInfo   String?
   itemCount     Int
   status        NfeImportStatus @default(COMPLETED)
+  /** XML original da NF-e de entrada (arquivo contabil). */
+  xmlContent    String?         @db.Text
   userId        String
 
   tenant        Tenant          @relation(fields: [tenantId], references: [id])
@@ -408,6 +410,8 @@ model Invoice {
   number              String?
   key                 String?
   status              InvoiceStatus @default(PENDING)
+  /** XML autorizado da NFC-e (arquivo contabil). */
+  xmlContent          String?       @db.Text
   xmlUrl              String?
   pdfUrl              String?
   lastError           String?       @db.Text

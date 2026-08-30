@@ -8,6 +8,7 @@ import {
   BellRing,
   Boxes,
   CreditCard,
+  FileArchive,
   FileInput,
   LayoutGrid,
   LogOut,
@@ -43,7 +44,8 @@ function buildNavGroups(userType) {
     ...(isAdmin
       ? [
           { to: "/estoque/importar-nfe", label: "Entrada por NF-e", icon: FileInput },
-          { to: "/estoque/alertas", label: "Avisos de estoque", icon: BellRing }
+          { to: "/estoque/alertas", label: "Avisos de estoque", icon: BellRing },
+          { to: "/fechamento-fiscal", label: "Fechamento fiscal", icon: FileArchive }
         ]
       : []),
     { to: "/relatorios", label: "Relatórios", icon: ReceiptText }

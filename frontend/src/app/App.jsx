@@ -48,8 +48,8 @@ const UsersPage = lazy(() =>
 const CashPage = lazy(() =>
   import("../features/cash/CashPage.jsx").then((m) => ({ default: m.CashPage }))
 );
-const StockAlertsPage = lazy(() =>
-  import("../features/stock/StockAlertsPage.jsx").then((m) => ({ default: m.StockAlertsPage }))
+const FiscalClosingPage = lazy(() =>
+  import("../features/fiscal/FiscalClosingPage.jsx").then((m) => ({ default: m.FiscalClosingPage }))
 );
 function PrivateRoute({ children }) {
   const { token } = useAuth();
@@ -88,6 +88,7 @@ function AppRoutes() {
       <Route path="/estoque/alertas" element={<PrivateShell><StockAlertsPage /></PrivateShell>} />
       <Route path="/caixa" element={<PrivateShell><CashPage /></PrivateShell>} />
       <Route path="/relatorios" element={<PrivateShell><ReportsPage /></PrivateShell>} />
+      <Route path="/fechamento-fiscal" element={<PrivateShell><FiscalClosingPage /></PrivateShell>} />
       <Route path="/assinatura" element={<PrivateShell><BillingPage /></PrivateShell>} />
       <Route path="/usuarios" element={<PrivateShell><UsersPage /></PrivateShell>} />
     </Routes>
