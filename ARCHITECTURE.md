@@ -97,7 +97,7 @@ Enums relevantes: `Plan`, `UserType`, `PaymentMethod`, `SaleStatus`, `StockMovem
 - **Payload:** `shared/notaas/notaasNfceBuilder.js` (modelo **65** NFC-e, CSOSN 102).
 - **Emissão:** `invoice.service.issueFromSale` emite no Notaas, faz polling, persiste chave/número em `Invoice`; PDF via DANFE (proxy em `GET /invoices/sale/:saleId/pdf`).
 - **Multi-tenant:** cada loja = projeto Notaas (mesmo CNPJ) + API Key no `Tenant`. Emitente = `Tenant.cnpj`. Env global: `NOTAAS_API_BASE`, `NOTAAS_AMBIENTE` (org token opcional).
-- **Rotas:** `GET /invoices/connection-test`, `PATCH /invoices/notaas-config` (admin); `POST /invoices/issue/:saleId` e PDF/job.
+- **Rotas:** `GET /invoices/connection-test`, `PATCH /invoices/notaas-config` (admin); emissão/PDF/job; **fechamento:** `GET /fiscal-closing/summary`, `GET /fiscal-closing/export`.
 
 ## 7. Mapa de rotas HTTP (referência)
 
@@ -115,7 +115,7 @@ Todas abaixo do prefixo **`/api/v1`**.
 | Vendas | `GET\|POST /sales`, `GET /sales/summary`, `GET /sales/:id`, `PUT /sales/:id`, `POST /sales/:id/cancel` |
 | Estoque (manual + listagem) | `GET /stock-movements`, `POST /stock-movements` |
 | Relatórios | `GET /reports/sales`, `GET /reports/low-stock` |
-| NFC-e | `GET /invoices/connection-test`, `PATCH /invoices/notaas-config`, `POST /invoices/issue/:saleId`, `GET /invoices/sale/:saleId/pdf`, `GET /invoices/sale/:saleId/job` |
+| NFC-e / fiscal | `GET /invoices/connection-test`, `PATCH /invoices/notaas-config`, `POST /invoices/issue/:saleId`, PDF/job, `GET /fiscal-closing/summary`, `GET /fiscal-closing/export` |
 
 ## 8. Tratamento de erros e logging
 

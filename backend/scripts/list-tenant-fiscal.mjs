@@ -4,7 +4,7 @@
  */
 import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
-import { buildTenantFiscalContext, formatCnpjBr } from "../src/shared/nuvemFiscal/nuvemFiscalEmitente.js";
+import { buildTenantFiscalContext, formatCnpjBr } from "../src/shared/fiscal/tenantEmitente.js";
 import { env } from "../src/config/env.js";
 
 dotenv.config();

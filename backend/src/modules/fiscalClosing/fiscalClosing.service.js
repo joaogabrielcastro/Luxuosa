@@ -3,7 +3,7 @@ import { InvoiceStatus, NfeImportStatus, SaleStatus } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
 import { env } from "../../config/env.js";
 import { getNfeDanfe, getNfeXml } from "../../shared/notaas/notaasApi.js";
-import { formatCnpjBr } from "../../shared/nuvemFiscal/nuvemFiscalEmitente.js";
+import { formatCnpjBr } from "../../shared/fiscal/tenantEmitente.js";
 import { formatMoneyBRL, parseFiscalMonth, safeFileName } from "./fiscalClosingMonth.js";
 
 const require = createRequire(import.meta.url);

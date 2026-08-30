@@ -1,39 +1,33 @@
-import { env } from "../../config/env.js";
-import { digitsOnly } from "./nuvemFiscalNfceBuilder.js";
+export function digitsOnly(value) {
+  return String(value ?? "").replace(/\D/g, "");
+}
 
 /**
- * Resolve o CNPJ emitente **somente** a partir do Tenant.cnpj.
- *
- * `NUVEM_FISCAL_EMITENTE_CNPJ` NAO e usado como emitente (legado/deprecado).
- * Se estiver definido e diferente do tenant, apenas sinaliza `envOverrideIgnored`
- * para auditoria/UI — a emissao nunca cai nesse fallback.
- *
+ * Resolve o CNPJ emitente somente a partir do Tenant.cnpj.
  * @param {string|null|undefined} tenantCnpj
  */
 export function resolveEmitenteCnpj(tenantCnpj) {
   const tenantDigits = digitsOnly(tenantCnpj);
-  const envDigits = digitsOnly(env.nuvemFiscal.emitenteCnpj || "");
-  const envOverrideDefined = envDigits.length === 14;
 
   if (tenantDigits.length === 14) {
     return {
       emitCnpj: tenantDigits,
       source: "tenant",
-      envOverrideDefined,
-      envOverrideIgnored: envOverrideDefined && envDigits !== tenantDigits
+      envOverrideDefined: false,
+      envOverrideIgnored: false
     };
   }
 
   return {
     emitCnpj: "",
     source: "invalid",
-    envOverrideDefined,
+    envOverrideDefined: false,
     envOverrideIgnored: false
   };
 }
 
 /**
- * Exige CNPJ valido da loja para emissao NFC-e. Nunca usa env como emitente.
+ * Exige CNPJ valido da loja para emissao NFC-e.
  * @param {string|null|undefined} tenantCnpj
  * @returns {string} 14 digitos
  */
@@ -41,7 +35,7 @@ export function requireTenantEmitenteCnpj(tenantCnpj) {
   const resolved = resolveEmitenteCnpj(tenantCnpj);
   if (resolved.source !== "tenant" || resolved.emitCnpj.length !== 14) {
     const err = new Error(
-      "CNPJ da loja invalido ou ausente. Cada tenant deve ter CNPJ proprio (14 digitos) e o mesmo CNPJ no projeto Notaas. NUVEM_FISCAL_EMITENTE_CNPJ nao e usado como emitente."
+      "CNPJ da loja invalido ou ausente. Cada tenant deve ter CNPJ proprio (14 digitos) e o mesmo CNPJ no projeto Notaas."
     );
     err.statusCode = 400;
     err.code = "NFCE_TENANT_CNPJ_REQUIRED";
@@ -51,16 +45,14 @@ export function requireTenantEmitenteCnpj(tenantCnpj) {
 }
 
 /**
- * Garante que a empresa retornada pela Nuvem e a mesma do tenant autenticado.
- * @param {{ cpf_cnpj?: string, cnpj?: string }|null|undefined} empresa
- * @param {string} tenantEmitCnpj
+ * Garante que o emitente informado e o mesmo do tenant autenticado.
  */
 export function assertEmpresaCnpjMatchesTenant(empresa, tenantEmitCnpj) {
   const emp = digitsOnly(empresa?.cpf_cnpj || empresa?.cnpj);
   const expected = digitsOnly(tenantEmitCnpj);
   if (!expected || emp !== expected) {
     const err = new Error(
-      `Empresa Nuvem Fiscal (${emp || "—"}) nao corresponde ao CNPJ da loja (${expected || "—"}). Isolamento multi-tenant bloqueou a emissao.`
+      `Emitente (${emp || "—"}) nao corresponde ao CNPJ da loja (${expected || "—"}). Isolamento multi-tenant bloqueou a emissao.`
     );
     err.statusCode = 502;
     err.code = "NFCE_EMITENTE_MISMATCH";
@@ -68,11 +60,7 @@ export function assertEmpresaCnpjMatchesTenant(empresa, tenantEmitCnpj) {
   }
 }
 
-/**
- * Garante que o payload NFC-e usa o CNPJ do tenant (nao de outra loja).
- * @param {object} payload
- * @param {string} tenantEmitCnpj
- */
+/** Garante que o payload NFC-e usa o CNPJ do tenant. */
 export function assertNfcePayloadEmitente(payload, tenantEmitCnpj) {
   const emit = digitsOnly(payload?.infNFe?.emit?.CNPJ);
   const expected = digitsOnly(tenantEmitCnpj);
@@ -117,12 +105,4 @@ export function buildTenantFiscalContext(tenant) {
           ? `Emitente ${formatCnpjBr(resolved.emitCnpj)} — falta API Key Notaas (projeto da loja) para emitir.`
           : `NFC-e será emitida pelo CNPJ ${formatCnpjBr(resolved.emitCnpj)} desta loja (Notaas).`
   };
-}
-
-export function listEmpresasFromApiBody(body) {
-  if (!body) return [];
-  if (Array.isArray(body.data)) return body.data;
-  if (Array.isArray(body)) return body;
-  if (body.cpf_cnpj) return [body];
-  return [];
 }

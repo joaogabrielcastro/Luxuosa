@@ -160,7 +160,7 @@ async function drainTenantQueue(tenantId) {
 
 /**
  * Re-enfileira emissao automatica pos-venda. Estado persistido no Postgres (sobrevive restart).
- * Um worker logico por tenant (Promise chain) evita corrida e rate limit na Nuvem Fiscal.
+ * Um worker logico por tenant (Promise chain) evita corrida e rate limit no Notaas.
  */
 export async function enqueueNfceIssue(tenantId, saleId) {
   const tenant = await prisma.tenant.findUnique({
@@ -172,7 +172,7 @@ export async function enqueueNfceIssue(tenantId, saleId) {
       where: { tenantId, saleId },
       data: {
         status: NfceIssueJobStatus.FAILED,
-        lastError: "NFC-e nao habilitada para esta loja (emitente Nuvem Fiscal).",
+        lastError: "NFC-e nao habilitada para esta loja (Notaas nao configurado).",
         runAt: null
       }
     });

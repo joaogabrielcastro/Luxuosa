@@ -165,10 +165,10 @@ Habilitar emissão NFC-e **por loja** (`Tenant.enableNfceEmission`) só depois d
 
 ### Multi-tenant NFC-e (checklist Coolify / Notaas)
 
-- [ ] Remover credenciais Nuvem Fiscal do Coolify (`NUVEM_FISCAL_*`)
+- [ ] ~~Remover credenciais Nuvem Fiscal~~ (código Luxuosa não usa mais; limpar Coolify se ainda houver `NUVEM_FISCAL_*`)
 - [ ] Envs: `NOTAAS_API_BASE`, `NOTAAS_AMBIENTE`
 - [ ] Cada loja: projeto Notaas com o mesmo `Tenant.cnpj` + certificado/CSC no projeto + `Tenant.notaasApiKey`
 - [ ] Luxuosa Presentes: cadastrar no Notaas e gravar key (`PATCH /invoices/notaas-config` ou SQL)
 - [ ] `enableNfceEmission=true` só nas lojas prontas
 - [ ] Worker NFC-e separado com `NFCE_PROCESS_IN_API=true`
-- [ ] Smoke: emitir com 2 lojas/API Keys diferentes e confirmar DANFE de cada uma
+- [ ] Fechamento fiscal: `/fechamento-fiscal` → export ZIP do mês

@@ -25,14 +25,14 @@ Checklist operacional (Docker, Stripe, NFC-e, produção): ver [HOMOLOGACAO.md](
 - **Movimentações de estoque manuais:** entrada e saída sem venda (`POST /stock-movements`), com histórico (`GET /stock-movements`). Saída não pode ultrapassar o estoque da variação.
 - **Relatórios (API):** vendas pagas por intervalo de datas (`GET /reports/sales?from=&to=`) e lista de produtos abaixo do mínimo (`GET /reports/low-stock`). O **dashboard admin** continua com visão mais rica (só admin).
 - **Dashboard (admin):** métricas agregadas (receita, ticket, vendas por período/atendente, lucro por produto, estoque consolidado, produtos sem venda recente, etc.).
-- **NFC-e (Notaas):** após registrar a venda, o backend enfileira emissão **modelo 65** em fila persistida (`NfceIssueJob`) com serialização por `tenantId`; consulta status e grava `Invoice`. Cada loja usa seu projeto Notaas (`Tenant.notaasApiKey`). **PDF (DANFE):** `GET /invoices/sale/:saleId/pdf`. Reemissão: `POST /invoices/issue/:saleId` (admin). Config: `PATCH /invoices/notaas-config`. Teste: `GET /invoices/connection-test` (admin). Simples Nacional (CSOSN 102).
+- **NFC-e (Notaas):** após registrar a venda, o backend enfileira emissão **modelo 65** em fila persistida (`NfceIssueJob`) com serialização por `tenantId`; consulta status e grava `Invoice`. Cada loja usa seu projeto Notaas (`Tenant.notaasApiKey`). **PDF (DANFE):** `GET /invoices/sale/:saleId/pdf`. Reemissão: `POST /invoices/issue/:saleId` (admin). Config: `PATCH /invoices/notaas-config`. Teste: `GET /invoices/connection-test` (admin). **Fechamento fiscal:** `GET /fiscal-closing/summary` e export ZIP em `/fiscal-closing/export` (admin, plano PRO). Simples Nacional (CSOSN 102).
+- **Usuários:** CRUD de atendentes/admins por loja (`/usuarios`).
 
 ## O que ainda é esboço ou não existe
 
-- **NF-e na UI** e refinamentos fiscais avançados (outros CST/CFOP, download automático de XML em massa).
-- **Gestão de usuários** do tenant (criar atendentes), **onboarding** de novos tenants.
-- **Fila externa dedicada** (Redis/Bull) para NFC-e em cenários de alto volume/múltiplas instâncias (há worker `nfce-worker` no Docker; Redis/Bull ainda não).
-- **Testes automatizados** em volume (há testes unitários básicos em `salePayload`; falta cobertura de integração).
+- Refinamentos fiscais avançados (NFS-e, CT-e, cancelamento/CC-e na SEFAZ, SPED).
+- **Onboarding** self-service de novos tenants (cadastro básico existe em `/cadastro`).
+- **Fila externa dedicada** (Redis/Bull) para NFC-e em cenários de alto volume (há worker `nfce-worker` no Docker; Bull ainda não).
 
 ## Estrutura do repositório
 
@@ -53,11 +53,10 @@ Luxuosa/
         enqueueNfceIssue.js   # fila por tenant para NFC-e pós-venda
       config/
       middlewares/
-      modules/          # auth, customers, categories, products, productVariations,
-      #                 # dashboard, sales, invoices, stockMovements, reports
+      modules/          # auth, customers, sales, invoices, fiscalClosing, nfeImports…
       shared/
         notaas/         # API Notaas (NFC-e)
-        nuvemFiscal/    # legado (helpers de CNPJ emitente)
+        fiscal/         # CNPJ emitente multi-tenant
       utils/
     .env.example
   frontend/
@@ -137,6 +136,8 @@ Prefixo global: **`/api/v1`**.
 | `POST /invoices/issue/:saleId` | Só admin; reemite/força NFC-e (venda paga) |
 | `GET /invoices/sale/:saleId/pdf` | PDF (DANFE) da NFC-e autorizada |
 | `GET /invoices/sale/:saleId/job` | Status da fila de emissão NFC-e para a venda |
+| `GET /fiscal-closing/summary?year=&month=` | Só admin PRO; resumo mensal fiscal |
+| `GET /fiscal-closing/export?year=&month=` | Só admin PRO; ZIP contábil (XML/PDF/CSV) |
 
 ## Frontend (rotas)
 
@@ -155,7 +156,9 @@ Prefixo global: **`/api/v1`**.
 | `/estoque/movimentos` | Movimentações de estoque manuais |
 | `/stock` | Redireciona para `/estoque/movimentos` |
 | `/relatorios` | Relatórios mínimos (vendas por período, estoque baixo) |
-| `/reports` | Redireciona para `/relatorios` |
+| `/fechamento-fiscal` | Fechamento mensal + export ZIP para contador (admin) |
+| `/usuarios` | Gestão de usuários da loja (admin) |
+| `/assinatura` | Plano Stripe (admin) |
 
 ## NFC-e e Notaas
 
@@ -191,7 +194,7 @@ Cada login usa o `Tenant` da loja. A emissão usa `Tenant.notaasApiKey` (projeto
 1. `Tenant.cnpj` = CNPJ real (14 dígitos).
 2. Projeto Notaas com o **mesmo CNPJ** + certificado/CSC.
 3. `Tenant.notaasApiKey` + `enableNfceEmission = true`.
-4. Remova `NUVEM_FISCAL_*` do Coolify (legado).
+4. Remova `NUVEM_FISCAL_*` do Coolify se ainda existirem (código não usa mais).
 
 Se o mesmo e-mail existir em mais de uma loja, o login pede o **CNPJ da loja** para escolher o tenant certo.
 

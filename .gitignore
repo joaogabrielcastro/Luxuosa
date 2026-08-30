@@ -24,7 +24,8 @@ build/
 coverage/
 *.tsbuildinfo
 
-# Playwright
+# Playwright / testes
+test-results/
 frontend/test-results/
 frontend/playwright-report/
 frontend/blob-report/

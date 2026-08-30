@@ -8,11 +8,11 @@ const prisma = new PrismaClient();
 
 
 
-/** CNPJ ficticio do seed antigo — migrado para o CNPJ real na Nuvem Fiscal. */
+/** CNPJ ficticio do seed antigo — migrado para o CNPJ real da loja. */
 
 const LEGACY_LUXUOSA_CNPJ = "12345678000199";
 
-/** LUXUOSA PRESENTES LTDA — cadastro na Nuvem Fiscal (sandbox/producao conforme console). */
+/** LUXUOSA PRESENTES LTDA — CNPJ real da loja demo. */
 
 const LUXUOSA_CNPJ = "12440489000100";
 
@@ -305,7 +305,7 @@ async function main() {
 
   console.log(`Senha: ${adminPasswordPlain}`);
 
-  console.log(`Luxuosa CNPJ (Nuvem Fiscal): ${LUXUOSA_CNPJ}`);
+  console.log(`Luxuosa CNPJ: ${LUXUOSA_CNPJ}`);
 
 }
 

@@ -7,7 +7,7 @@ import {
   formatCnpjBr,
   resolveEmitenteCnpj,
   requireTenantEmitenteCnpj
-} from "../../shared/nuvemFiscal/nuvemFiscalEmitente.js";
+} from "../../shared/fiscal/tenantEmitente.js";
 import { saleRepository } from "../sales/sale.repository.js";
 
 function sleep(ms) {

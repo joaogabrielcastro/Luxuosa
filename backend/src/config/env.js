@@ -58,28 +58,6 @@ export const env = {
     priceEnterprise: trimEnv(process.env.STRIPE_PRICE_ENTERPRISE),
     /** URL do frontend para success/cancel/portal return */
     frontendUrl: trimEnv(process.env.FRONTEND_URL || "http://localhost:3006")
-  },
-  nuvemFiscal: {
-    clientId: trimEnv(process.env.NUVEM_FISCAL_CLIENT_ID),
-    clientSecret: trimEnv(process.env.NUVEM_FISCAL_CLIENT_SECRET),
-    apiBase: trimEnv(process.env.NUVEM_FISCAL_API_BASE || "https://api.sandbox.nuvemfiscal.com.br").replace(/\/$/, ""),
-    oauthScope: trimEnv(process.env.NUVEM_FISCAL_OAUTH_SCOPE || "empresa nfe nfce"),
-    /** homologacao | producao — deve coincidir com a configuração da empresa na Nuvem Fiscal */
-    ambiente: trimEnv(process.env.NUVEM_FISCAL_AMBIENTE || "homologacao"),
-    /** CNPJ só dígitos — fallback se Tenant.cnpj inválido; em multi-tenant a loja logada tem prioridade */
-    /** @deprecated Nao usado como emitente. Emitente = Tenant.cnpj. */
-    emitenteCnpj: trimEnv(process.env.NUVEM_FISCAL_EMITENTE_CNPJ || ""),
-    /** @deprecated IE na emissao vem da Empresa Nuvem do CNPJ do tenant. */
-    emitenteIe: trimEnv(process.env.NUVEM_FISCAL_EMITENTE_IE || ""),
-    /** Responsavel tecnico (infRespTec) — software house, global para todos os tenants. */
-    respTecCnpj: trimEnv(process.env.NUVEM_FISCAL_RESP_TEC_CNPJ || ""),
-    respTecContato: trimEnv(process.env.NUVEM_FISCAL_RESP_TEC_CONTATO || ""),
-    respTecEmail: trimEnv(process.env.NUVEM_FISCAL_RESP_TEC_EMAIL || ""),
-    respTecFone: trimEnv(process.env.NUVEM_FISCAL_RESP_TEC_FONE || ""),
-    /** PR (e outras UF): idCSRT + hashCSRT em infRespTec — hash derivado da chave 44 (NT 2018.005). */
-    respTecIdCsrt: trimEnv(process.env.NUVEM_FISCAL_RESP_TEC_ID_CSRT || ""),
-    /** Segredo CSRT fornecido pela SEFAZ (nao versionar). Com ID_CSRT, o backend calcula hashCSRT por nota. */
-    csrt: trimEnv(process.env.NUVEM_FISCAL_CSRT || "")
   }
 };
 

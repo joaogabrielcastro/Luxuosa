@@ -21,7 +21,7 @@ process.env.DATABASE_URL =
 /** Evita processar NFC-e no processo de teste. */
 process.env.NFCE_PROCESS_IN_API = "false";
 
-/** Mock Nuvem Fiscal por padrao nos testes de integracao. */
+/** Mock Notaas por padrao nos testes de integracao. */
 if (process.env.NFCE_MOCK == null || process.env.NFCE_MOCK === "") {
   process.env.NFCE_MOCK = "true";
 }

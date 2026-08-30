@@ -16,7 +16,7 @@ export async function assertSaleMutable(tx, tenantId, saleId) {
 
   if (sale.invoice?.status === InvoiceStatus.ISSUED) {
     const err = new Error(
-      "Nao e possivel alterar ou cancelar esta venda: NFC-e ja autorizada. Cancele a nota na SEFAZ/Nuvem antes, se aplicavel."
+      "Nao e possivel alterar ou cancelar esta venda: NFC-e ja autorizada. Cancele a nota na SEFAZ/Notaas antes, se aplicavel."
     );
     err.statusCode = 409;
     err.code = "SALE_LOCKED_BY_INVOICE";

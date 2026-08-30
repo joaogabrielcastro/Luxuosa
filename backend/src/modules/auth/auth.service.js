@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import { env } from "../../config/env.js";
 import { prisma } from "../../config/prisma.js";
 import { authRepository } from "./auth.repository.js";
-import { buildTenantFiscalContext } from "../../shared/nuvemFiscal/nuvemFiscalEmitente.js";
+import { buildTenantFiscalContext } from "../../shared/fiscal/tenantEmitente.js";
 
 function digitsOnly(value) {
   return String(value ?? "").replace(/\D/g, "");
