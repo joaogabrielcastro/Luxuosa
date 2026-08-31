@@ -48,6 +48,9 @@ const UsersPage = lazy(() =>
 const CashPage = lazy(() =>
   import("../features/cash/CashPage.jsx").then((m) => ({ default: m.CashPage }))
 );
+const StockAlertsPage = lazy(() =>
+  import("../features/stock/StockAlertsPage.jsx").then((m) => ({ default: m.StockAlertsPage }))
+);
 const FiscalClosingPage = lazy(() =>
   import("../features/fiscal/FiscalClosingPage.jsx").then((m) => ({ default: m.FiscalClosingPage }))
 );
