@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Users } from "lucide-react";
 import { apiClient } from "../../shared/apiClient.js";
@@ -60,11 +60,6 @@ export function UsersPage() {
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const filteredCount = useMemo(
-    () => items.filter((u) => matchesUserQuery(u, query)).length,
-    [items, query]
-  );
 
   function openCreate() {
     setEditingId("");
@@ -189,7 +184,6 @@ export function UsersPage() {
           value={items.length}
           icon={<Users className="h-4 w-4 text-violet-600" />}
         />
-        <StatCard label={query.trim() ? "Resultado da busca" : "Listados"} value={filteredCount} />
       </section>
 
       <div className="flex justify-end">

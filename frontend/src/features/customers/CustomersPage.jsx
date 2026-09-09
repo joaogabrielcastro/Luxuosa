@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { apiClient } from "../../shared/apiClient.js";
 import { useApiQuery } from "../../shared/hooks/useApiQuery.js";
 import { useInvalidateLuxuosa } from "../../shared/hooks/useInvalidateLuxuosa.js";
@@ -105,11 +105,6 @@ export function CustomersPage() {
   const [loading, setLoading] = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
   const lastLookedUpCep = useRef("");
-
-  const filteredCount = useMemo(
-    () => items.filter((c) => matchesCustomerQuery(c, query)).length,
-    [items, query]
-  );
 
   async function handleCepChange(raw) {
     const masked = maskCepInput(raw);
@@ -231,10 +226,6 @@ export function CustomersPage() {
           label="Clientes cadastrados"
           value={items.length}
           icon={<Users className="h-4 w-4 text-violet-600" />}
-        />
-        <StatCard
-          label={query.trim() ? "Resultado da busca" : "Listados"}
-          value={filteredCount}
         />
       </section>
 
