@@ -11,5 +11,6 @@ router.get("/:id", crediarioController.getById);
 router.post("/", requireAdmin, crediarioController.create);
 router.post("/:id/payments", crediarioController.addPayment);
 router.post("/:id/cancel", requireAdmin, crediarioController.cancel);
+router.delete("/:id", requireAdmin, crediarioController.remove);
 
 export { router as crediarioRoutes };

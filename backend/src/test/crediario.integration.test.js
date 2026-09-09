@@ -78,5 +78,46 @@ describe("crediario integration", { skip: !runDb }, () => {
       body: { amount: 30, paymentMethod: "pix", note: "parcela 1" }
     });
     assert.equal(payment.status, 200);
+
+    const blockedOpen = await api(server.baseUrl, `/crediario/${toPay.data.id}`, {
+      method: "DELETE",
+      token: session.token
+    });
+    assert.equal(blockedOpen.status, 409);
+
+    const settle = await api(server.baseUrl, `/crediario/${toPay.data.id}/payments`, {
+      method: "POST",
+      token: session.token,
+      body: { amount: 50, paymentMethod: "dinheiro" }
+    });
+    assert.equal(settle.status, 200);
+    assert.equal(settle.data.status, "PAID");
+
+    const stockBeforeDelete = await prisma.productVariation.findFirst({
+      where: { id: catalog.variationId, tenantId: session.tenantId }
+    });
+    assert.equal(stockBeforeDelete.stock, 9);
+
+    const removed = await api(server.baseUrl, `/crediario/${toPay.data.id}`, {
+      method: "DELETE",
+      token: session.token
+    });
+    assert.equal(removed.status, 204);
+
+    const gone = await prisma.creditSale.findFirst({
+      where: { id: toPay.data.id, tenantId: session.tenantId }
+    });
+    assert.equal(gone, null);
+
+    const stockAfterDelete = await prisma.productVariation.findFirst({
+      where: { id: catalog.variationId, tenantId: session.tenantId }
+    });
+    assert.equal(stockAfterDelete.stock, 9);
+
+    const canceledGone = await api(server.baseUrl, `/crediario/${toCancel.data.id}`, {
+      method: "DELETE",
+      token: session.token
+    });
+    assert.equal(canceledGone.status, 204);
   });
 });

@@ -31,6 +31,18 @@ const CREDIT_STATUS_LABEL = {
   CANCELED: "Cancelado"
 };
 
+function canDeleteCreditSale(row) {
+  if (!row) return false;
+  return row.status === "PAID" || row.status === "CANCELED";
+}
+
+function deleteCreditSaleMessage(row) {
+  if (row?.status === "PAID") {
+    return "Excluir esta venda quitada? O estoque não volta (a mercadoria já saiu). Os recebimentos saem do histórico. Esta ação não pode ser desfeita.";
+  }
+  return "Excluir este registro cancelado da lista? Esta ação não pode ser desfeita.";
+}
+
 function formatDt(iso) {
   if (!iso) return "";
   try {
@@ -277,6 +289,27 @@ export function CrediarioPage() {
     }
   }
 
+  async function handleDelete(row) {
+    if (!isAdmin || !canDeleteCreditSale(row)) return;
+    const ok = await confirm({
+      title: "Excluir venda a prazo",
+      message: deleteCreditSaleMessage(row),
+      confirmText: "Excluir",
+      cancelText: "Voltar"
+    });
+    if (!ok) return;
+    try {
+      await apiClient(`/crediario/${row.id}`, { method: "DELETE", token });
+      showToast("Venda a prazo excluída.", "success");
+      if (detailId === row.id) {
+        setDetailId(null);
+      }
+      await refreshCrediario();
+    } catch (err) {
+      showToast(err.message || "Nao foi possivel excluir.", "error");
+    }
+  }
+
   const maxSkip = Math.max(0, total - take);
   const canPrev = skip > 0;
   const canNext = skip + take < total;
@@ -395,6 +428,16 @@ export function CrediarioPage() {
                             </Button>
                             ) : null}
                           </>
+                        ) : null}
+                        {isAdmin && canDeleteCreditSale(row) ? (
+                          <Button
+                            variant="danger"
+                            className="px-2 py-1 text-xs"
+                            type="button"
+                            onClick={() => handleDelete(row)}
+                          >
+                            Excluir
+                          </Button>
                         ) : null}
                       </div>
                     </td>
@@ -601,6 +644,13 @@ export function CrediarioPage() {
                 <p className="text-slate-500">Nenhum pagamento ainda.</p>
               )}
             </div>
+            {isAdmin && canDeleteCreditSale(detail) ? (
+              <div className="flex justify-end pt-1">
+                <Button variant="danger" type="button" className="text-xs" onClick={() => handleDelete(detail)}>
+                  Excluir
+                </Button>
+              </div>
+            ) : null}
           </div>
         )}
       </Modal>

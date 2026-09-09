@@ -77,5 +77,14 @@ export const crediarioController = {
     } catch (error) {
       return next(error);
     }
+  },
+
+  async remove(req, res, next) {
+    try {
+      await crediarioService.remove(req.tenantId, req.params.id);
+      return res.status(204).send();
+    } catch (error) {
+      return next(error);
+    }
   }
 };

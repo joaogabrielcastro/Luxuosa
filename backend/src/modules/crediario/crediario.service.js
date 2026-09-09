@@ -299,5 +299,38 @@ export const crediarioService = {
         data: { status: CreditSaleStatus.CANCELED }
       });
     });
+  },
+
+  async remove(tenantId, creditSaleId) {
+    return prisma.$transaction(async (tx) => {
+      const sale = await tx.creditSale.findFirst({
+        where: { tenantId, id: creditSaleId },
+        include: { items: true }
+      });
+      if (!sale) {
+        const err = new Error("Venda a prazo nao encontrada.");
+        err.statusCode = 404;
+        throw err;
+      }
+      if (sale.status === CreditSaleStatus.OPEN && toNumber(sale.paidTotal) > 0.0001) {
+        const err = new Error(
+          "Nao e possivel excluir conta com recebimento em aberto. Quite o saldo antes ou cancele apenas vendas sem pagamento."
+        );
+        err.statusCode = 409;
+        throw err;
+      }
+
+      if (sale.status === CreditSaleStatus.OPEN) {
+        await restoreCreditSaleEffects(tx, tenantId, sale);
+      } else if (sale.status === CreditSaleStatus.PAID) {
+        await tx.customer.updateMany({
+          where: { tenantId, id: sale.customerId },
+          data: { totalPurchases: { decrement: toNumber(sale.totalValue) } }
+        });
+      }
+
+      await tx.creditSale.delete({ where: { id: creditSaleId } });
+      return { ok: true };
+    });
   }
 };
