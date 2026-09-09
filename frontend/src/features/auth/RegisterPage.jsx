@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Eye, EyeOff, ShieldCheck, Sparkles, Store } from "lucide-react";
+import { Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { apiClient } from "../../shared/apiClient.js";
 import { useAuth } from "./useAuth.jsx";
 import { Input } from "../../shared/components/ui/Input.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
 import { Alert } from "../../shared/components/ui/Alert.jsx";
 import { FormField } from "../../shared/components/ui/FormField.jsx";
+import { AuthSplitLayout } from "./AuthSplitLayout.jsx";
 
 function digitsOnly(value) {
   return String(value ?? "").replace(/\D/g, "");
@@ -86,76 +87,45 @@ export function RegisterPage() {
   }
 
   return (
-    <main className="grid min-h-screen grid-cols-1 lg:grid-cols-2">
-      <section
-        className="relative hidden overflow-hidden p-8 lg:flex lg:flex-col lg:justify-between"
-        style={{ background: "var(--gradient-brand)" }}
-      >
-        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-blue-900/30 blur-2xl" />
-
-        <div className="relative inline-flex w-fit items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
-          <Sparkles className="h-3.5 w-3.5" aria-hidden />
-          Comece em minutos
+    <AuthSplitLayout
+      badge="Comece em minutos"
+      headline="Sua loja no ar, com o painel pronto para vender."
+      description="Cadastre a loja, defina o administrador e entre para registrar vendas, crediário e estoque."
+    >
+      <div className="ui-surface-interactive p-5 sm:p-8">
+        <div className="mb-5 flex items-center gap-2 text-violet-700">
+          <ShieldCheck className="h-5 w-5" aria-hidden />
+          <span className="text-xs font-semibold uppercase tracking-wide">Nova loja</span>
         </div>
+        <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">Criar conta</h2>
+        <p className="mt-1.5 text-sm text-slate-600">
+          Informe os dados da loja e do administrador. Você entrará automaticamente após o cadastro.
+        </p>
 
-        <div className="relative my-8">
-          <h1 className="max-w-md text-4xl font-bold leading-tight tracking-tight text-white">
-            Cadastre sua loja e gerencie tudo em um só lugar.
-          </h1>
-          <p className="mt-4 max-w-lg text-sm leading-relaxed text-violet-100">
-            Crie a conta da loja, defina o administrador e já entre na plataforma para vender, controlar estoque e
-            acompanhar resultados.
-          </p>
-        </div>
+        <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dados da loja</p>
 
-        <div className="relative overflow-hidden rounded-2xl border border-white/20 bg-white/10 p-5 shadow-2xl backdrop-blur-md">
-          <div className="mb-3 flex items-center gap-2 text-white/90">
-            <Store className="h-4 w-4" aria-hidden />
-            <span className="text-xs font-semibold">O que você ganha</span>
-          </div>
-          <ul className="space-y-2 text-sm text-violet-50">
-            <li>• Plano básico gratuito para começar</li>
-            <li>• Acesso de administrador para sua equipe</li>
-            <li>• Vendas, estoque e clientes no mesmo painel</li>
-          </ul>
-        </div>
-      </section>
+          <FormField label="Nome da loja" htmlFor="reg-tenant-name" required>
+            <Input
+              id="reg-tenant-name"
+              value={form.tenantName}
+              onChange={(e) => updateField("tenantName", e.target.value)}
+              placeholder="Minha Loja"
+            />
+          </FormField>
 
-      <section className="flex items-center justify-center p-4 sm:p-10">
-        <div className="ui-surface-interactive w-full max-w-[480px] p-7 sm:p-9">
-          <div className="mb-6 flex items-center gap-2 text-violet-700">
-            <ShieldCheck className="h-5 w-5" aria-hidden />
-            <span className="text-xs font-semibold uppercase tracking-wide">Nova loja</span>
-          </div>
-          <h2 className="text-2xl font-bold text-slate-900">Criar conta</h2>
-          <p className="mt-1.5 text-sm text-slate-600">
-            Informe os dados da loja e do administrador. Você entrará automaticamente após o cadastro.
-          </p>
+          <FormField label="CNPJ" htmlFor="reg-cnpj" required hint="Apenas números (14 dígitos).">
+            <Input
+              id="reg-cnpj"
+              inputMode="numeric"
+              autoComplete="organization"
+              placeholder="00.000.000/0000-00"
+              value={form.cnpj}
+              onChange={(e) => updateField("cnpj", digitsOnly(e.target.value).slice(0, 14))}
+            />
+          </FormField>
 
-          <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Dados da loja</p>
-
-            <FormField label="Nome da loja" htmlFor="reg-tenant-name" required>
-              <Input
-                id="reg-tenant-name"
-                value={form.tenantName}
-                onChange={(e) => updateField("tenantName", e.target.value)}
-                placeholder="Minha Loja"
-              />
-            </FormField>
-
-            <FormField label="CNPJ" htmlFor="reg-cnpj" required hint="Apenas números (14 dígitos).">
-              <Input
-                id="reg-cnpj"
-                inputMode="numeric"
-                autoComplete="organization"
-                placeholder="00.000.000/0000-00"
-                value={form.cnpj}
-                onChange={(e) => updateField("cnpj", digitsOnly(e.target.value).slice(0, 14))}
-              />
-            </FormField>
-
+          <div className="grid gap-4 sm:grid-cols-2">
             <FormField label="E-mail da loja" htmlFor="reg-tenant-email" required>
               <Input
                 id="reg-tenant-email"
@@ -166,7 +136,6 @@ export function RegisterPage() {
                 onChange={(e) => updateField("tenantEmail", e.target.value)}
               />
             </FormField>
-
             <FormField label="Telefone da loja" htmlFor="reg-tenant-phone">
               <Input
                 id="reg-tenant-phone"
@@ -176,71 +145,70 @@ export function RegisterPage() {
                 onChange={(e) => updateField("tenantPhone", e.target.value)}
               />
             </FormField>
+          </div>
 
-            <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Administrador</p>
+          <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Administrador</p>
 
-            <FormField label="Seu nome" htmlFor="reg-admin-name" required>
+          <FormField label="Seu nome" htmlFor="reg-admin-name" required>
+            <Input
+              id="reg-admin-name"
+              value={form.adminName}
+              onChange={(e) => updateField("adminName", e.target.value)}
+              placeholder="Nome completo"
+            />
+          </FormField>
+
+          <FormField label="E-mail de acesso" htmlFor="reg-admin-email" required>
+            <Input
+              id="reg-admin-email"
+              type="email"
+              autoComplete="username"
+              placeholder="voce@loja.com"
+              value={form.adminEmail}
+              onChange={(e) => updateField("adminEmail", e.target.value)}
+            />
+          </FormField>
+
+          <FormField label="Senha" htmlFor="reg-admin-password" required>
+            <div className="relative">
               <Input
-                id="reg-admin-name"
-                value={form.adminName}
-                onChange={(e) => updateField("adminName", e.target.value)}
-                placeholder="Nome completo"
+                id="reg-admin-password"
+                className="pr-12"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                placeholder="Mínimo 6 caracteres"
+                value={form.adminPassword}
+                onChange={(e) => updateField("adminPassword", e.target.value)}
               />
-            </FormField>
+              <button
+                type="button"
+                className="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center text-slate-500 hover:text-slate-800"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </FormField>
 
-            <FormField label="E-mail de acesso" htmlFor="reg-admin-email" required>
-              <Input
-                id="reg-admin-email"
-                type="email"
-                autoComplete="username"
-                placeholder="voce@loja.com"
-                value={form.adminEmail}
-                onChange={(e) => updateField("adminEmail", e.target.value)}
-              />
-            </FormField>
+          <Button className="w-full min-h-11 py-2.5" type="submit" disabled={loading}>
+            {loading ? "Criando conta…" : "Criar conta e entrar"}
+          </Button>
+        </form>
 
-            <FormField label="Senha" htmlFor="reg-admin-password" required>
-              <div className="flex gap-2">
-                <Input
-                  id="reg-admin-password"
-                  className="flex-1"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="new-password"
-                  placeholder="Mínimo 6 caracteres"
-                  value={form.adminPassword}
-                  onChange={(e) => updateField("adminPassword", e.target.value)}
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="shrink-0 px-3"
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-              </div>
-            </FormField>
+        <p className="mt-5 text-center text-sm text-slate-600">
+          Já tem conta?{" "}
+          <Link className="font-medium text-violet-700 hover:underline" to="/login">
+            Entrar
+          </Link>
+        </p>
 
-            <Button className="w-full py-2.5" type="submit" disabled={loading}>
-              {loading ? "Criando conta…" : "Criar conta e entrar"}
-            </Button>
-          </form>
-
-          <p className="mt-5 text-center text-sm text-slate-600">
-            Já tem conta?{" "}
-            <Link className="font-medium text-violet-700 hover:underline" to="/login">
-              Entrar
-            </Link>
-          </p>
-
-          {error ? (
-            <Alert className="mt-5" variant="danger" title="Não foi possível cadastrar">
-              {typeof error === "string" ? error : error.message}
-            </Alert>
-          ) : null}
-        </div>
-      </section>
-    </main>
+        {error ? (
+          <Alert className="mt-5" variant="danger" title="Não foi possível cadastrar">
+            {typeof error === "string" ? error : error.message}
+          </Alert>
+        ) : null}
+      </div>
+    </AuthSplitLayout>
   );
 }
