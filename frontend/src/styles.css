@@ -63,7 +63,7 @@
 
 @layer components {
   .ui-page {
-    @apply space-y-6;
+    @apply space-y-4 sm:space-y-6;
   }
 
   .ui-surface {
@@ -95,7 +95,8 @@
   }
 
   .ui-btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all duration-150 focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all duration-150 focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-50;
+    touch-action: manipulation;
   }
 
   .ui-btn-primary {
@@ -129,6 +130,10 @@
     @apply flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900;
   }
 
+  .ui-nav-item.ui-nav-sub {
+    @apply gap-2 py-1.5 pl-3 text-[13px] font-normal;
+  }
+
   /* Item ativo: fundo claro + texto escuro (evita gradiente forte ilegivel) */
   .ui-nav-item.ui-nav-active {
     @apply bg-violet-100 font-semibold text-violet-900 shadow-none ring-1 ring-violet-200;
@@ -159,12 +164,12 @@
   }
 
   .ui-modal-backdrop {
-    @apply fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[2px];
+    @apply fixed inset-0 z-[70] flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-[2px] sm:items-center sm:p-4;
     animation: ui-fade-in 0.15s ease-out;
   }
 
   .ui-modal-panel {
-    @apply ui-surface max-h-[min(85vh,720px)] w-full max-w-xl overflow-auto p-5 shadow-xl;
+    @apply ui-surface max-h-[min(92dvh,720px)] w-full max-w-xl overflow-auto rounded-b-none p-4 shadow-xl sm:rounded-xl sm:p-5;
     animation: ui-scale-in 0.2s ease-out;
   }
 }

@@ -27,7 +27,7 @@ export function ToastProvider({ children }) {
     <ToastContext.Provider value={value}>
       {children}
       <div
-        className="pointer-events-none fixed bottom-4 right-4 z-[80] flex w-[min(100%,22rem)] flex-col gap-2 sm:bottom-6 sm:right-6"
+        className="pointer-events-none fixed inset-x-3 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[80] flex flex-col gap-2 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[min(100%,22rem)]"
         aria-live="polite"
       >
         {toasts.map((toast) => {

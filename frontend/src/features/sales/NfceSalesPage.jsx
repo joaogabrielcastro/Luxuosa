@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
 import { useAuth } from "../auth/useAuth.jsx";
@@ -9,10 +10,12 @@ import { useSalesData } from "./hooks/useSalesData.js";
 import { nfceJobStatusLabel, paymentLabel, saleStatusLabel } from "./sales.utils.js";
 import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
 import { Modal } from "../../shared/components/ui/Modal.jsx";
+import { Button } from "../../shared/components/ui/Button.jsx";
 
 /** Página de vendas (PDV) com cliente opcional e atalhos de teclado. */
 export function SalesPage() {
-  const { token, tenant } = useAuth();
+  const { token, tenant, user } = useAuth();
+  const isAdmin = user?.type === "ADMIN";
   const enableNfceEmission = tenant?.enableNfceEmission === true;
   const { showToast } = useToast();
   const { confirm } = useConfirm();
@@ -68,6 +71,13 @@ export function SalesPage() {
             ? "Registre vendas, aplique descontos e acompanhe a nota fiscal quando necessário."
             : "Registre vendas, aplique descontos e acompanhe o histórico da loja."
         }
+        actions={
+          <Link to="/crediario?nova=1">
+            <Button type="button" variant="secondary" className="text-sm">
+              Venda a prazo
+            </Button>
+          </Link>
+        }
       />
       <SalesFormCard
         token={token}
@@ -113,6 +123,7 @@ export function SalesPage() {
         cancelSale={cancelSale}
         setNfceErrorDetail={setNfceErrorDetail}
         enableNfceEmission={enableNfceEmission}
+        canManageSales={isAdmin}
       />
 
       <Modal open={Boolean(nfceErrorDetail)} title="Detalhe do erro NFC-e" onClose={() => setNfceErrorDetail(null)}>

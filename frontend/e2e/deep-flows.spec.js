@@ -123,7 +123,7 @@ test.describe("fluxos profundos", () => {
 
     await page.goto("/estoque/movimentos");
     await expect(
-      page.getByRole("heading", { name: "Ajustar estoque", exact: true })
+      page.getByRole("heading", { name: "Movimentações", exact: true })
     ).toBeVisible({ timeout: 15_000 });
 
     const variationSelect = page.locator("form select").first();
@@ -275,6 +275,8 @@ test.describe("fluxos profundos", () => {
     await expect(page.getByRole("heading", { name: "Início", exact: true })).toBeVisible({
       timeout: 15_000
     });
+    await expect(page.getByText("Ações rápidas").first()).toBeVisible();
+    await expect(page.getByText("Faturamento do mês")).toBeVisible();
   });
 
   test("billing plans Enterprise R$ 250", async ({ page }) => {
@@ -305,7 +307,7 @@ test.describe("fluxos PRO (demo + forcePlanPro)", () => {
     await ensureCatalog(request, token, { stock: 0, forceNew: true });
 
     await page.goto("/estoque/alertas");
-    await expect(page.getByRole("heading", { name: "Avisos de estoque", exact: true })).toBeVisible({
+    await expect(page.getByRole("heading", { name: "Alertas de estoque", exact: true })).toBeVisible({
       timeout: 15_000
     });
 

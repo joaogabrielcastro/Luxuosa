@@ -17,10 +17,17 @@ import { Select } from "../../shared/components/ui/Select.jsx";
 import { Textarea } from "../../shared/components/ui/Textarea.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
 import { FormErrorSummary } from "../../shared/components/FormErrorSummary.jsx";
+import { ModuleNav } from "../../shared/components/ModuleNav.jsx";
+import { catalogModuleItems } from "../../shared/navConfig.js";
 import { ProductVariationsSection } from "./ProductVariationsSection.jsx";
 import { isDefaultVariation } from "./catalogConstants.js";
+
 function productCurrentStock(item) {
   return (item.variations || []).reduce((acc, v) => acc + Number(v.stock || 0), 0);
+}
+
+function productHasRealVariations(item) {
+  return (item.variations || []).some((v) => !isDefaultVariation(v));
 }
 
 function productLowStockClass(item) {
@@ -60,7 +67,8 @@ function buildProductPayload(form) {
 }
 
 export function ProductsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const isAdmin = user?.type === "ADMIN";
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
@@ -76,11 +84,8 @@ export function ProductsPage() {
   const [error, setError] = useState("");
   const [scannerSku, setScannerSku] = useState("");
   const [form, setForm] = useState(EMPTY_PRODUCT_FORM);
-  /** String vazia = mostrar placeholder (como minima); nao exibir 0 no campo. */
   const [currentStockPreview, setCurrentStockPreview] = useState("");
-  /** Se ambos preenchidos junto com quantidade, o estoque aplica-se so a esta variacao. */
-  const [variationSize, setVariationSize] = useState("");
-  const [variationColor, setVariationColor] = useState("");
+  const [hasVariations, setHasVariations] = useState(false);
 
   const listParams = useMemo(
     () => ({
@@ -135,56 +140,12 @@ export function ProductsPage() {
     await Promise.all([invalidateProducts(), invalidateCatalog()]);
   }
 
-  async function syncProductStock(productId, desiredStock, { variationSize: sizeArg = "", variationColor: colorArg = "" } = {}) {
-    const sizeTrim = String(sizeArg || "").trim();
-    const colorTrim = String(colorArg || "").trim();
-    const useExplicit = Boolean(sizeTrim && colorTrim);
-    if ((sizeTrim && !colorTrim) || (!sizeTrim && colorTrim)) {
-      throw new Error("Preencha Tamanho e Cor juntos, ou deixe os dois em branco.");
-    }
-
+  /** Ajusta só a variação padrão (sem tamanho/cor). Variações reais ficam na seção abaixo. */
+  async function syncDefaultStock(productId, desiredStock) {
     const product = await apiClient(`/products/${productId}`, { token });
     const variations = product.variations || [];
     const defaultVariation = variations.find(isDefaultVariation);
-    const realVariations = variations.filter((v) => !isDefaultVariation(v));
     const desired = Number(desiredStock || 0);
-
-    if (useExplicit) {
-      const row = realVariations.find((v) => v.size === sizeTrim && v.color === colorTrim);
-
-      // Produto sem variacoes reais: promover a variacao padrao para tamanho/cor.
-      if (!row && defaultVariation && realVariations.length === 0) {
-        await apiClient(`/product-variations/${defaultVariation.id}`, {
-          method: "PUT",
-          token,
-          body: { size: sizeTrim, color: colorTrim, stock: desired }
-        });
-        return;
-      }
-
-      const currentRow = row ? Number(row.stock) : 0;
-      if (desired === currentRow) return;
-
-      if (!row && desired > 0) {
-        await apiClient("/product-variations", {
-          method: "POST",
-          token,
-          body: { productId, size: sizeTrim, color: colorTrim, stock: desired }
-        });
-        return;
-      }
-
-      if (row) {
-        await apiClient(`/product-variations/${row.id}`, {
-          method: "PUT",
-          token,
-          body: { stock: desired }
-        });
-      }
-      return;
-    }
-
-    // Sem tamanho/cor: ajustar a variacao padrao do produto.
     const current = variations.reduce((acc, v) => acc + Number(v.stock || 0), 0);
     if (desired === current) return;
 
@@ -208,9 +169,7 @@ export function ProductsPage() {
 
     const decrement = current - desired;
     if (!defaultVariation || Number(defaultVariation.stock) < decrement) {
-      throw new Error(
-        "Nao foi possivel reduzir o estoque atual por aqui. Ajuste as linhas na secao Variacoes abaixo ou use Tamanho/Cor no cadastro para esta variacao."
-      );
+      throw new Error("Para reduzir o estoque deste produto, use Estoque → Movimentações.");
     }
 
     await apiClient(`/product-variations/${defaultVariation.id}`, {
@@ -222,6 +181,7 @@ export function ProductsPage() {
 
   async function createProduct(event) {
     event.preventDefault();
+    if (!isAdmin) return;
     setError("");
     if (!token) {
       setError("Sessao expirada. Faca login novamente.");
@@ -240,13 +200,10 @@ export function ProductsPage() {
         body: payload
       });
       const productId = editingId || response?.id;
-      if (productId) {
+      if (productId && !hasVariations) {
         const skipStockAdjust = Boolean(editingId) && currentStockPreview === "";
         if (!skipStockAdjust) {
-          await syncProductStock(productId, currentStockPreview, {
-            variationSize,
-            variationColor
-          });
+          await syncDefaultStock(productId, currentStockPreview);
         }
       }
 
@@ -274,6 +231,7 @@ export function ProductsPage() {
   }
 
   async function removeProduct(id) {
+    if (!isAdmin) return;
     try {
       const confirmed = await confirm({
         title: "Excluir produto",
@@ -284,11 +242,7 @@ export function ProductsPage() {
       if (!confirmed) return;
       await apiClient(`/products/${id}`, { method: "DELETE", token });
       if (id === editingId) {
-        setEditingId("");
-        setForm(EMPTY_PRODUCT_FORM);
-        setCurrentStockPreview("");
-        setVariationSize("");
-        setVariationColor("");
+        resetForm();
       }
       await refreshProducts();
       showToast("Produto excluido.");
@@ -296,6 +250,14 @@ export function ProductsPage() {
       setError(err);
       showToast(err.message, "error");
     }
+  }
+
+  function resetForm() {
+    setEditingId("");
+    setForm(EMPTY_PRODUCT_FORM);
+    setCurrentStockPreview("");
+    setHasVariations(false);
+    setScannerSku("");
   }
 
   function startEdit(item) {
@@ -310,22 +272,15 @@ export function ProductsPage() {
       sku: item.sku || "",
       minStock: Number(item.minStock || 0)
     });
-    const vars = item.variations || [];
-    if (vars.length === 1) {
-      const v0 = vars[0];
-      if (isDefaultVariation(v0)) {
-        setVariationSize("");
-        setVariationColor("");
-      } else {
-        setVariationSize(v0.size || "");
-        setVariationColor(v0.color || "");
-      }
-      setCurrentStockPreview(String(Number(v0.stock ?? 0)));
+    const withVars = productHasRealVariations(item);
+    setHasVariations(withVars);
+    if (withVars) {
+      setCurrentStockPreview("");
     } else {
-      setVariationSize("");
-      setVariationColor("");
+      const vars = item.variations || [];
       const stockSum = productCurrentStock(item);
-      setCurrentStockPreview(stockSum > 0 ? String(stockSum) : "");
+      const only = vars.length === 1 ? vars[0] : null;
+      setCurrentStockPreview(only ? String(Number(only.stock ?? 0)) : stockSum > 0 ? String(stockSum) : "");
     }
   }
 
@@ -334,139 +289,194 @@ export function ProductsPage() {
     if (!normalized) return;
     setForm((prev) => ({ ...prev, sku: normalized }));
     setScannerSku("");
-    showToast("Codigo lido e aplicado no SKU.");
+    showToast("Codigo lido e aplicado no codigo de barras.");
+  }
+
+  function onToggleVariations(checked) {
+    if (!checked && editingId) {
+      const current = products.find((p) => p.id === editingId);
+      if (current && productHasRealVariations(current)) {
+        showToast("Este produto já tem tamanhos ou cores. Remova-os na lista abaixo para voltar a um único estoque.", "error");
+        return;
+      }
+    }
+    setHasVariations(checked);
+    if (checked) setCurrentStockPreview("");
   }
 
   return (
     <div className="ui-page">
       <PageHeader
         title="Produtos"
-        description="Cadastre o produto e, no mesmo lugar, as variações (tamanho, cor e estoque por combinação)."
+        description="Cadastre peças da loja: dados, preço, tamanhos e cores, estoque e código de barras."
       />
+      <ModuleNav items={catalogModuleItems()} label="Catálogo" />
+
+      {isAdmin ? (
       <SectionCard title={editingId ? "Editar produto" : "Novo produto"}>
-        <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs text-slate-600">
-            Leitor de código de barras: clique no campo, bip no scanner e pressione Enter.
-          </p>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-            <Input
-              placeholder="Aguardando leitura do scanner..."
-              value={scannerSku}
-              onChange={(e) => setScannerSku(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  applyScannedSku();
-                }
-              }}
-            />
-            <Button type="button" variant="secondary" onClick={applyScannedSku}>
-              Aplicar código
-            </Button>
-          </div>
-        </div>
-        <form className="mt-3 grid gap-2 md:grid-cols-2" onSubmit={createProduct}>
-          <p className="text-xs text-slate-600 md:col-span-2">
-            Tamanho e Cor (opcionais): se ambos forem preenchidos, a quantidade abaixo vale apenas para essa combinação.
-            Se os dois ficarem em branco, a quantidade é o total geral do produto (como antes).
-          </p>
-          <Input
-            placeholder="Tamanho (opcional)"
-            value={variationSize}
-            onChange={(e) => setVariationSize(e.target.value)}
-          />
-          <Input
-            placeholder="Cor (opcional)"
-            value={variationColor}
-            onChange={(e) => setVariationColor(e.target.value)}
-          />
-          <Input
-            placeholder="Nome"
-            value={form.name}
-            onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-          />
-          <Input
-            placeholder="SKU (opcional)"
-            value={form.sku}
-            onChange={(e) => setForm((prev) => ({ ...prev, sku: e.target.value }))}
-          />
-          <CurrencyInput
-            placeholder="Preco"
-            value={form.price}
-            onChange={(price) => setForm((prev) => ({ ...prev, price }))}
-          />
-          <CurrencyInput
-            placeholder="Custo"
-            value={form.cost}
-            onChange={(cost) => setForm((prev) => ({ ...prev, cost }))}
-          />
-          <div>
-            <Input
-              placeholder={
-                String(variationSize || "").trim() && String(variationColor || "").trim()
-                  ? "Quantidade nesta variacao (tamanho/cor)"
-                  : "Quantidade atual (total do produto)"
-              }
-              type="number"
-              inputMode="numeric"
-              min="0"
-              value={currentStockPreview}
-              onChange={(e) => setCurrentStockPreview(e.target.value)}
-            />
-          </div>
-          <div>
-            <Input
-              placeholder="Quantidade minima"
-              type="number"
-              min="0"
-              value={form.minStock}
-              onChange={(e) => setForm((prev) => ({ ...prev, minStock: e.target.value }))}
-            />
-          </div>
-          <Select
-            value={form.categoryId}
-            onChange={(e) => setForm((prev) => ({ ...prev, categoryId: e.target.value }))}
-          >
-            <option value="">Selecione categoria</option>
-            {categories.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </Select>
-          <Select
-            value={form.brandId}
-            onChange={(e) => setForm((prev) => ({ ...prev, brandId: e.target.value }))}
-          >
-            <option value="">Selecione marca</option>
-            {brands.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </Select>
-          <Textarea
-            className="md:col-span-2"
-            placeholder="Descricao"
-            value={form.description}
-            onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-          />
-          <div className="flex gap-2 md:col-span-2">
+        <form className="mt-3 space-y-8" onSubmit={createProduct}>
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-slate-900">Produto</h3>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-slate-600">Nome</span>
+                <Input
+                  placeholder="Nome"
+                  value={form.name}
+                  onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-slate-600">Categoria</span>
+                <Select
+                  value={form.categoryId}
+                  onChange={(e) => setForm((prev) => ({ ...prev, categoryId: e.target.value }))}
+                >
+                  <option value="">Selecione categoria</option>
+                  {categories.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-slate-600">Marca</span>
+                <Select
+                  value={form.brandId}
+                  onChange={(e) => setForm((prev) => ({ ...prev, brandId: e.target.value }))}
+                >
+                  <option value="">Selecione marca</option>
+                  {brands.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <label className="flex flex-col gap-1 md:col-span-2">
+                <span className="text-xs font-medium text-slate-600">Descrição</span>
+                <Textarea
+                  placeholder="Descricao"
+                  value={form.description}
+                  onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-slate-900">Preço</h3>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-slate-600">Preço de venda</span>
+                <CurrencyInput
+                  placeholder="Preco"
+                  value={form.price}
+                  onChange={(price) => setForm((prev) => ({ ...prev, price }))}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-slate-600">Custo</span>
+                <CurrencyInput
+                  placeholder="Custo"
+                  value={form.cost}
+                  onChange={(cost) => setForm((prev) => ({ ...prev, cost }))}
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-slate-900">Variações</h3>
+            <label className="flex cursor-pointer items-start gap-2 rounded-md border border-slate-200 bg-white p-3">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-slate-300"
+                checked={hasVariations}
+                onChange={(e) => onToggleVariations(e.target.checked)}
+              />
+              <span>
+                <span className="text-sm font-medium text-slate-800">Este produto possui tamanhos ou cores</span>
+                <span className="mt-0.5 block text-xs text-slate-500">
+                  Ative para camisetas, calças e peças com mais de uma combinação.
+                </span>
+              </span>
+            </label>
+            {!hasVariations ? (
+              <label className="flex max-w-xs flex-col gap-1">
+                <span className="text-xs font-medium text-slate-600">Quantidade em estoque</span>
+                <Input
+                  placeholder="Quantidade atual"
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  value={currentStockPreview}
+                  onChange={(e) => setCurrentStockPreview(e.target.value)}
+                />
+              </label>
+            ) : (
+              <p className="text-xs text-slate-500">
+                {editingId
+                  ? "Informe tamanho, cor e quantidade na tabela abaixo."
+                  : "Salve o produto para cadastrar cada tamanho e cor."}
+              </p>
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-slate-900">Estoque mínimo</h3>
+            <label className="flex max-w-xs flex-col gap-1">
+              <span className="text-xs font-medium text-slate-600">Avisar quando faltar</span>
+              <Input
+                placeholder="Quantidade minima"
+                type="number"
+                min="0"
+                value={form.minStock}
+                onChange={(e) => setForm((prev) => ({ ...prev, minStock: e.target.value }))}
+              />
+            </label>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-slate-900">Código de barras</h3>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-slate-600">Código (SKU)</span>
+                <Input
+                  placeholder="SKU (opcional)"
+                  value={form.sku}
+                  onChange={(e) => setForm((prev) => ({ ...prev, sku: e.target.value }))}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-slate-600">Leitor</span>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Bipar e pressionar Enter"
+                    value={scannerSku}
+                    onChange={(e) => setScannerSku(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        applyScannedSku();
+                      }
+                    }}
+                  />
+                  <Button type="button" variant="secondary" onClick={applyScannedSku}>
+                    Aplicar
+                  </Button>
+                </div>
+              </label>
+            </div>
+          </section>
+
+          <div className="flex gap-2">
             <Button disabled={loading}>
               {editingId ? "Atualizar produto" : "Salvar produto"}
             </Button>
             {editingId ? (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setEditingId("");
-                  setForm(EMPTY_PRODUCT_FORM);
-                  setCurrentStockPreview("");
-                  setVariationSize("");
-                  setVariationColor("");
-                }}
-              >
+              <Button type="button" variant="secondary" onClick={resetForm}>
                 Cancelar
               </Button>
             ) : null}
@@ -474,13 +484,20 @@ export function ProductsPage() {
         </form>
         <FormErrorSummary error={error} className="mt-2" />
       </SectionCard>
+      ) : (
+        <SectionCard title="Catálogo">
+          <p className="text-sm text-slate-600">Consulta de produtos. Somente administradores cadastram ou editam.</p>
+        </SectionCard>
+      )}
 
-      <ProductVariationsSection
-        token={token}
-        productId={editingId}
-        productName={form.name?.trim() || ""}
-        onChanged={() => refreshProducts().catch(() => {})}
-      />
+      {isAdmin && hasVariations ? (
+        <ProductVariationsSection
+          token={token}
+          productId={editingId}
+          productName={form.name?.trim() || ""}
+          onChanged={() => refreshProducts().catch(() => {})}
+        />
+      ) : null}
 
       <SectionCard title="Lista de produtos">
         <div className="mb-3 flex items-center justify-between text-xs text-slate-600">
@@ -565,12 +582,18 @@ export function ProductsPage() {
               <td className="py-2">{item.minStock}</td>
               <td className="py-2">{formatCurrencyBRL(item.price)}</td>
               <td className="py-2">
-                <Button variant="secondary" className="mr-2 px-2 py-1 text-xs" onClick={() => startEdit(item)}>
-                  Editar
-                </Button>
-                <Button variant="danger" className="px-2 py-1 text-xs" onClick={() => removeProduct(item.id)}>
-                  Excluir
-                </Button>
+                {isAdmin ? (
+                  <>
+                    <Button variant="secondary" className="mr-2 px-2 py-1 text-xs" onClick={() => startEdit(item)}>
+                      Editar
+                    </Button>
+                    <Button variant="danger" className="px-2 py-1 text-xs" onClick={() => removeProduct(item.id)}>
+                      Excluir
+                    </Button>
+                  </>
+                ) : (
+                  <span className="text-xs text-slate-400">—</span>
+                )}
               </td>
             </>
             );

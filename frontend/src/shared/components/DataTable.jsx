@@ -93,7 +93,7 @@ export function DataTable({
         ) : null}
 
         <div className="overflow-x-auto rounded-lg border border-slate-100">
-          <table className="w-full min-w-[620px] text-left text-sm">
+          <table className="w-full min-w-[520px] text-left text-sm md:min-w-[620px]">
             <thead>
               <tr className="ui-table-head">
                 {columns.map((column) => (
@@ -123,7 +123,7 @@ export function DataTable({
           </table>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+        <div className="mt-4 flex flex-col gap-2 text-xs text-slate-600 sm:flex-row sm:items-center sm:justify-between">
           <span>
             {filteredData.length
               ? `Mostrando ${from}–${to} de ${filteredData.length}`

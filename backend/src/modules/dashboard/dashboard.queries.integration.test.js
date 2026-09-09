@@ -3,6 +3,7 @@ import { after, before, describe, it } from "node:test";
 import { prisma } from "../../config/prisma.js";
 import { destroyTenant, uniqueTestCnpj } from "../../test/helpers.js";
 import {
+  crediarioOpenAggregated,
   productsWithoutSalesAggregated,
   profitByProductAggregated,
   salesByPeriodAggregated,
@@ -41,17 +42,20 @@ describe("dashboard.queries (integracao)", { skip: !runDbTests }, () => {
     const noSalesSince = new Date();
     noSalesSince.setDate(noSalesSince.getDate() - 30);
 
-    const [byPeriod, profit, stock, inactive] = await Promise.all([
+    const [byPeriod, profit, stock, inactive, open] = await Promise.all([
       salesByPeriodAggregated(tenantId, monthStart),
       profitByProductAggregated(tenantId),
       stockConsolidatedAggregated(tenantId),
-      productsWithoutSalesAggregated(tenantId, noSalesSince)
+      productsWithoutSalesAggregated(tenantId, noSalesSince),
+      crediarioOpenAggregated(tenantId)
     ]);
 
     assert.ok(Array.isArray(byPeriod));
     assert.ok(Array.isArray(profit));
     assert.ok(Array.isArray(stock));
     assert.ok(Array.isArray(inactive));
+    assert.equal(open.remaining, 0);
+    assert.equal(open.count, 0);
 
     for (const row of stock) {
       assert.ok(row.productId);

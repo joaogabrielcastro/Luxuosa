@@ -27,6 +27,8 @@ import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
 import { Modal } from "../../shared/components/ui/Modal.jsx";
 import { StatCard } from "../../shared/components/ui/StatCard.jsx";
 import { Alert } from "../../shared/components/ui/Alert.jsx";
+import { ModuleNav } from "../../shared/components/ModuleNav.jsx";
+import { stockModuleItems } from "../../shared/navConfig.js";
 
 const STEPS = {
   UPLOAD: "upload",
@@ -376,6 +378,7 @@ export function NfeImportPage() {
     return (
       <div className="ui-page">
         <PageHeader title="Entrada por NF-e (XML)" description="Entrada de mercadoria via nota fiscal." />
+        <ModuleNav items={stockModuleItems(false)} label="Estoque" />
         <SectionCard title="Acesso restrito">
           <p className="text-sm text-slate-600">Apenas administradores podem importar NF-e.</p>
           <Link to="/estoque/movimentos" className="mt-3 inline-flex text-sm text-violet-700 hover:underline">
@@ -392,6 +395,7 @@ export function NfeImportPage() {
         title="Entrada por NF-e (XML)"
         description="Selecione o XML, confira os produtos e confirme a entrada no estoque."
       />
+      <ModuleNav items={stockModuleItems(isAdmin)} label="Estoque" />
 
       {planUpgradeRequired ? (
         <Alert

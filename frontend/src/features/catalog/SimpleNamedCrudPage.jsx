@@ -28,9 +28,11 @@ export function SimpleNamedCrudPage({
   emptyMessage,
   searchPlaceholder,
   deleteMessage,
-  statIcon
+  statIcon,
+  beforeContent = null
 }) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const isAdmin = user?.type === "ADMIN";
   const { showToast } = useToast();
   const { confirm } = useConfirm();
 
@@ -64,6 +66,7 @@ export function SimpleNamedCrudPage({
 
   async function submit(event) {
     event.preventDefault();
+    if (!isAdmin) return;
     setError("");
     setLoading(true);
     try {
@@ -85,6 +88,7 @@ export function SimpleNamedCrudPage({
   }
 
   async function remove(id) {
+    if (!isAdmin) return;
     try {
       const confirmed = await confirm({
         title: `Excluir ${entityNoun}`,
@@ -101,18 +105,18 @@ export function SimpleNamedCrudPage({
     }
   }
 
-  const filteredCount = query
-    ? items.filter((item) => item.name.toLowerCase().includes(query.toLowerCase())).length
-    : items.length;
-
   return (
     <div className="ui-page">
       <PageHeader title={title} description={description} />
+      {beforeContent}
       <section className="grid gap-3 sm:grid-cols-2">
         <StatCard label={`${pluralLabel} cadastrad${entityNounFeminine ? "as" : "os"}`} value={items.length} icon={statIcon} />
-        <StatCard label={`${pluralLabel} encontrad${entityNounFeminine ? "as" : "os"}`} value={filteredCount} />
       </section>
       <SectionCard title={editingId ? `Editar ${entityNoun}` : `Nov${entityNounFeminine ? "a" : "o"} ${entityNoun}`}>
+        {!isAdmin ? (
+          <p className="mt-3 text-sm text-slate-600">Somente administradores cadastram ou editam.</p>
+        ) : (
+          <>
         <form className="mt-3 flex flex-col gap-2 sm:flex-row" onSubmit={submit}>
           <Input
             placeholder={`Nome d${articleArt} ${entityNoun}`}
@@ -134,6 +138,8 @@ export function SimpleNamedCrudPage({
           ) : null}
         </form>
         <FormErrorSummary error={error} />
+          </>
+        )}
       </SectionCard>
 
       <DataTable
@@ -155,19 +161,25 @@ export function SimpleNamedCrudPage({
           <>
             <td className="py-2">{item.name}</td>
             <td className="py-2">
-              <Button
-                variant="secondary"
-                className="mr-2 px-2 py-1 text-xs"
-                onClick={() => {
-                  setEditingId(item.id);
-                  setName(item.name);
-                }}
-              >
-                Editar
-              </Button>
-              <Button variant="danger" className="px-2 py-1 text-xs" onClick={() => remove(item.id)}>
-                Excluir
-              </Button>
+              {isAdmin ? (
+                <>
+                  <Button
+                    variant="secondary"
+                    className="mr-2 px-2 py-1 text-xs"
+                    onClick={() => {
+                      setEditingId(item.id);
+                      setName(item.name);
+                    }}
+                  >
+                    Editar
+                  </Button>
+                  <Button variant="danger" className="px-2 py-1 text-xs" onClick={() => remove(item.id)}>
+                    Excluir
+                  </Button>
+                </>
+              ) : (
+                <span className="text-xs text-slate-400">—</span>
+              )}
             </td>
           </>
         )}

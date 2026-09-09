@@ -25,7 +25,8 @@ export function SalesTableCard({
   editSale,
   cancelSale,
   setNfceErrorDetail,
-  enableNfceEmission = true
+  enableNfceEmission = true,
+  canManageSales = true
 }) {
   const canPrev = salesSkip > 0;
   const canNext = salesSkip + salesTake < totalSales;
@@ -159,7 +160,7 @@ export function SalesTableCard({
             {!sale.invoice ? (
               <div className="space-y-1">
                 <span className="text-slate-500">Aguardando NFC-e...</span>
-                {enableNfceEmission && sale.status === "PAID" ? (
+                {enableNfceEmission && canManageSales && sale.status === "PAID" ? (
                   <Button
                     type="button"
                     variant="secondary"
@@ -209,7 +210,7 @@ export function SalesTableCard({
                     Ver mensagem completa
                   </button>
                 ) : null}
-                {enableNfceEmission && sale.status === "PAID" ? (
+                {enableNfceEmission && canManageSales && sale.status === "PAID" ? (
                   <Button
                     type="button"
                     variant="secondary"
@@ -224,7 +225,7 @@ export function SalesTableCard({
             ) : (
               <span className="text-amber-700">Enviando NFC-e para SEFAZ...</span>
             )}
-            {enableNfceEmission && sale.status === "PAID" && sale.invoice?.status === "PENDING" ? (
+            {enableNfceEmission && canManageSales && sale.status === "PAID" && sale.invoice?.status === "PENDING" ? (
               <Button
                 type="button"
                 variant="secondary"
@@ -239,7 +240,7 @@ export function SalesTableCard({
           </td>
           ) : null}
           <td className="py-2">
-            {sale.status !== "CANCELED" ? (
+            {canManageSales && sale.status !== "CANCELED" ? (
               <div className="inline-flex gap-2">
                 <Button variant="secondary" className="px-1.5 py-1 text-[11px]" onClick={() => editSale(sale)}>
                   Editar

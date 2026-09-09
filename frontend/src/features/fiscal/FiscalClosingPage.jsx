@@ -11,6 +11,8 @@ import { Button } from "../../shared/components/ui/Button.jsx";
 import { Input } from "../../shared/components/ui/Input.jsx";
 import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
+import { ModuleNav } from "../../shared/components/ModuleNav.jsx";
+import { fiscalModuleItems } from "../../shared/navConfig.js";
 
 function defaultPeriod() {
   const d = new Date();
@@ -97,6 +99,7 @@ export function FiscalClosingPage() {
     return (
       <div>
         <PageHeader title="Fechamento fiscal" description="Resumo mensal para contabilidade." />
+        <ModuleNav items={fiscalModuleItems(false)} label="Fiscal" />
         <EmptyState title="Acesso restrito" description="Somente administradores podem acessar o fechamento fiscal." />
       </div>
     );
@@ -108,6 +111,7 @@ export function FiscalClosingPage() {
         title="Fechamento fiscal"
         description="Resumo mensal e pacote ZIP com NFC-e, NF-e de entrada, vendas e totais para o contador."
       />
+      <ModuleNav items={fiscalModuleItems(isAdmin)} label="Fiscal" />
 
       <SectionCard title="Período">
         <form onSubmit={applyPeriod} className="flex flex-wrap items-end gap-3">

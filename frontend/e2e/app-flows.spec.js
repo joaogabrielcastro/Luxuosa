@@ -60,7 +60,7 @@ test.describe("fluxos da aplicacao", () => {
   test("login → Estoque movimentos", async ({ page }) => {
     await page.goto("/estoque/movimentos");
     await expect(
-      page.getByRole("heading", { name: "Ajustar estoque", exact: true })
+      page.getByRole("heading", { name: "Movimentações", exact: true })
     ).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Nova movimentação")).toBeVisible();
   });

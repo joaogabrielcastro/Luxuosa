@@ -34,9 +34,12 @@ export function useInvalidateLuxuosa(token) {
     return queryClient.invalidateQueries({ queryKey: queryKeys.users.list(token) });
   }, [queryClient, token]);
 
-  const invalidateCrediario = useCallback(() => {
-    if (!token) return Promise.resolve();
-    return queryClient.invalidateQueries({ queryKey: queryKeys.crediario.all(token) });
+  const invalidateCrediario = useCallback(async () => {
+    if (!token) return;
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.crediario.all(token) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(token) })
+    ]);
   }, [queryClient, token]);
 
   const invalidateStock = useCallback(async () => {
@@ -50,10 +53,15 @@ export function useInvalidateLuxuosa(token) {
     return queryClient.invalidateQueries({ queryKey: queryKeys.reports.all(token) });
   }, [queryClient, token]);
 
+  const invalidateDashboard = useCallback(() => {
+    if (!token) return Promise.resolve();
+    return queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all(token) });
+  }, [queryClient, token]);
+
   /** Após mutação de venda: atualiza lista e estoque do catálogo. */
   const refreshAfterSaleMutation = useCallback(async () => {
-    await Promise.all([invalidateSales(), invalidateCatalog()]);
-  }, [invalidateSales, invalidateCatalog]);
+    await Promise.all([invalidateSales(), invalidateCatalog(), invalidateDashboard()]);
+  }, [invalidateSales, invalidateCatalog, invalidateDashboard]);
 
   /** Após movimentação manual ou crediário: estoque + listas relacionadas. */
   const refreshAfterStockMutation = useCallback(async () => {
@@ -74,6 +82,7 @@ export function useInvalidateLuxuosa(token) {
     invalidateCrediario,
     invalidateStock,
     invalidateReports,
+    invalidateDashboard,
     refreshAfterSaleMutation,
     refreshAfterStockMutation
   };

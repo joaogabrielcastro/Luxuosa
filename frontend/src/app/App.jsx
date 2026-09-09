@@ -24,6 +24,9 @@ const ProductsPage = lazy(() =>
 const SalesPage = lazy(() =>
   import("../features/sales/NfceSalesPage.jsx").then((m) => ({ default: m.SalesPage }))
 );
+const StockOverviewPage = lazy(() =>
+  import("../features/stock/StockOverviewPage.jsx").then((m) => ({ default: m.StockOverviewPage }))
+);
 const StockMovementsPage = lazy(() =>
   import("../features/stock/StockMovementsPage.jsx").then((m) => ({ default: m.StockMovementsPage }))
 );
@@ -54,6 +57,13 @@ const StockAlertsPage = lazy(() =>
 const FiscalClosingPage = lazy(() =>
   import("../features/fiscal/FiscalClosingPage.jsx").then((m) => ({ default: m.FiscalClosingPage }))
 );
+const FiscalInvoicesPage = lazy(() =>
+  import("../features/fiscal/FiscalInvoicesPage.jsx").then((m) => ({ default: m.FiscalInvoicesPage }))
+);
+const SettingsPage = lazy(() =>
+  import("../features/settings/SettingsPage.jsx").then((m) => ({ default: m.SettingsPage }))
+);
+
 function PrivateRoute({ children }) {
   const { token } = useAuth();
   return token ? children : <Navigate to="/login" replace />;
@@ -86,14 +96,19 @@ function AppRoutes() {
       <Route path="/vendas" element={<PrivateShell><SalesPage /></PrivateShell>} />
       <Route path="/crediario" element={<PrivateShell><CrediarioPage /></PrivateShell>} />
       <Route path="/clientes" element={<PrivateShell><CustomersPage /></PrivateShell>} />
+      <Route path="/estoque" element={<PrivateShell><StockOverviewPage /></PrivateShell>} />
       <Route path="/estoque/movimentos" element={<PrivateShell><StockMovementsPage /></PrivateShell>} />
       <Route path="/estoque/importar-nfe" element={<PrivateShell><NfeImportPage /></PrivateShell>} />
       <Route path="/estoque/alertas" element={<PrivateShell><StockAlertsPage /></PrivateShell>} />
       <Route path="/caixa" element={<PrivateShell><CashPage /></PrivateShell>} />
       <Route path="/relatorios" element={<PrivateShell><ReportsPage /></PrivateShell>} />
+      <Route path="/fiscal" element={<Navigate to="/fiscal/notas" replace />} />
+      <Route path="/fiscal/notas" element={<PrivateShell><FiscalInvoicesPage /></PrivateShell>} />
       <Route path="/fechamento-fiscal" element={<PrivateShell><FiscalClosingPage /></PrivateShell>} />
+      <Route path="/configuracoes" element={<PrivateShell><SettingsPage /></PrivateShell>} />
       <Route path="/assinatura" element={<PrivateShell><BillingPage /></PrivateShell>} />
       <Route path="/usuarios" element={<PrivateShell><UsersPage /></PrivateShell>} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

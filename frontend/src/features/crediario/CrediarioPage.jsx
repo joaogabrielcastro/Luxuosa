@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/useAuth.jsx";
 import { apiClient } from "../../shared/apiClient.js";
 import { queryKeys } from "../../shared/queryKeys.js";
@@ -49,7 +50,9 @@ const emptyLine = () => ({
 });
 
 export function CrediarioPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const isAdmin = user?.type === "ADMIN";
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
 
@@ -74,6 +77,14 @@ export function CrediarioPage() {
     notes: "",
     items: [emptyLine()]
   });
+
+  useEffect(() => {
+    if (!isAdmin || searchParams.get("nova") !== "1") return;
+    setCreateOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete("nova");
+    setSearchParams(next, { replace: true });
+  }, [isAdmin, searchParams, setSearchParams]);
 
   const [detailId, setDetailId] = useState(null);
 
@@ -162,6 +173,7 @@ export function CrediarioPage() {
   }
 
   async function submitCreate() {
+    if (!isAdmin) return;
     if (!createForm.customerId) {
       showToast("Selecione o cliente.", "error");
       return;
@@ -245,6 +257,7 @@ export function CrediarioPage() {
   }
 
   async function handleCancel(row) {
+    if (!isAdmin) return;
     const ok = await confirm({
       title: "Cancelar venda a prazo",
       message: "Estorna estoque e remove o debito (apenas se nao houver pagamentos). Continuar?",
@@ -274,9 +287,11 @@ export function CrediarioPage() {
         title="Crediário"
         description="Cliente leva agora e paga depois na loja (fiado). Não é cartão parcelado — use Crediário para saldo em aberto e recebimentos."
         actions={
-          <Button type="button" onClick={() => setCreateOpen(true)}>
-            Nova venda a prazo
-          </Button>
+          isAdmin ? (
+            <Button type="button" onClick={() => setCreateOpen(true)}>
+              Nova venda a prazo
+            </Button>
+          ) : null
         }
       />
 
@@ -374,9 +389,11 @@ export function CrediarioPage() {
                             <Button className="px-2 py-1 text-xs" type="button" onClick={() => openPay(row)}>
                               Receber
                             </Button>
+                            {isAdmin ? (
                             <Button variant="secondary" className="px-2 py-1 text-xs" type="button" onClick={() => handleCancel(row)}>
                               Cancelar
                             </Button>
+                            ) : null}
                           </>
                         ) : null}
                       </div>

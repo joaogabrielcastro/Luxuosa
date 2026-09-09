@@ -1,11 +1,18 @@
+import { CreditSaleStatus } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
 import { productService } from "../products/product.service.js";
 import {
+  crediarioOpenAggregated,
   productsWithoutSalesAggregated,
   profitByProductAggregated,
   salesByPeriodAggregated,
   stockConsolidatedAggregated
 } from "./dashboard.queries.js";
+
+function toNumber(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
 
 export const dashboardService = {
   async admin(tenantId, { includeHeavy = true } = {}) {
@@ -23,6 +30,11 @@ export const dashboardService = {
       lastSales,
       paidSalesAgg,
       paidByUser,
+      creditMonthPayments,
+      creditDaySales,
+      creditPaidAgg,
+      crediarioOpen,
+      creditByUser,
       salesByPeriod,
       profitByProduct,
       stockConsolidated,
@@ -59,18 +71,57 @@ export const dashboardService = {
         _count: { _all: true },
         _sum: { totalValue: true }
       }),
+      prisma.creditPayment.aggregate({
+        where: { tenantId, paidAt: { gte: monthStart } },
+        _sum: { amount: true }
+      }),
+      prisma.creditSale.count({
+        where: {
+          tenantId,
+          status: { not: CreditSaleStatus.CANCELED },
+          occurredAt: { gte: dayStart }
+        }
+      }),
+      prisma.creditSale.aggregate({
+        where: { tenantId, status: CreditSaleStatus.PAID },
+        _sum: { totalValue: true },
+        _count: { _all: true }
+      }),
+      crediarioOpenAggregated(tenantId),
+      prisma.creditSale.groupBy({
+        by: ["userId"],
+        where: { tenantId, status: { in: [CreditSaleStatus.OPEN, CreditSaleStatus.PAID] } },
+        _count: { _all: true },
+        _sum: { totalValue: true }
+      }),
       salesByPeriodAggregated(tenantId, monthStart),
       includeHeavy ? profitByProductAggregated(tenantId) : Promise.resolve([]),
       includeHeavy ? stockConsolidatedAggregated(tenantId) : Promise.resolve([]),
       includeHeavy ? productsWithoutSalesAggregated(tenantId, noSalesSince) : Promise.resolve([])
     ]);
 
-    const monthlyRevenue = Number(monthAgg._sum.totalValue || 0);
-    const paidCount = Number(paidSalesAgg?._count?._all || 0);
-    const paidTotal = Number(paidSalesAgg?._sum?.totalValue || 0);
+    const monthlyRevenue =
+      toNumber(monthAgg._sum.totalValue) + toNumber(creditMonthPayments._sum?.amount);
+    const paidCount = toNumber(paidSalesAgg?._count?._all) + toNumber(creditPaidAgg?._count?._all);
+    const paidTotal = toNumber(paidSalesAgg?._sum?.totalValue) + toNumber(creditPaidAgg?._sum?.totalValue);
     const ticketAverage = paidCount ? paidTotal / paidCount : 0;
 
-    const userIds = paidByUser.map((row) => row.userId).filter(Boolean);
+    const byUser = new Map();
+    for (const row of paidByUser) {
+      byUser.set(row.userId, {
+        userId: row.userId,
+        sales: toNumber(row._count?._all),
+        amount: toNumber(row._sum?.totalValue)
+      });
+    }
+    for (const row of creditByUser) {
+      const current = byUser.get(row.userId) || { userId: row.userId, sales: 0, amount: 0 };
+      current.sales += toNumber(row._count?._all);
+      current.amount += toNumber(row._sum?.totalValue);
+      byUser.set(row.userId, current);
+    }
+
+    const userIds = [...byUser.keys()].filter(Boolean);
     const users = userIds.length
       ? await prisma.user.findMany({
           where: { tenantId, id: { in: userIds } },
@@ -78,19 +129,22 @@ export const dashboardService = {
         })
       : [];
     const userNameById = new Map(users.map((u) => [u.id, u.name]));
-    const salesByAttendant = paidByUser
+    const salesByAttendant = [...byUser.values()]
       .map((row) => ({
         userId: row.userId,
         name: userNameById.get(row.userId) || "Usuario removido",
-        sales: Number(row._count?._all || 0),
-        amount: Number(row._sum?.totalValue || 0)
+        sales: row.sales,
+        amount: row.amount
       }))
       .sort((a, b) => b.amount - a.amount);
 
     return {
       monthlyRevenue,
-      daySales,
+      daySales: daySales + creditDaySales,
       ticketAverage,
+      crediarioOpenBalance: crediarioOpen.remaining,
+      crediarioOpenCount: crediarioOpen.count,
+      crediarioReceivedMonth: toNumber(creditMonthPayments._sum?.amount),
       lowStockCount: lowStockItems.length,
       lowStockItems,
       lastSales,

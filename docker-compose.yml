@@ -47,7 +47,8 @@ services:
       redis:
         condition: service_healthy
     env_file:
-      - ./.env.compose
+      - path: ./.env.compose
+        required: false
     environment:
       PORT: 3001
       DATABASE_URL: postgresql://postgres:postgres@db:5432/luxuosa
@@ -77,7 +78,8 @@ services:
       backend:
         condition: service_started
     env_file:
-      - ./.env.compose
+      - path: ./.env.compose
+        required: false
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/luxuosa
       NFCE_PROCESS_IN_API: "true"

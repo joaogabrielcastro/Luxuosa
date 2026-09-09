@@ -228,8 +228,8 @@ export function ReportsPage() {
           <EmptyState description="Nenhum produto abaixo do mínimo no momento." />
         )}
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
-          <Link to="/estoque/movimentos" className="text-violet-700 hover:underline">
-            Registrar entrada
+          <Link to="/estoque" className="text-violet-700 hover:underline">
+            Ver estoque
           </Link>
         </div>
       </SectionCard>

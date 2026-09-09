@@ -114,19 +114,19 @@ export function ProductVariationsSection({ token, productId, productName, onChan
 
   if (!productId) {
     return (
-      <SectionCard title="Variacoes (tamanho, cor, estoque)">
-        <p className="text-sm text-slate-600">Salve o produto primeiro para cadastrar variacoes.</p>
+      <SectionCard title="Tamanhos e cores">
+        <p className="text-sm text-slate-600">Salve o produto primeiro para cadastrar cada combinação.</p>
       </SectionCard>
     );
   }
 
   return (
     <SectionCard
-      title="Variacoes (tamanho, cor, estoque)"
+      title="Tamanhos e cores"
       description={
         productName
-          ? `Produto: ${productName}. A linha "Estoque" sem tamanho/cor representa o estoque do produto quando ele nao tem variacoes.`
-          : `A linha "Estoque" sem tamanho/cor representa o estoque do produto quando ele nao tem variacoes.`
+          ? `${productName}: uma linha para cada combinação de tamanho e cor.`
+          : "Uma linha para cada combinação de tamanho e cor."
       }
     >
       <form className="mt-3 grid gap-2 md:grid-cols-3" onSubmit={submitVariation}>
@@ -188,8 +188,7 @@ export function ProductVariationsSection({ token, productId, productName, onChan
             ) : variations.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-3 py-4 text-slate-500">
-                  Nenhuma variacao. Use o formulario acima ou ajuste a quantidade atual no bloco principal (gera estoque
-                  automatico).
+                  Nenhuma combinação ainda. Informe tamanho, cor e quantidade acima.
                 </td>
               </tr>
             ) : (
@@ -200,10 +199,10 @@ export function ProductVariationsSection({ token, productId, productName, onChan
                   <td className="px-3 py-2 text-slate-600">
                     {isDefault ? (
                       <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
-                        Estoque
+                        Estoque geral
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-500">Variacao</span>
+                      <span className="text-xs text-slate-500">Tamanho/cor</span>
                     )}
                   </td>
                   <td className="px-3 py-2">{isDefault ? "—" : row.size}</td>
@@ -212,7 +211,7 @@ export function ProductVariationsSection({ token, productId, productName, onChan
                   <td className="px-3 py-2">
                     {isDefault ? (
                       <span className="text-xs text-slate-400">
-                        Ajuste pela tela do produto.
+                        Ajuste em Estoque → Movimentações.
                       </span>
                     ) : (
                       <>

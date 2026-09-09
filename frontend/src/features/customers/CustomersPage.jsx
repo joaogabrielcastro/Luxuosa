@@ -88,7 +88,8 @@ function buildUpdateBody(form) {
 }
 
 export function CustomersPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const isAdmin = user?.type === "ADMIN";
   const { showToast } = useToast();
   const { confirm } = useConfirm();
   const [form, setForm] = useState(emptyForm);
@@ -167,6 +168,7 @@ export function CustomersPage() {
 
   async function submit(event) {
     event.preventDefault();
+    if (!isAdmin) return;
     setError("");
     if (!form.name.trim() || form.name.trim().length < 2) {
       setError("Informe o nome (minimo 2 caracteres).");
@@ -199,6 +201,7 @@ export function CustomersPage() {
   }
 
   async function removeCustomer(id) {
+    if (!isAdmin) return;
     try {
       const ok = await confirm({
         title: "Excluir cliente",
@@ -236,6 +239,9 @@ export function CustomersPage() {
       </section>
 
       <SectionCard title={editingId ? "Editar cliente" : "Novo cliente"}>
+        {!isAdmin ? (
+          <p className="mt-3 text-sm text-slate-600">Consulta de clientes. Somente administradores cadastram ou editam.</p>
+        ) : (
         <form className="mt-3 grid gap-3 md:grid-cols-2" onSubmit={submit}>
           <label className="flex flex-col gap-1 md:col-span-2">
             <span className="text-xs font-medium text-slate-600">Nome completo *</span>
@@ -318,6 +324,7 @@ export function CustomersPage() {
             ) : null}
           </div>
         </form>
+        )}
         <FormErrorSummary error={error} />
       </SectionCard>
 
@@ -346,6 +353,8 @@ export function CustomersPage() {
             <td className="py-2 text-sm text-slate-600">{c.phone || "—"}</td>
             <td className="max-w-[180px] truncate py-2 text-sm text-slate-600">{c.email || "—"}</td>
             <td className="py-2">
+              {isAdmin ? (
+                <>
               <Button
                 type="button"
                 variant="secondary"
@@ -357,6 +366,10 @@ export function CustomersPage() {
               <Button type="button" variant="danger" className="px-2 py-1 text-xs" onClick={() => removeCustomer(c.id)}>
                 Excluir
               </Button>
+                </>
+              ) : (
+                <span className="text-xs text-slate-400">—</span>
+              )}
             </td>
           </>
         )}

@@ -14,6 +14,7 @@ import { Button } from "../../../shared/components/ui/Button.jsx";
 import { formatCurrencyBRL, parseCurrencyInput } from "../../../shared/formatters.js";
 import { useToast } from "../../../shared/components/ToastProvider.jsx";
 import { apiClient } from "../../../shared/apiClient.js";
+import { Link } from "react-router-dom";
 
 function parseQty(raw) {
   if (raw === "" || raw === undefined) return 1;
@@ -535,7 +536,10 @@ export function SalesFormCard({
                 <option value="INSTALLMENT">Cartão parcelado</option>
               </Select>
               <span className="text-xs text-slate-500">
-                Fiado ou pagar depois? Use o menu Crediário.
+                Fiado ou pagar depois?{" "}
+                <Link to="/crediario?nova=1" className="font-medium text-violet-700 hover:underline">
+                  Venda a prazo
+                </Link>
               </span>
             </label>
             {form.paymentMethod === "INSTALLMENT" ? (
@@ -548,7 +552,7 @@ export function SalesFormCard({
                   value={form.installments}
                   onChange={(e) => setForm((prev) => ({ ...prev, installments: e.target.value }))}
                 />
-                <span className="text-xs text-slate-500">Mínimo 2 parcelas (cartão). Fiado fica no Crediário.</span>
+                <span className="text-xs text-slate-500">Mínimo 2 parcelas (cartão). Fiado fica em Venda a prazo.</span>
               </label>
             ) : null}
           </div>

@@ -12,6 +12,8 @@ import { Input } from "../../shared/components/ui/Input.jsx";
 import { Select } from "../../shared/components/ui/Select.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
 import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
+import { ModuleNav } from "../../shared/components/ModuleNav.jsx";
+import { stockModuleItems } from "../../shared/navConfig.js";
 
 export function StockAlertsPage() {
   const { token, user } = useAuth();
@@ -99,9 +101,10 @@ export function StockAlertsPage() {
   return (
     <div className="ui-page">
       <PageHeader
-        title="Avisos de estoque"
-        description="Envia e-mail/WhatsApp quando faltar produto. O estoque mínimo se define em Produtos."
+        title="Alertas de estoque"
+        description="Envia e-mail ou WhatsApp quando faltar produto. O mínimo se define em Produtos."
       />
+      <ModuleNav items={stockModuleItems(isAdmin)} label="Estoque" />
 
       {isAdmin ? (
         <SectionCard title="Configurações">

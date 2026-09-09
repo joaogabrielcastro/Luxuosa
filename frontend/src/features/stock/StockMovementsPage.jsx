@@ -17,11 +17,14 @@ import { Button } from "../../shared/components/ui/Button.jsx";
 import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
 import { Badge } from "../../shared/components/ui/Badge.jsx";
 import { StatCard } from "../../shared/components/ui/StatCard.jsx";
+import { ModuleNav } from "../../shared/components/ModuleNav.jsx";
+import { stockModuleItems } from "../../shared/navConfig.js";
 
 const VARIATIONS_LIST_Q = new URLSearchParams({ take: "500", skip: "0" }).toString();
 
 export function StockMovementsPage() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const isAdmin = user?.type === "ADMIN";
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const { refreshAfterStockMutation } = useInvalidateLuxuosa(token);
@@ -58,6 +61,7 @@ export function StockMovementsPage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!isAdmin) return;
     if (!form.productVariationId) {
       showToast("Selecione uma variacao.", "error");
       return;
@@ -103,9 +107,11 @@ export function StockMovementsPage() {
   return (
     <div className="ui-page">
       <PageHeader
-        title="Ajustar estoque"
-        description="Entrada ou saída manual. Notas de compra do fornecedor ficam em Entrada por NF-e."
+        title="Movimentações"
+        description="Entrada ou saída manual. Notas de compra do fornecedor ficam em Entradas."
       />
+      <ModuleNav items={stockModuleItems(isAdmin)} label="Estoque" />
+      {isAdmin ? (
       <div className="mb-1">
         <Link to="/estoque/importar-nfe">
           <Button type="button" variant="secondary" className="text-sm">
@@ -113,11 +119,13 @@ export function StockMovementsPage() {
           </Button>
         </Link>
       </div>
+      ) : null}
       <section className="grid gap-3 sm:grid-cols-3">
         <StatCard label="Movimentações na página" value={movements.length} />
         <StatCard label="Entradas" value={movements.filter((m) => m.type === "ENTRY").length} />
         <StatCard label="Saídas" value={movements.filter((m) => m.type === "EXIT").length} />
       </section>
+      {isAdmin ? (
       <SectionCard title="Nova movimentação">
         <p className="text-sm text-slate-600">
           Ajuste manual de estoque (entrada de mercadoria ou saída para uso interno). Vendas continuam baixando
@@ -165,6 +173,11 @@ export function StockMovementsPage() {
           </Button>
         </form>
       </SectionCard>
+      ) : (
+        <SectionCard title="Consulta">
+          <p className="text-sm text-slate-600">Somente administradores registram entrada ou saída manual.</p>
+        </SectionCard>
+      )}
 
       <SectionCard title="Histórico recente">
         <div className="mb-3 flex items-center justify-between text-xs text-slate-600">

@@ -48,5 +48,9 @@ export const queryKeys = {
     sales: (token, range) => ["reports", token, "sales", range],
     lowStock: (token) => ["reports", token, "lowStock"]
   },
+  dashboard: {
+    all: (token) => ["dashboard", token],
+    admin: (token) => ["dashboard", token, "admin"]
+  },
   namedResource: (resource, token) => [resource, token, "list"]
 };
