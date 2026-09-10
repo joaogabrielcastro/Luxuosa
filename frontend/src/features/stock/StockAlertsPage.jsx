@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../../shared/apiClient.js";
 import { useAuth } from "../auth/useAuth.jsx";
@@ -102,7 +103,14 @@ export function StockAlertsPage() {
     <div className="ui-page">
       <PageHeader
         title="Alertas de estoque"
-        description="Envia e-mail ou WhatsApp quando faltar produto. O mínimo se define em Produtos."
+        description="Dispara e-mail ou WhatsApp quando faltar produto. A lista do que repor fica em Estoque."
+        actions={
+          <Link to="/estoque">
+            <Button type="button" variant="secondary" className="text-sm">
+              Ver produtos abaixo do mínimo
+            </Button>
+          </Link>
+        }
       />
       <ModuleNav items={stockModuleItems(isAdmin)} label="Estoque" />
 

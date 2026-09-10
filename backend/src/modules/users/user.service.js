@@ -1,4 +1,6 @@
 import bcrypt from "bcryptjs";
+import { prisma } from "../../config/prisma.js";
+import { planMaxUsers } from "../../shared/planCatalog.js";
 import { userRepository, userPublicSelect } from "./user.repository.js";
 
 export const userService = {
@@ -16,6 +18,28 @@ export const userService = {
       const err = new Error("Ja existe um usuario com este e-mail nesta loja.");
       err.statusCode = 409;
       throw err;
+    }
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: true, planGateExempt: true }
+    });
+    if (!tenant) {
+      const err = new Error("Loja nao encontrada.");
+      err.statusCode = 404;
+      throw err;
+    }
+    const maxUsers = planMaxUsers(tenant);
+    if (maxUsers != null) {
+      const count = await userRepository.countByTenant(tenantId);
+      if (count >= maxUsers) {
+        const err = new Error(
+          `Limite de ${maxUsers} usuarios neste plano. Atualize em Assinatura.`
+        );
+        err.statusCode = 402;
+        err.code = "PLAN_UPGRADE_REQUIRED";
+        throw err;
+      }
     }
 
     const passwordHash = await bcrypt.hash(password, 10);

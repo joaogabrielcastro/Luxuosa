@@ -117,7 +117,8 @@ Obrigatório:
 | `STRIPE_SECRET_KEY` | Preferir `sk_live_...` só após homologar |
 | `STRIPE_WEBHOOK_SECRET` | Endpoint real no Dashboard Stripe |
 | `REDIS_URL` | Rate limit de login entre réplicas |
-| `NUVEM_FISCAL_*` | Ambiente `producao` alinhado ao console |
+| `NOTAAS_API_BASE` | API Notaas (NFC-e) |
+| `NOTAAS_AMBIENTE` | `homologacao` até autorizar; `producao` só depois |
 | `NFCE_PROCESS_IN_API=false` | API + worker separados |
 
 Webhook Stripe (Dashboard):
@@ -129,9 +130,9 @@ Webhook Stripe (Dashboard):
 
 | Plano | Preço (catálogo) | Libera |
 |-------|------------------|--------|
-| BASIC | Grátis | Catálogo, vendas, estoque, crediário |
-| PRO | R$ 97/mês | NFC-e (se `enableNfceEmission`), import NF-e |
-| ENTERPRISE | R$ 250/mês | Tudo do Pro + roadmap multi-loja |
+| BASIC | Grátis | Catálogo, vendas, estoque, crediário, até 3 usuários |
+| PRO | R$ 97/mês | NFC-e (se `enableNfceEmission`), import NF-e, alertas, até 10 usuários |
+| ENTERPRISE | R$ 250/mês | Tudo do Pro + troca de loja no mesmo e-mail, relatórios avançados, usuários ilimitados |
 
 **Clientes já existentes:** tenants com `planGateExempt=true` **não são bloqueados** por plano (NFC-e, import NF-e, alertas). A migração marca todas as lojas atuais como isentas; **novos cadastros** self-serve nascem com `planGateExempt=false` e passam pelo gate (BASIC → upgrade).
 
@@ -165,7 +166,6 @@ Habilitar emissão NFC-e **por loja** (`Tenant.enableNfceEmission`) só depois d
 
 ### Multi-tenant NFC-e (checklist Coolify / Notaas)
 
-- [ ] ~~Remover credenciais Nuvem Fiscal~~ (código Luxuosa não usa mais; limpar Coolify se ainda houver `NUVEM_FISCAL_*`)
 - [ ] Envs: `NOTAAS_API_BASE`, `NOTAAS_AMBIENTE`
 - [ ] Cada loja: projeto Notaas com o mesmo `Tenant.cnpj` + certificado/CSC no projeto + `Tenant.notaasApiKey`
 - [ ] Luxuosa Presentes: cadastrar no Notaas e gravar key (`PATCH /invoices/notaas-config` ou SQL)

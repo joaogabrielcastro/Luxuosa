@@ -194,7 +194,6 @@ Cada login usa o `Tenant` da loja. A emissão usa `Tenant.notaasApiKey` (projeto
 1. `Tenant.cnpj` = CNPJ real (14 dígitos).
 2. Projeto Notaas com o **mesmo CNPJ** + certificado/CSC.
 3. `Tenant.notaasApiKey` + `enableNfceEmission = true`.
-4. Remova `NUVEM_FISCAL_*` do Coolify se ainda existirem (código não usa mais).
 
 Se o mesmo e-mail existir em mais de uma loja, o login pede o **CNPJ da loja** para escolher o tenant certo.
 

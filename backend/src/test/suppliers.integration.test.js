@@ -53,5 +53,20 @@ describe("suppliers integration", { skip: !runDb }, () => {
     const get = await api(server.baseUrl, `/suppliers/${id}`, { token });
     assert.equal(get.status, 200);
     assert.equal(get.data.tradeName, "Forn Atualizado");
+
+    const badCnpj = await api(server.baseUrl, "/suppliers", {
+      method: "POST",
+      token,
+      body: { name: "Ruim", cnpj: "123" }
+    });
+    assert.equal(badCnpj.status, 400);
+    const dup = await api(server.baseUrl, "/suppliers", {
+      method: "POST",
+      token,
+      body: { name: "Outro", cnpj }
+    });
+    assert.equal(dup.status, 409);
+    const missing = await api(server.baseUrl, "/suppliers/clxxxxxxxxxxxxxxxxxxxx", { token });
+    assert.equal(missing.status, 404);
   });
 });

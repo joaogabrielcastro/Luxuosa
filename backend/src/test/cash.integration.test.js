@@ -87,6 +87,34 @@ describe("cash integration", { skip: !runDb }, () => {
     const list = await api(server.baseUrl, "/cash", { token: session.token });
     assert.equal(list.status, 200);
     assert.ok((list.data.items || []).some((row) => row.id === open.data.id));
+
+    const preview = await api(server.baseUrl, "/cash/preview", { token: session.token });
+    assert.equal(preview.status, 200);
+
+    const reopen = await api(server.baseUrl, "/cash/open", {
+      method: "POST",
+      token: session.token,
+      body: { openingFloat: 10 }
+    });
+    assert.equal(reopen.status, 201);
+    const dup = await api(server.baseUrl, "/cash/open", {
+      method: "POST",
+      token: session.token,
+      body: { openingFloat: 1 }
+    });
+    assert.equal(dup.status, 409);
+    const closeMissing = await api(server.baseUrl, "/cash/clxxxxxxxxxxxxxxxxxxxx/close", {
+      method: "POST",
+      token: session.token,
+      body: { countedCash: 0 }
+    });
+    assert.equal(closeMissing.status, 404);
+    const closeAgain = await api(server.baseUrl, `/cash/${open.data.id}/close`, {
+      method: "POST",
+      token: session.token,
+      body: { countedCash: 0 }
+    });
+    assert.equal(closeAgain.status, 409);
   });
 
   it("atendente nao abre caixa", async () => {

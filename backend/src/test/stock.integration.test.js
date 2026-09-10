@@ -63,5 +63,23 @@ describe("stock integration", { skip: !runDb }, () => {
       where: { id: catalog.variationId, tenantId: session.tenantId }
     });
     assert.equal(unchanged.stock, 3);
+
+    const listed = await api(server.baseUrl, "/stock-movements", { token: session.token });
+    assert.equal(listed.status, 200);
+    assert.ok(Array.isArray(listed.data) || Array.isArray(listed.data?.items));
+
+    const entry = await api(server.baseUrl, "/stock-movements", {
+      method: "POST",
+      token: session.token,
+      body: { productVariationId: catalog.variationId, type: "ENTRY", quantity: 1 }
+    });
+    assert.equal(entry.status, 201);
+
+    const missing = await api(server.baseUrl, "/stock-movements", {
+      method: "POST",
+      token: session.token,
+      body: { productVariationId: "clxxxxxxxxxxxxxxxxxxxx", type: "ENTRY", quantity: 1 }
+    });
+    assert.equal(missing.status, 404);
   });
 });

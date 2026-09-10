@@ -4,10 +4,10 @@
   "description": "Monorepo: use npm run na raiz para Prisma (delega para backend/).",
   "scripts": {
     "build": "npm run build --prefix frontend",
-    "check": "npm run build --prefix frontend && npm run check:backend --prefix backend && npm run test:all --prefix backend",
-    "test": "npm test --prefix backend",
+    "check": "npm run build --prefix frontend && npm run check:backend --prefix backend && npm run test:all --prefix backend && npm test --prefix frontend",
+    "test": "npm test --prefix backend && npm test --prefix frontend",
     "test:integration": "npm run test:integration --prefix backend",
-    "test:coverage": "npm run test:coverage --prefix backend",
+    "test:coverage": "npm run test:coverage --prefix backend && npm run test:coverage --prefix frontend",
     "test:e2e": "npm run test:e2e --prefix frontend",
     "prisma:generate": "cd backend && npx prisma generate",
     "prisma:migrate": "cd backend && npx prisma migrate dev",

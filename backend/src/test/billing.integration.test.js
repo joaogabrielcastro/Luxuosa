@@ -50,5 +50,16 @@ describe("billing integration", { skip: !runDb }, () => {
     assert.equal(sync.status, 200);
     assert.ok(sync.data.currentPlan);
     assert.equal(typeof sync.data.configured, "boolean");
+
+    const status = await api(server.baseUrl, "/billing/status", { token });
+    assert.equal(status.status, 200);
+    assert.equal(status.data.currentPlan, "BASIC");
+    assert.equal(typeof status.data.entitlements?.nfeImport, "boolean");
+
+    const webhook = await api(server.baseUrl, "/billing/webhook", {
+      method: "POST",
+      body: { type: "ping" }
+    });
+    assert.ok([400, 500, 503].includes(webhook.status), `webhook status ${webhook.status}`);
   });
 });

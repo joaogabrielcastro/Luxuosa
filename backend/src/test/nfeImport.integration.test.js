@@ -133,6 +133,22 @@ describe("nfeImport integration", { skip: !runDb }, () => {
     const rows = list.data.items || list.data;
     assert.ok(Array.isArray(rows));
     assert.ok(rows.length >= 1);
+
+    const detail = await api(server.baseUrl, `/nfe-imports/${confirm.data.id}`, {
+      token: session.token
+    });
+    assert.equal(detail.status, 200);
+    const missingImport = await api(server.baseUrl, "/nfe-imports/clxxxxxxxxxxxxxxxxxxxx", {
+      token: session.token
+    });
+    assert.equal(missingImport.status, 404);
+
+    const dup = await api(server.baseUrl, "/nfe-imports/preview", {
+      method: "POST",
+      token: session.token,
+      body: { xmlContent }
+    });
+    assert.equal(dup.status, 409);
   });
 
   it("create sem categoria/marca retorna 400", async () => {

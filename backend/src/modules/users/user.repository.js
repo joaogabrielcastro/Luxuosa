@@ -30,6 +30,10 @@ class UserRepository extends BaseTenantRepository {
     return this.findUniqueById(tenantId, id, { select: userPublicSelect });
   }
 
+  countByTenant(tenantId) {
+    return this.model.count({ where: { tenantId } });
+  }
+
   countAdmins(tenantId, excludeUserId) {
     return this.model.count({
       where: {

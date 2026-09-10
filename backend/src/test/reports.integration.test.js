@@ -70,5 +70,12 @@ describe("reports integration", { skip: !runDb }, () => {
     const low = await api(server.baseUrl, "/reports/low-stock", { token: session.token });
     assert.equal(low.status, 200);
     assert.ok(Array.isArray(low.data.items) || Array.isArray(low.data));
+
+    const bad = await api(server.baseUrl, "/reports/sales?from=2026-09-10&to=2026-09-01", {
+      token: session.token
+    });
+    assert.equal(bad.status, 400);
+    const missingRange = await api(server.baseUrl, "/reports/sales", { token: session.token });
+    assert.equal(missingRange.status, 400);
   });
 });

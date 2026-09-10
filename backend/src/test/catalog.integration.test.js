@@ -110,11 +110,47 @@ describe("catalog integration", { skip: !runDb }, () => {
     const lowItems = Array.isArray(low.data) ? low.data : low.data.items || [];
     assert.ok(lowItems.some((p) => p.id === productId || p.productId === productId));
 
-    const varDel = await api(server.baseUrl, `/product-variations/${variationId}`, {
-      method: "DELETE",
-      token
+    const listed = await api(server.baseUrl, `/products?categoryId=${categoryId}&brandId=${brandId}`, { token });
+    assert.equal(listed.status, 200);
+    assert.ok((listed.data.items || []).some((p) => p.id === productId));
+
+    const listedQ = await api(server.baseUrl, `/products?q=Prod`, { token });
+    assert.equal(listedQ.status, 200);
+
+    const byId = await api(server.baseUrl, `/products/${productId}`, { token });
+    assert.equal(byId.status, 200);
+    assert.equal(byId.data.id, productId);
+
+    const missing = await api(server.baseUrl, "/products/clxxxxxxxxxxxxxxxxxxxx", { token });
+    assert.equal(missing.status, 404);
+
+    const badCat = await api(server.baseUrl, "/products", {
+      method: "POST",
+      token,
+      body: {
+        name: `Prod Bad ${Date.now()}`,
+        price: 10,
+        cost: 1,
+        categoryId: "clxxxxxxxxxxxxxxxxxxxx",
+        brandId,
+        minStock: 1
+      }
     });
-    assert.equal(varDel.status, 204);
+    assert.equal(badCat.status, 400);
+
+    const vars = await api(
+      server.baseUrl,
+      `/product-variations?q=${encodeURIComponent(product.data.name)}&productId=${productId}&categoryId=${categoryId}&brandId=${brandId}`,
+      { token }
+    );
+    assert.equal(vars.status, 200);
+
+    const keepVar = await api(server.baseUrl, "/product-variations", {
+      method: "POST",
+      token,
+      body: { productId, size: "P", color: "Azul", stock: 1 }
+    });
+    assert.equal(keepVar.status, 201);
 
     const prodDel = await api(server.baseUrl, `/products/${productId}`, {
       method: "DELETE",
@@ -144,5 +180,63 @@ describe("catalog integration", { skip: !runDb }, () => {
     });
     assert.equal(listed.status, 200);
     assert.equal(listed.data.stock, 7);
+  });
+
+  it("404s, variacao inconsistente e exclusao", async () => {
+    const session = await registerTenant(server.baseUrl);
+    tenantIds.push(session.tenantId);
+    const catalog = await seedCatalog(server.baseUrl, session.token, { stock: 3 });
+
+    const missingBrand = await api(server.baseUrl, "/brands/clxxxxxxxxxxxxxxxxxxxx", {
+      token: session.token
+    });
+    assert.equal(missingBrand.status, 404);
+    const missingCat = await api(server.baseUrl, "/categories/clxxxxxxxxxxxxxxxxxxxx", {
+      token: session.token
+    });
+    assert.equal(missingCat.status, 404);
+    const brandGet = await api(server.baseUrl, `/brands/${catalog.brandId}`, { token: session.token });
+    assert.equal(brandGet.status, 200);
+
+    const badVar = await api(server.baseUrl, "/product-variations", {
+      method: "POST",
+      token: session.token,
+      body: { productId: catalog.productId, size: "G", color: "", stock: 1 }
+    });
+    assert.equal(badVar.status, 400);
+
+    const defVar = await api(server.baseUrl, "/product-variations", {
+      method: "POST",
+      token: session.token,
+      body: { productId: catalog.productId, size: "", color: "", stock: 1 }
+    });
+    assert.ok([200, 201, 400, 409].includes(defVar.status));
+
+    const missingVar = await api(server.baseUrl, "/product-variations/clxxxxxxxxxxxxxxxxxxxx", {
+      token: session.token
+    });
+    assert.equal(missingVar.status, 404);
+
+    const extra = await api(server.baseUrl, "/product-variations", {
+      method: "POST",
+      token: session.token,
+      body: { productId: catalog.productId, size: "GG", color: "Vermelho", stock: 1 }
+    });
+    assert.equal(extra.status, 201);
+    const del = await api(server.baseUrl, `/product-variations/${extra.data.id}`, {
+      method: "DELETE",
+      token: session.token
+    });
+    assert.equal(del.status, 204);
+
+    await api(server.baseUrl, `/brands/cxxxxxxxxxxxxxxxxxxxxxxx`, {
+      method: "PUT",
+      token: session.token,
+      body: { name: "X" }
+    }).then((res) => assert.ok([400, 404].includes(res.status)));
+    await api(server.baseUrl, `/categories/cxxxxxxxxxxxxxxxxxxxxxxx`, {
+      method: "DELETE",
+      token: session.token
+    }).then((res) => assert.ok([400, 404].includes(res.status)));
   });
 });

@@ -1,13 +1,10 @@
-import { createRequire } from "node:module";
+import { ZipArchive } from "archiver";
 import { InvoiceStatus, NfeImportStatus, SaleStatus } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
 import { env } from "../../config/env.js";
 import { getNfeDanfe, getNfeXml } from "../../shared/notaas/notaasApi.js";
 import { formatCnpjBr } from "../../shared/fiscal/tenantEmitente.js";
 import { formatMoneyBRL, parseFiscalMonth, safeFileName } from "./fiscalClosingMonth.js";
-
-const require = createRequire(import.meta.url);
-const archiver = require("archiver");
 
 function round2(n) {
   return Math.round(Number(n) * 100) / 100;
@@ -280,7 +277,7 @@ export const fiscalClosingService = {
     let nfcePdfCount = 0;
     let nfeEntradaXmlCount = 0;
 
-    const archive = archiver("zip", { zlib: { level: 6 } });
+    const archive = new ZipArchive({ zlib: { level: 6 } });
     const chunks = [];
     archive.on("data", (chunk) => chunks.push(chunk));
 

@@ -26,7 +26,8 @@ export function SalesTableCard({
   cancelSale,
   setNfceErrorDetail,
   enableNfceEmission = true,
-  canManageSales = true
+  canManageSales = true,
+  fiscalMode = false
 }) {
   const canPrev = salesSkip > 0;
   const canNext = salesSkip + salesTake < totalSales;
@@ -36,7 +37,7 @@ export function SalesTableCard({
     { key: "amount", label: "Total" },
     { key: "payment", label: "Pagamento" },
     { key: "status", label: "Status" },
-    ...(enableNfceEmission ? [{ key: "nfce", label: "Nota fiscal" }] : []),
+    ...(enableNfceEmission || fiscalMode ? [{ key: "nfce", label: "Nota fiscal" }] : []),
     { key: "actions", label: "Acoes" }
   ];
 
@@ -55,7 +56,7 @@ export function SalesTableCard({
       ],
       matcher: (row, value) => row.paymentMethod === value
     },
-    ...(enableNfceEmission
+    ...(enableNfceEmission || fiscalMode
       ? [
           {
             id: "nfce",
@@ -87,7 +88,7 @@ export function SalesTableCard({
   return (
     <>
       <SectionCard
-        title="Ultimas vendas"
+        title={fiscalMode ? "Documentos fiscais" : "Ultimas vendas"}
         actions={
           <div className="flex items-center gap-2 text-xs text-slate-600">
             <span>
@@ -123,7 +124,7 @@ export function SalesTableCard({
       search={{
         query: search,
         onQueryChange: setSearch,
-        placeholder: enableNfceEmission
+        placeholder: enableNfceEmission || fiscalMode
           ? "Buscar por pagamento ou nota fiscal..."
           : "Buscar por pagamento ou status...",
         matcher: (row, q) => {
@@ -146,7 +147,7 @@ export function SalesTableCard({
           <td className="py-2">
             <Badge variant={saleStatusVariant(sale.status)}>{saleStatusLabel(sale.status)}</Badge>
           </td>
-          {enableNfceEmission ? (
+          {enableNfceEmission || fiscalMode ? (
           <td className="max-w-[220px] py-2 align-top text-xs">
               <>
             {sale.nfceJob?.status && sale.nfceJob.status !== "COMPLETED" ? (
@@ -160,7 +161,7 @@ export function SalesTableCard({
             {!sale.invoice ? (
               <div className="space-y-1">
                 <span className="text-slate-500">Aguardando NFC-e...</span>
-                {enableNfceEmission && canManageSales && sale.status === "PAID" ? (
+                {(enableNfceEmission || fiscalMode) && canManageSales && sale.status === "PAID" ? (
                   <Button
                     type="button"
                     variant="secondary"
@@ -187,7 +188,7 @@ export function SalesTableCard({
                   disabled={loading}
                   onClick={() => downloadNfcePdf(sale.id)}
                 >
-                  Baixar PDF da NFC-e
+                  {fiscalMode ? "Baixar PDF" : "Baixar PDF da NFC-e"}
                 </Button>
               </div>
             ) : sale.invoice.status === "ERROR" ? (
@@ -210,7 +211,7 @@ export function SalesTableCard({
                     Ver mensagem completa
                   </button>
                 ) : null}
-                {enableNfceEmission && canManageSales && sale.status === "PAID" ? (
+                {(enableNfceEmission || fiscalMode) && canManageSales && sale.status === "PAID" ? (
                   <Button
                     type="button"
                     variant="secondary"
@@ -218,14 +219,14 @@ export function SalesTableCard({
                     disabled={loading}
                     onClick={() => retryNfce(sale.id)}
                   >
-                    Tentar NFC-e novamente
+                    {fiscalMode ? "Emitir / tentar de novo" : "Tentar NFC-e novamente"}
                   </Button>
                 ) : null}
               </div>
             ) : (
               <span className="text-amber-700">Enviando NFC-e para SEFAZ...</span>
             )}
-            {enableNfceEmission && canManageSales && sale.status === "PAID" && sale.invoice?.status === "PENDING" ? (
+            {(enableNfceEmission || fiscalMode) && canManageSales && sale.status === "PAID" && sale.invoice?.status === "PENDING" ? (
               <Button
                 type="button"
                 variant="secondary"
@@ -240,7 +241,9 @@ export function SalesTableCard({
           </td>
           ) : null}
           <td className="py-2">
-            {canManageSales && sale.status !== "CANCELED" ? (
+            {fiscalMode ? (
+              <span className="text-xs text-slate-500">PDF e reemissão na nota</span>
+            ) : canManageSales && sale.status !== "CANCELED" ? (
               <div className="inline-flex gap-2">
                 <Button variant="secondary" className="px-1.5 py-1 text-[11px]" onClick={() => editSale(sale)}>
                   Editar

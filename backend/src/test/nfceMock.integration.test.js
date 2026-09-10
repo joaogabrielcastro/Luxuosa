@@ -60,12 +60,31 @@ describe("nfce mock integration", { skip: !runDb }, () => {
     });
     assert.equal(issue.status, 201, JSON.stringify(issue.data));
     assert.equal(issue.data.status, "ISSUED");
-    assert.ok(issue.data.externalId?.startsWith("mock_"));
+    assert.ok(issue.data.externalId?.startsWith("inv_mock_"));
     assert.ok(issue.data.key);
 
     const invoice = await prisma.invoice.findFirst({
       where: { tenantId: session.tenantId, saleId: sale.data.id }
     });
     assert.equal(invoice?.status, "ISSUED");
+
+    const pdf = await fetch(
+      `${server.baseUrl}/invoices/sale/${sale.data.id}/pdf`,
+      { headers: { Authorization: `Bearer ${session.token}` } }
+    );
+    assert.ok([200, 502, 404].includes(pdf.status));
+
+    const cfg = await api(server.baseUrl, "/invoices/notaas-config", {
+      method: "PATCH",
+      token: session.token,
+      body: { notaasApiKey: "ntaas_mock_cfg", enableNfceEmission: true }
+    });
+    assert.equal(cfg.status, 200);
+    assert.equal(cfg.data.enableNfceEmission, true);
+
+    const job = await api(server.baseUrl, `/invoices/sale/${sale.data.id}/job`, {
+      token: session.token
+    });
+    assert.ok([200, 404].includes(job.status));
   });
 });

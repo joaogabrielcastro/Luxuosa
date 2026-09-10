@@ -49,6 +49,25 @@ export const authController = {
     return res.status(204).send();
   },
 
+  async stores(req, res, next) {
+    try {
+      const data = await authService.listStores(req.user.id, req.tenantId);
+      return res.json(data);
+    } catch (error) {
+      return next(error);
+    }
+  },
+
+  async switchStore(req, res, next) {
+    try {
+      const data = z.object({ tenantId: z.string().min(1) }).parse(req.body);
+      const result = await authService.switchStore(req.user.id, req.tenantId, data.tenantId);
+      return res.json(result);
+    } catch (error) {
+      return next(error);
+    }
+  },
+
   async me(req, res, next) {
     try {
       const { tenant, user } = await authService.me(req.tenantId, req.user.id);

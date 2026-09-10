@@ -101,13 +101,54 @@ export function StockOverviewPage() {
 
       <SectionCard
         title="O que precisa repor"
-        description="Comparado ao mínimo cadastrado em cada produto."
+        description="Comparado ao mínimo cadastrado em cada produto. Esta é a lista da loja."
         actions={
-          <Link to="/relatorios">
-            <Button type="button" variant="secondary" className="text-xs">
-              Ver em Relatórios
+          <div className="flex flex-wrap gap-2">
+            {isAdmin ? (
+              <Link to="/estoque/alertas">
+                <Button type="button" variant="secondary" className="text-xs">
+                  Disparar avisos
+                </Button>
+              </Link>
+            ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              className="text-xs"
+              disabled={!lowItems.length}
+              onClick={() => {
+                const rows = [["name", "sku", "currentStock", "minStock", "severity"]];
+                for (const item of lowItems) {
+                  rows.push([
+                    item.name,
+                    item.sku || "",
+                    item.currentStock,
+                    item.minStock,
+                    item.severity || ""
+                  ]);
+                }
+                const body = rows
+                  .map((row) =>
+                    row
+                      .map((value) => {
+                        const s = String(value ?? "");
+                        return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+                      })
+                      .join(",")
+                  )
+                  .join("\r\n");
+                const blob = new Blob(["\uFEFF" + body], { type: "text/csv;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "estoque_baixo.csv";
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >
+              Exportar CSV
             </Button>
-          </Link>
+          </div>
         }
       >
         {lowStockQuery.isLoading ? (

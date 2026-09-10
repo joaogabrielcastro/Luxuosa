@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseFiscalMonth, safeFileName } from "./fiscalClosingMonth.js";
+import { parseFiscalMonth, safeFileName, formatMoneyBRL } from "./fiscalClosingMonth.js";
 
 describe("parseFiscalMonth", () => {
   it("resolve agosto/2026", () => {
@@ -15,10 +15,21 @@ describe("parseFiscalMonth", () => {
   it("rejeita mes invalido", () => {
     assert.throws(() => parseFiscalMonth(2026, 13), (err) => err.statusCode === 400);
   });
+
+  it("rejeita ano invalido", () => {
+    assert.throws(() => parseFiscalMonth(1999, 1), (err) => err.statusCode === 400);
+  });
+});
+
+describe("formatMoneyBRL", () => {
+  it("formata zero", () => {
+    assert.ok(formatMoneyBRL(0).includes("0"));
+  });
 });
 
 describe("safeFileName", () => {
   it("remove caracteres perigosos", () => {
     assert.equal(safeFileName("Loja/Luxuosa*"), "Loja_Luxuosa_");
+    assert.equal(safeFileName(""), "arquivo");
   });
 });

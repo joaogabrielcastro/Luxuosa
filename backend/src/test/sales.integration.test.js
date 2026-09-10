@@ -139,4 +139,38 @@ describe("sales integration", { skip: !runDb }, () => {
     });
     assert.equal(variation.stock, 2);
   });
+
+  it("nao cancela venda com NFC-e autorizada", async () => {
+    const session = await registerTenant(server.baseUrl);
+    tenantIds.push(session.tenantId);
+    const catalog = await seedCatalog(server.baseUrl, session.token, { stock: 4, price: 25 });
+
+    const sale = await api(server.baseUrl, "/sales", {
+      method: "POST",
+      token: session.token,
+      body: {
+        paymentMethod: "PIX",
+        installments: 1,
+        emitNfce: false,
+        items: [{ productVariationId: catalog.variationId, quantity: 1, unitPrice: 25 }]
+      }
+    });
+    assert.equal(sale.status, 201);
+
+    await prisma.invoice.create({
+      data: {
+        tenantId: session.tenantId,
+        saleId: sale.data.id,
+        status: "ISSUED",
+        key: "41240000000000000000000000000000000000000000",
+        externalId: `inv_lock_${sale.data.id}`
+      }
+    });
+
+    const cancel = await api(server.baseUrl, `/sales/${sale.data.id}/cancel`, {
+      method: "POST",
+      token: session.token
+    });
+    assert.equal(cancel.status, 409);
+  });
 });

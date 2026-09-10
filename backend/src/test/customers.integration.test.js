@@ -68,5 +68,19 @@ describe("customers integration", { skip: !runDb }, () => {
 
     const missing = await api(server.baseUrl, `/customers/${id}`, { token });
     assert.equal(missing.status, 404);
+
+    const search = await api(server.baseUrl, "/customers?q=Maria", { token });
+    assert.equal(search.status, 200);
+    const updMissing = await api(server.baseUrl, "/customers/cxxxxxxxxxxxxxxxxxxxxxxx", {
+      method: "PUT",
+      token,
+      body: { name: "X" }
+    });
+    assert.ok([400, 404].includes(updMissing.status));
+    const delMissing = await api(server.baseUrl, "/customers/cxxxxxxxxxxxxxxxxxxxxxxx", {
+      method: "DELETE",
+      token
+    });
+    assert.ok([400, 404].includes(delMissing.status));
   });
 });

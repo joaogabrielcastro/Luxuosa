@@ -69,5 +69,20 @@ describe("stock alerts integration", { skip: !runDb }, () => {
     const emailLog = items.find((row) => row.channel === "email" && row.productId === catalog.productId);
     assert.ok(emailLog);
     assert.equal(emailLog.status, "logged");
+
+    const updated = await api(server.baseUrl, "/stock-alerts/settings", {
+      method: "PUT",
+      token: session.token,
+      body: { enabled: false, email: "", phone: "11999999999", minSeverity: "critical", cooldownMin: 60 }
+    });
+    assert.equal(updated.status, 200);
+    assert.equal(updated.data.enabled, false);
+
+    const disabledRun = await api(server.baseUrl, "/stock-alerts/run", {
+      method: "POST",
+      token: session.token
+    });
+    assert.equal(disabledRun.status, 200);
+    assert.equal(disabledRun.data.ran, false);
   });
 });

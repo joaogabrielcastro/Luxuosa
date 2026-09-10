@@ -12,6 +12,7 @@ import { Button } from "../../shared/components/ui/Button.jsx";
 import { StatCard } from "../../shared/components/ui/StatCard.jsx";
 import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
 import { FormErrorSummary } from "../../shared/components/FormErrorSummary.jsx";
+import { paymentLabel } from "../sales/sales.utils.js";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 function defaultFromTo() {
@@ -37,12 +38,6 @@ function downloadCsv(filename, rows) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
-}
-
-function severityLabel(severity) {
-  if (severity === "critical") return "Crítico (zerado)";
-  if (severity === "low") return "Baixo";
-  return severity || "";
 }
 
 export function ReportsPage() {
@@ -71,6 +66,7 @@ export function ReportsPage() {
   const lowStock = lowStockQuery.data ?? null;
   const error = salesQuery.error || lowStockQuery.error;
   const loading = salesQuery.isFetching || lowStockQuery.isFetching;
+  const advanced = salesReport?.advanced || null;
 
   async function applyRange(e) {
     e.preventDefault();
@@ -104,11 +100,23 @@ export function ReportsPage() {
     downloadCsv("estoque_baixo.csv", rows);
   }
 
+  function exportMixCsv() {
+    if (!salesReport) return;
+    const rows = [["tipo", "nome", "count", "amount"]];
+    for (const row of salesReport.byPayment || []) {
+      rows.push(["pagamento", paymentLabel(row.method), row.count, Number(row.amount || 0).toFixed(2)]);
+    }
+    for (const row of salesReport.byAttendant || []) {
+      rows.push(["atendente", row.name, row.sales, Number(row.amount || 0).toFixed(2)]);
+    }
+    downloadCsv(`mix_${appliedRange.from}_${appliedRange.to}.csv`, rows);
+  }
+
   return (
     <div className="ui-page">
       <PageHeader
         title="Relatórios"
-        description="Veja vendas por período e produtos em falta no estoque."
+        description="Intervalo à escolha, com gráfico, mix de pagamento e exportação CSV. A lista de reposição fica em Estoque."
       />
       <SectionCard title="Vendas por período">
         <form className="mt-3 flex flex-wrap items-end gap-3" onSubmit={applyRange}>
@@ -145,6 +153,7 @@ export function ReportsPage() {
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard label="Vendas (pagas)" value={salesReport.saleCount} />
             <StatCard label="Total no período" value={formatCurrencyBRL(salesReport.totalAmount)} />
+            <StatCard label="Ticket médio" value={formatCurrencyBRL(salesReport.ticketAverage || 0)} />
           </div>
         ) : null}
         {salesReport?.byDay?.length ? (
@@ -184,10 +193,114 @@ export function ReportsPage() {
         ) : null}
       </SectionCard>
 
+      <SectionCard
+        title="Pagamento e atendentes"
+        actions={
+          <Button
+            type="button"
+            variant="secondary"
+            className="text-xs"
+            disabled={!salesReport?.byPayment?.length && !salesReport?.byAttendant?.length}
+            onClick={exportMixCsv}
+          >
+            Exportar mix
+          </Button>
+        }
+      >
+        {salesReport?.byPayment?.length || salesReport?.byAttendant?.length ? (
+          <div className="mt-3 grid gap-4 lg:grid-cols-2">
+            <div>
+              <h3 className="mb-2 text-sm font-medium text-slate-700">Por pagamento</h3>
+              <ul className="space-y-1 text-sm">
+                {(salesReport.byPayment || []).map((row) => (
+                  <li key={row.method} className="flex justify-between rounded border border-slate-100 px-2 py-1">
+                    <span>{paymentLabel(row.method)}</span>
+                    <span>
+                      {row.count} · {formatCurrencyBRL(row.amount)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3 className="mb-2 text-sm font-medium text-slate-700">Por atendente</h3>
+              <ul className="space-y-1 text-sm">
+                {(salesReport.byAttendant || []).map((row) => (
+                  <li key={row.userId || row.name} className="flex justify-between rounded border border-slate-100 px-2 py-1">
+                    <span>{row.name}</span>
+                    <span>
+                      {row.sales} · {formatCurrencyBRL(row.amount)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        ) : (
+          <EmptyState description="Sem vendas pagas neste intervalo para montar o mix." />
+        )}
+      </SectionCard>
+
+      {advanced ? (
+        <SectionCard title="Análise Enterprise">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-slate-100 px-3 py-2 text-sm">
+              <p className="text-xs font-medium text-slate-500">Período anterior</p>
+              <p className="mt-1 font-semibold text-slate-900">
+                {advanced.previous.saleCount} vendas · {formatCurrencyBRL(advanced.previous.totalAmount)}
+              </p>
+              <p className="text-xs text-slate-500">
+                {formatDateBR(advanced.previous.from)} – {formatDateBR(advanced.previous.to)}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-100 px-3 py-2 text-sm">
+              <p className="text-xs font-medium text-slate-500">Este período</p>
+              <p className="mt-1 font-semibold text-slate-900">
+                {salesReport.saleCount} vendas · {formatCurrencyBRL(salesReport.totalAmount)}
+              </p>
+            </div>
+          </div>
+          {advanced.profitByProduct?.length ? (
+            <div className="mt-4">
+              <h3 className="mb-2 text-sm font-medium text-slate-700">Lucro por produto</h3>
+              <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
+                {advanced.profitByProduct.map((row) => (
+                  <li key={row.productId} className="flex justify-between rounded border border-slate-100 px-2 py-1">
+                    <span>{row.name}</span>
+                    <span>{formatCurrencyBRL(row.profit)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {advanced.productsWithoutSales?.length ? (
+            <div className="mt-4">
+              <h3 className="mb-2 text-sm font-medium text-slate-700">Sem venda no período</h3>
+              <ul className="max-h-40 space-y-1 overflow-y-auto text-sm text-slate-700">
+                {advanced.productsWithoutSales.map((row) => (
+                  <li key={row.productId}>{row.name}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </SectionCard>
+      ) : (
+        <SectionCard title="Análise Enterprise">
+          <p className="mt-2 text-sm text-slate-600">
+            Lucro no intervalo, comparação com o período anterior e produtos parados entram no plano Enterprise.
+          </p>
+          <Link to="/assinatura" className="mt-2 inline-block text-sm text-violet-700 hover:underline">
+            Ver planos
+          </Link>
+        </SectionCard>
+      )}
+
       <SectionCard title="Estoque abaixo do mínimo">
         <div className="mt-1 flex flex-wrap items-start justify-between gap-2">
           <p className="text-sm text-slate-600">
-            Soma das variações por produto comparada ao estoque mínimo cadastrado no produto.
+            {lowStock?.count
+              ? `${lowStock.count} produto(s) para repor. A lista interativa está em Estoque.`
+              : "Nenhum produto abaixo do mínimo no momento."}
           </p>
           <Button
             type="button"
@@ -199,37 +312,12 @@ export function ReportsPage() {
             Exportar CSV
           </Button>
         </div>
-        {lowStock?.items?.length ? (
-          <ul className="mt-3 space-y-2 text-sm">
-            {lowStock.items.map((item) => {
-              const critical = item.severity === "critical" || Number(item.currentStock) === 0;
-              return (
-                <li
-                  key={item.id}
-                  className={`rounded border px-3 py-2 ${
-                    critical
-                      ? "border-rose-300 bg-rose-50 text-rose-950"
-                      : "border-amber-200 bg-amber-50 text-amber-950"
-                  }`}
-                >
-                  <strong>{item.name}</strong>
-                  {item.sku ? ` (${item.sku})` : null}
-                  {item.category ? <span className="text-slate-600"> — {item.category}</span> : null}
-                  {item.brand ? <span className="text-slate-600"> · {item.brand}</span> : null}
-                  <div className="text-xs opacity-90">
-                    Atual: {item.currentStock} / mínimo: {item.minStock}
-                    {item.severity ? ` · ${severityLabel(item.severity)}` : ""}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <EmptyState description="Nenhum produto abaixo do mínimo no momento." />
-        )}
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
           <Link to="/estoque" className="text-violet-700 hover:underline">
-            Ver estoque
+            Ver o que repor
+          </Link>
+          <Link to="/estoque/alertas" className="text-violet-700 hover:underline">
+            Disparar avisos
           </Link>
         </div>
       </SectionCard>

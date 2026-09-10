@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import { fillDailySeries, lastDayDelta, rangeForPreset } from "./periodRange.js";
 
 describe("periodRange", () => {
@@ -33,5 +33,18 @@ describe("periodRange", () => {
       { amount: 150, count: 1 }
     ]);
     assert.equal(delta.percent, 50);
+  });
+
+  it("semana e 30 dias a partir da data informada", () => {
+    const week = rangeForPreset("week", new Date(2026, 8, 9));
+    assert.equal(week.to, "2026-09-09");
+    assert.equal(week.from, "2026-09-07");
+    const thirty = rangeForPreset("30d", new Date(2026, 8, 9));
+    assert.equal(thirty.to, "2026-09-09");
+    assert.equal(thirty.from, "2026-08-11");
+  });
+
+  it("fillDailySeries ignora intervalo invertido", () => {
+    assert.deepEqual(fillDailySeries("2026-09-10", "2026-09-01", []), []);
   });
 });

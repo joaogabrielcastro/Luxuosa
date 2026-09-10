@@ -10,7 +10,6 @@ import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
 import { StatCard } from "../../shared/components/ui/StatCard.jsx";
 import { Alert } from "../../shared/components/ui/Alert.jsx";
 import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
-import { Badge } from "../../shared/components/ui/Badge.jsx";
 import { queryKeys } from "../../shared/queryKeys.js";
 import { paymentLabel } from "../sales/sales.utils.js";
 import {
@@ -223,7 +222,6 @@ function AdminDashboardBody() {
   }, [openCreditQuery.data]);
 
   const attendants = data.salesByAttendant || [];
-  const lowItems = (data.lowStockItems || []).slice(0, 6);
   const lastSales = data.lastSales || [];
   const idleProducts = (data.productsWithoutSales || []).slice(0, 5);
 
@@ -443,37 +441,26 @@ function AdminDashboardBody() {
         </SectionCard>
 
         <SectionCard
-          title="Estoque baixo"
-          description="Mesma regra de Produtos: estoque total da variação vs mínimo do produto."
-          actions={<TextLink to="/estoque">Ver estoque</TextLink>}
+          title="Estoque"
+          description="O recorte do dia. A lista do que repor fica em Estoque."
+          actions={<TextLink to="/estoque">Ver o que repor</TextLink>}
         >
-          {lowItems.length ? (
-            <ul className="space-y-2">
-              {lowItems.map((item) => {
-                const zero = Number(item.currentStock) === 0;
-                return (
-                  <li
-                    key={item.id}
-                    className={`rounded-lg border px-3 py-2 text-sm ${
-                      zero ? "border-rose-200 bg-rose-50" : "border-amber-200 bg-amber-50"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-slate-900">{item.name}</span>
-                      <Badge variant={zero ? "danger" : "warning"}>{zero ? "Zerado" : "Baixo"}</Badge>
-                    </div>
-                    <p className="mt-0.5 text-xs text-slate-600">
-                      Atual <strong>{item.currentStock}</strong> · mínimo <strong>{item.minStock}</strong>
-                    </p>
-                  </li>
-                );
-              })}
-            </ul>
+          {data.lowStockCount > 0 ? (
+            <Alert
+              variant={criticalCount ? "danger" : "warning"}
+              title={
+                criticalCount
+                  ? `${criticalCount} produto(s) sem estoque`
+                  : `${data.lowStockCount} produto(s) abaixo do mínimo`
+              }
+            >
+              <TextLink to="/estoque">Abrir lista de reposição</TextLink>
+            </Alert>
           ) : (
             <EmptyState
               compact
               title="Nada abaixo do mínimo"
-              description="Quando um produto ficar no mínimo ou zerado, ele entra nesta lista."
+              description="Quando um produto ficar no mínimo ou zerado, o aviso aparece aqui e a lista em Estoque."
               actions={
                 <Link to="/estoque/movimentos" className="ui-btn ui-btn-secondary text-sm">
                   Ajustar estoque

@@ -36,7 +36,7 @@ export const PLAN_CATALOG = {
     description: "Catalogo, vendas, estoque manual e crediario.",
     priceLabel: "Gratis",
     amountCents: 0,
-    features: ["Catalogo e variacoes", "Vendas e estoque", "Crediario", "1–2 usuarios (manual)"]
+    features: ["Catalogo e variacoes", "Vendas e estoque", "Crediario", "Ate 3 usuarios"]
   },
   PRO: {
     id: "PRO",
@@ -48,17 +48,33 @@ export const PLAN_CATALOG = {
       "Tudo do Basico",
       "Emissao NFC-e (quando habilitada na loja)",
       "Importacao de NF-e de entrada",
-      "Relatorios e exportacao"
+      "Relatorios e exportacao",
+      "Ate 10 usuarios"
     ]
   },
   ENTERPRISE: {
     id: "ENTERPRISE",
     name: "Enterprise",
-    description: "Multi-loja, suporte prioritario e limites ampliados.",
+    description: "Rede de lojas no mesmo e-mail, relatorios avancados e usuarios ilimitados.",
     priceLabel: "R$ 250/mes",
     amountCents: 25000,
-    features: ["Tudo do Pro", "Multi-loja (roadmap)", "Suporte prioritario", "Usuarios ampliados"]
+    features: [
+      "Tudo do Pro",
+      "Troca de loja no mesmo e-mail",
+      "Relatorios avancados (lucro, comparacao, parados)",
+      "Usuarios ilimitados",
+      "Suporte prioritario"
+    ]
   }
+};
+
+/** Limite de usuarios por plano. null = ilimitado.
+ * @type {Record<PlanId, number|null>}
+ */
+export const PLAN_MAX_USERS = {
+  BASIC: 3,
+  PRO: 10,
+  ENTERPRISE: null
 };
 
 /** Features que exigem plano minimo.
@@ -68,8 +84,20 @@ export const FEATURE_MIN_PLAN = {
   nfeImport: "PRO",
   nfceEmission: "PRO",
   stockAlerts: "PRO",
-  billingPortal: "BASIC"
+  billingPortal: "BASIC",
+  advancedReports: "ENTERPRISE",
+  storeNetwork: "ENTERPRISE"
 };
+
+/**
+ * @param {{ plan?: string|null, planGateExempt?: boolean|null }|null|undefined} tenant
+ * @returns {number|null}
+ */
+export function planMaxUsers(tenant) {
+  if (tenant?.planGateExempt) return null;
+  const plan = /** @type {PlanId} */ (tenant?.plan || "BASIC");
+  return PLAN_MAX_USERS[plan] ?? PLAN_MAX_USERS.BASIC;
+}
 
 /**
  * @param {string|null|undefined} currentPlan

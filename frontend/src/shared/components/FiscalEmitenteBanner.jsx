@@ -33,11 +33,6 @@ export function FiscalEmitenteBanner({ compact = false }) {
           {cnpjLabel ? `: ${cnpjLabel}` : null}
         </p>
         {!compact && fiscal?.message ? <p className="mt-0.5 text-[11px] opacity-90">{fiscal.message}</p> : null}
-        {fiscal?.envOverrideIgnored ? (
-          <p className="mt-1 text-[11px] font-medium text-amber-800">
-            Atenção: variável NUVEM_FISCAL_EMITENTE_CNPJ no servidor não substitui este CNPJ.
-          </p>
-        ) : null}
       </div>
     </div>
   );

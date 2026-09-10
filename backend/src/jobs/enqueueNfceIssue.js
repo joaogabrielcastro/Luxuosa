@@ -3,6 +3,7 @@ import { prisma } from "../config/prisma.js";
 import { env } from "../config/env.js";
 import { invoiceService } from "../modules/invoices/invoice.service.js";
 import { logger } from "../utils/logger.js";
+import { isRetriableErr, isRetriableLastError } from "./nfceRetry.js";
 
 const chains = new Map();
 
@@ -12,23 +13,6 @@ const BASE_DELAY_MS = 2000;
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
-}
-
-function isRetriableErr(err) {
-  const code = err?.statusCode;
-  if (code >= 500 && code < 600) return true;
-  if (code === 504) return true;
-  if (err?.code === "ETIMEDOUT") return true;
-  const msg = String(err?.message || "");
-  if (/timeout/i.test(msg)) return true;
-  return false;
-}
-
-function isRetriableLastError(lastError) {
-  const s = String(lastError || "").toLowerCase();
-  if (!s) return true;
-  if (/timeout|502|503|504|temporar|indispon|throttle|rate/i.test(s)) return true;
-  return false;
 }
 
 async function recoverStaleForTenant(tenantId) {
@@ -201,6 +185,11 @@ export async function enqueueNfceIssue(tenantId, saleId) {
   // FAILED / PROCESSING: nao altera aqui; drain ainda roda para demais jobs do tenant.
 
   scheduleTenantDrain(tenantId);
+}
+
+/** Processa a fila persistida do tenant (worker e testes). */
+export async function processNfceQueue(tenantId) {
+  await drainTenantQueue(tenantId);
 }
 
 function scheduleTenantDrain(tenantId) {

@@ -57,9 +57,6 @@ const StockAlertsPage = lazy(() =>
 const FiscalClosingPage = lazy(() =>
   import("../features/fiscal/FiscalClosingPage.jsx").then((m) => ({ default: m.FiscalClosingPage }))
 );
-const FiscalInvoicesPage = lazy(() =>
-  import("../features/fiscal/FiscalInvoicesPage.jsx").then((m) => ({ default: m.FiscalInvoicesPage }))
-);
 const SettingsPage = lazy(() =>
   import("../features/settings/SettingsPage.jsx").then((m) => ({ default: m.SettingsPage }))
 );
@@ -102,8 +99,8 @@ function AppRoutes() {
       <Route path="/estoque/alertas" element={<PrivateShell><StockAlertsPage /></PrivateShell>} />
       <Route path="/caixa" element={<PrivateShell><CashPage /></PrivateShell>} />
       <Route path="/relatorios" element={<PrivateShell><ReportsPage /></PrivateShell>} />
-      <Route path="/fiscal" element={<Navigate to="/fiscal/notas" replace />} />
-      <Route path="/fiscal/notas" element={<PrivateShell><FiscalInvoicesPage /></PrivateShell>} />
+      <Route path="/fiscal" element={<Navigate to="/vendas?aba=notas" replace />} />
+      <Route path="/fiscal/notas" element={<Navigate to="/vendas?aba=notas" replace />} />
       <Route path="/fechamento-fiscal" element={<PrivateShell><FiscalClosingPage /></PrivateShell>} />
       <Route path="/configuracoes" element={<PrivateShell><SettingsPage /></PrivateShell>} />
       <Route path="/assinatura" element={<PrivateShell><BillingPage /></PrivateShell>} />

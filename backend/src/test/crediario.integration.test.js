@@ -119,5 +119,25 @@ describe("crediario integration", { skip: !runDb }, () => {
       token: session.token
     });
     assert.equal(canceledGone.status, 204);
+
+    const listed = await api(
+      server.baseUrl,
+      `/crediario?q=${encodeURIComponent("Cred")}&status=OPEN`,
+      { token: session.token }
+    );
+    assert.equal(listed.status, 200);
+    const missingCred = await api(server.baseUrl, "/crediario/clxxxxxxxxxxxxxxxxxxxx", {
+      token: session.token
+    });
+    assert.equal(missingCred.status, 404);
+    const badCustomer = await api(server.baseUrl, "/crediario", {
+      method: "POST",
+      token: session.token,
+      body: {
+        customerId: "clxxxxxxxxxxxxxxxxxxxx",
+        items: [{ productVariationId: catalog.variationId, quantity: 1, unitPrice: 80 }]
+      }
+    });
+    assert.equal(badCustomer.status, 404);
   });
 });

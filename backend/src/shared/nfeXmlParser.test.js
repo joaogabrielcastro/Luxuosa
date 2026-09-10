@@ -105,4 +105,18 @@ describe("parseNfeXml", () => {
   it("rejeita XML vazio", () => {
     assert.throws(() => parseNfeXml("   "), /vazio/i);
   });
+
+  it("rejeita XML quebrado, sem chave, emitente e data", () => {
+    assert.throws(() => parseNfeXml("<nfeProc><NFe><infNFe>"), /infNFe|integro|ler o XML/i);
+    const noKey = SAMPLE_NFE
+      .replace(/Id="NFe\d+"/, 'Id="NFe"')
+      .replace(/<chNFe>\d+<\/chNFe>/, "");
+    assert.throws(() => parseNfeXml(noKey), /Chave de acesso/);
+    const badEmit = SAMPLE_NFE.replace(/<CNPJ>12345678000190<\/CNPJ>/, "<CNPJ>1</CNPJ>");
+    assert.throws(() => parseNfeXml(badEmit), /CNPJ\/CPF do emitente/);
+    const badDate = SAMPLE_NFE.replace(/<dhEmi>2026-07-21T10:30:00-03:00<\/dhEmi>/, "<dhEmi>nope</dhEmi>");
+    assert.throws(() => parseNfeXml(badDate), /Data de emissao/);
+    const noItems = SAMPLE_NFE.replace(/<det nItem="1">[\s\S]*<det nItem="2">[\s\S]*<\/det>/, "");
+    assert.throws(() => parseNfeXml(noItems), /nao possui itens|itens/);
+  });
 });

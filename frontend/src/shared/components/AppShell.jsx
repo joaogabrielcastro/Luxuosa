@@ -1,8 +1,10 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../features/auth/useAuth.jsx";
 import { BrandLogo } from "./BrandLogo.jsx";
 import { Button } from "./ui/Button.jsx";
+import { StoreSwitcher } from "./StoreSwitcher.jsx";
+import { isNavItemActive } from "../navConfig.js";
 import {
   ArrowLeftRight,
   BarChart3,
@@ -77,7 +79,7 @@ function buildNav(userType) {
     {
       label: "Fiscal",
       items: [
-        { to: "/fiscal/notas", label: "Notas fiscais", icon: ReceiptText },
+        { to: "/vendas?aba=notas", label: "Notas fiscais", icon: ReceiptText },
         ...(isAdmin ? [{ to: "/fechamento-fiscal", label: "Fechamento fiscal", icon: FileArchive }] : [])
       ]
     },
@@ -104,13 +106,18 @@ const roleLabel = {
 };
 
 function NavItem({ item, onNavigate }) {
+  const location = useLocation();
   return (
     <div>
       <NavLink
         to={item.to}
         end={item.end}
         onClick={onNavigate}
-        className={({ isActive }) => (isActive ? "ui-nav-item ui-nav-active" : "ui-nav-item")}
+        className={({ isActive }) => {
+          const custom = isNavItemActive(item, location);
+          const active = custom === null ? isActive : custom;
+          return active ? "ui-nav-item ui-nav-active" : "ui-nav-item";
+        }}
       >
         {item.icon ? <item.icon className="h-4 w-4 shrink-0 opacity-90" aria-hidden /> : null}
         {item.label}
@@ -168,6 +175,7 @@ export function AppShell({ children }) {
               <Menu className="h-5 w-5" />
             </button>
             <BrandLogo compact tenant={tenant} />
+            <StoreSwitcher />
             <div className="min-w-0 border-l border-slate-200 pl-2 sm:pl-3">
               <p className="truncate text-sm font-semibold leading-tight text-slate-900">{tenant?.name ?? "—"}</p>
               <p className="hidden truncate text-xs text-slate-500 sm:block">{user?.name ?? "—"}</p>

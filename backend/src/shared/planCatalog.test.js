@@ -5,7 +5,9 @@ import {
   normalizeStripePlan,
   planAtLeast,
   PLAN_CATALOG,
+  PLAN_MAX_USERS,
   PLAN_RANK,
+  planMaxUsers,
   tenantMeetsPlan
 } from "./planCatalog.js";
 
@@ -29,6 +31,8 @@ describe("planAtLeast", () => {
     assert.equal(PLAN_RANK[FEATURE_MIN_PLAN.nfeImport], PLAN_RANK.PRO);
     assert.equal(PLAN_RANK[FEATURE_MIN_PLAN.nfceEmission], PLAN_RANK.PRO);
     assert.equal(PLAN_RANK[FEATURE_MIN_PLAN.stockAlerts], PLAN_RANK.PRO);
+    assert.equal(PLAN_RANK[FEATURE_MIN_PLAN.advancedReports], PLAN_RANK.ENTERPRISE);
+    assert.equal(PLAN_RANK[FEATURE_MIN_PLAN.storeNetwork], PLAN_RANK.ENTERPRISE);
   });
 });
 
@@ -51,6 +55,12 @@ describe("PLAN_CATALOG precos", () => {
     assert.equal(PLAN_CATALOG.ENTERPRISE.amountCents, 25000);
     assert.equal(PLAN_CATALOG.ENTERPRISE.priceLabel, "R$ 250/mes");
     assert.equal(PLAN_CATALOG.BASIC.amountCents, 0);
+    assert.equal(PLAN_MAX_USERS.BASIC, 3);
+    assert.equal(PLAN_MAX_USERS.PRO, 10);
+    assert.equal(PLAN_MAX_USERS.ENTERPRISE, null);
+    assert.equal(planMaxUsers({ plan: "BASIC" }), 3);
+    assert.equal(planMaxUsers({ plan: "BASIC", planGateExempt: true }), null);
+    assert.ok(!PLAN_CATALOG.ENTERPRISE.features.some((f) => /roadmap/i.test(f)));
   });
 });
 

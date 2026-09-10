@@ -4,6 +4,7 @@ import { env } from "../../config/env.js";
 import { prisma } from "../../config/prisma.js";
 import { authRepository } from "./auth.repository.js";
 import { buildTenantFiscalContext } from "../../shared/fiscal/tenantEmitente.js";
+import { FEATURE_MIN_PLAN, tenantMeetsPlan } from "../../shared/planCatalog.js";
 
 function digitsOnly(value) {
   return String(value ?? "").replace(/\D/g, "");
@@ -209,5 +210,62 @@ export const authService = {
       },
       user: profile
     };
+  },
+
+  async listStores(userId, currentTenantId) {
+    const profile = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, tenantId: true }
+    });
+    if (!profile || profile.tenantId !== currentTenantId) {
+      const err = new Error("Sessao invalida.");
+      err.statusCode = 401;
+      throw err;
+    }
+    const users = await authRepository.findUsersWithTenantByEmail(profile.email);
+    const canSwitch = users.some((u) => tenantMeetsPlan(u.tenant, FEATURE_MIN_PLAN.storeNetwork));
+    return {
+      canSwitch,
+      stores: users.map((u) => ({
+        id: u.tenant.id,
+        name: u.tenant.name,
+        cnpj: u.tenant.cnpj,
+        plan: u.tenant.plan,
+        current: u.tenant.id === currentTenantId
+      }))
+    };
+  },
+
+  async switchStore(userId, currentTenantId, targetTenantId) {
+    const listed = await this.listStores(userId, currentTenantId);
+    if (!listed.canSwitch) {
+      const err = new Error("Troca de loja disponivel a partir do plano ENTERPRISE.");
+      err.statusCode = 402;
+      err.code = "PLAN_UPGRADE_REQUIRED";
+      throw err;
+    }
+    if (!targetTenantId || targetTenantId === currentTenantId) {
+      const err = new Error("Informe outra loja.");
+      err.statusCode = 400;
+      throw err;
+    }
+    const target = listed.stores.find((s) => s.id === targetTenantId);
+    if (!target) {
+      const err = new Error("Sem acesso a esta loja.");
+      err.statusCode = 404;
+      throw err;
+    }
+    const profile = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true }
+    });
+    const users = await authRepository.findUsersWithTenantByEmail(profile.email);
+    const user = users.find((u) => u.tenant.id === targetTenantId);
+    if (!user) {
+      const err = new Error("Sem acesso a esta loja.");
+      err.statusCode = 404;
+      throw err;
+    }
+    return buildAuthResponse(user, user.tenant);
   }
 };

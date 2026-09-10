@@ -12,17 +12,13 @@ export function resolveEmitenteCnpj(tenantCnpj) {
   if (tenantDigits.length === 14) {
     return {
       emitCnpj: tenantDigits,
-      source: "tenant",
-      envOverrideDefined: false,
-      envOverrideIgnored: false
+      source: "tenant"
     };
   }
 
   return {
     emitCnpj: "",
-    source: "invalid",
-    envOverrideDefined: false,
-    envOverrideIgnored: false
+    source: "invalid"
   };
 }
 
@@ -94,7 +90,6 @@ export function buildTenantFiscalContext(tenant) {
     emitenteCnpj: resolved.emitCnpj,
     emitenteCnpjFormatado: formatCnpjBr(resolved.emitCnpj),
     emitenteSource: resolved.source,
-    envOverrideIgnored: resolved.envOverrideIgnored,
     hasNotaasApiKey: hasNotaasKey,
     willEmitNfce: enableNfce && validCnpj,
     message: !enableNfce

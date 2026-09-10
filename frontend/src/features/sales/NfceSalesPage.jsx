@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
 import { useAuth } from "../auth/useAuth.jsx";
@@ -11,12 +11,17 @@ import { nfceJobStatusLabel, paymentLabel, saleStatusLabel } from "./sales.utils
 import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
 import { Modal } from "../../shared/components/ui/Modal.jsx";
 import { Button } from "../../shared/components/ui/Button.jsx";
+import { ModuleNav } from "../../shared/components/ModuleNav.jsx";
+import { FiscalEmitenteBanner } from "../../shared/components/FiscalEmitenteBanner.jsx";
+import { salesModuleItems } from "../../shared/navConfig.js";
 
 /** Página de vendas (PDV) com cliente opcional e atalhos de teclado. */
-export function SalesPage() {
+export function SalesPage({ forceFiscalView = false }) {
   const { token, tenant, user } = useAuth();
   const isAdmin = user?.type === "ADMIN";
   const enableNfceEmission = tenant?.enableNfceEmission === true;
+  const [params] = useSearchParams();
+  const fiscalView = forceFiscalView || params.get("aba") === "notas";
   const { showToast } = useToast();
   const { confirm } = useConfirm();
   const [paymentFilter, setPaymentFilter] = useState("");
@@ -65,20 +70,33 @@ export function SalesPage() {
   return (
     <div className="ui-page">
       <PageHeader
-        title="Vendas"
+        title={fiscalView ? "Notas fiscais" : "Vendas"}
         description={
-          enableNfceEmission
-            ? "Registre vendas, aplique descontos e acompanhe a nota fiscal quando necessário."
-            : "Registre vendas, aplique descontos e acompanhe o histórico da loja."
+          fiscalView
+            ? "Lista de vendas com NFC-e: PDF e reemissão. O PDV continua registrando a venda."
+            : enableNfceEmission
+              ? "Registre vendas, aplique descontos e acompanhe a nota fiscal quando necessário."
+              : "Registre vendas, aplique descontos e acompanhe o histórico da loja."
         }
         actions={
-          <Link to="/crediario?nova=1">
-            <Button type="button" variant="secondary" className="text-sm">
-              Venda a prazo
-            </Button>
-          </Link>
+          fiscalView ? (
+            <Link to="/vendas">
+              <Button type="button" variant="secondary" className="text-sm">
+                Ir para o PDV
+              </Button>
+            </Link>
+          ) : (
+            <Link to="/crediario?nova=1">
+              <Button type="button" variant="secondary" className="text-sm">
+                Venda a prazo
+              </Button>
+            </Link>
+          )
         }
       />
+      <ModuleNav items={salesModuleItems()} label="Vendas" />
+      {fiscalView ? <FiscalEmitenteBanner /> : null}
+      {!fiscalView ? (
       <SalesFormCard
         token={token}
         editingSaleId={editingSaleId}
@@ -100,6 +118,7 @@ export function SalesPage() {
         enableNfceEmission={enableNfceEmission}
         getRemainingUnits={getRemainingUnits}
       />
+      ) : null}
 
       <SalesTableCard
         sales={sales}
@@ -124,6 +143,7 @@ export function SalesPage() {
         setNfceErrorDetail={setNfceErrorDetail}
         enableNfceEmission={enableNfceEmission}
         canManageSales={isAdmin}
+        fiscalMode={fiscalView}
       />
 
       <Modal open={Boolean(nfceErrorDetail)} title="Detalhe do erro NFC-e" onClose={() => setNfceErrorDetail(null)}>
