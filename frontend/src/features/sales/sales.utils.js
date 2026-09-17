@@ -10,10 +10,11 @@ export function normalizeSaleSearch(text) {
 
 function variationSearchHaystack(v) {
   const name = normalizeSaleSearch(v.product?.name);
-  const sku = normalizeSaleSearch(v.product?.sku);
+  const productSku = normalizeSaleSearch(v.product?.sku);
+  const variationSku = normalizeSaleSearch(v.sku);
   const size = normalizeSaleSearch(v.size);
   const color = normalizeSaleSearch(v.color);
-  return `${name} ${sku} ${size} ${color}`;
+  return `${name} ${productSku} ${variationSku} ${size} ${color}`;
 }
 
 /** Busca por nome, SKU, tamanho ou cor (palavras parciais). */
@@ -26,18 +27,23 @@ export function filterVariationsBySearch(variations, query, { getRemainingUnits 
     if (getRemainingUnits && getRemainingUnits(v.id) < 1) return false;
     const haystack = variationSearchHaystack(v);
     const name = normalizeSaleSearch(v.product?.name);
-    const sku = normalizeSaleSearch(v.product?.sku);
-    if (q === name || q === sku) return true;
+    const productSku = normalizeSaleSearch(v.product?.sku);
+    const variationSku = normalizeSaleSearch(v.sku);
+    if (q === name || q === productSku || q === variationSku) return true;
     if (words.length > 1) return words.every((w) => haystack.includes(w));
     return haystack.includes(q);
   });
 }
 
-/** Correspondencia exata de SKU ou nome do produto (Enter / bip). */
+/** Correspondencia exata: variation.sku primeiro, depois Product.sku ou nome. */
 export function findVariationsByExactCodeOrName(variations, raw) {
   const trimmed = String(raw ?? "").trim();
   if (!trimmed) return [];
   const q = normalizeSaleSearch(trimmed);
+
+  const byVariationSku = variations.filter((v) => String(v.sku || "").trim() === trimmed);
+  if (byVariationSku.length > 0) return byVariationSku;
+
   return variations.filter((v) => {
     const sku = String(v.product?.sku || "").trim();
     const name = String(v.product?.name || "").trim();

@@ -235,6 +235,8 @@ model ProductVariation {
   productId     String
   size          String
   color         String
+  /** Codigo/EAN da etiqueta desta variacao (opcional). Se vazio, bipagem usa Product.sku. */
+  sku           String?
   stock         Int
   createdAt     DateTime @default(now())
 
@@ -248,6 +250,7 @@ model ProductVariation {
   @@index([tenantId])
   @@index([tenantId, productId])
   @@unique([tenantId, productId, size, color])
+  @@unique([tenantId, sku])
 }
 
 model StockMovement {

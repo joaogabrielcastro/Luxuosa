@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileUp, CheckCircle2, AlertTriangle, Link2, Plus, Ban, ArrowLeft } from "lucide-react";
+import { FileUp, CheckCircle2, AlertTriangle, Link2, Plus, Ban, ArrowLeft, SplitSquareVertical } from "lucide-react";
 import { apiClient, ApiError } from "../../shared/apiClient.js";
 import { useAuth } from "../auth/useAuth.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
@@ -55,8 +55,51 @@ function statusBadge(row) {
 function formatVariationLabel(v) {
   const size = String(v?.size || "").trim();
   const color = String(v?.color || "").trim();
+  const sku = String(v?.sku || "").trim();
   if (!size && !color) return "Padrao (sem tamanho/cor)";
-  return `${size || "—"} / ${color || "—"} (est. ${v?.stock ?? 0})`;
+  const base = `${size || "—"} / ${color || "—"} (est. ${v?.stock ?? 0})`;
+  return sku ? `${base} · ${sku}` : base;
+}
+
+/** So variacao padrao vazia — nao escolhe a primeira grade automaticamente. */
+function pickDefaultVariationId(product, matchedVariationId) {
+  const variations = product?.variations || [];
+  const empty = variations.find(
+    (v) => !String(v.size || "").trim() && !String(v.color || "").trim()
+  );
+  if (empty) return empty.id;
+  if (matchedVariationId && variations.some((v) => v.id === matchedVariationId)) {
+    const matched = variations.find((v) => v.id === matchedVariationId);
+    if (matched && !String(matched.size || "").trim() && !String(matched.color || "").trim()) {
+      return matched.id;
+    }
+  }
+  return "";
+}
+
+function emptyAllocation(quantity = 1) {
+  return {
+    key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    variationId: "",
+    size: "",
+    color: "",
+    quantity: String(quantity),
+    sku: ""
+  };
+}
+
+function allocationSum(allocations) {
+  return (allocations || []).reduce((acc, a) => {
+    const n = Math.floor(Number(a.quantity));
+    return acc + (Number.isInteger(n) && n > 0 ? n : 0);
+  }, 0);
+}
+
+function suggestSkuPlaceholder(baseSku, size) {
+  const base = String(baseSku || "").trim();
+  const s = String(size || "").trim();
+  if (!base || !s) return "Codigo da etiqueta (opcional)";
+  return `Ex.: ${base}-${s}`;
 }
 
 function buildInitialRows(preview) {
@@ -92,8 +135,11 @@ function buildInitialRows(preview) {
       // So EAN da etiqueta (bipavel). Nao usa cProd do fornecedor.
       sku: item.ean || "",
       variationId: item.matchedProduct?.variationId || "",
+      variationSku: "",
       size: "",
       color: "",
+      splitMode: false,
+      allocations: [],
       warnings: item.warnings || []
     };
   });
@@ -243,17 +289,65 @@ export function NfeImportPage() {
           return false;
         }
       }
-      const size = String(row.size || "").trim();
-      const color = String(row.color || "").trim();
-      const usingNewSizeColor =
-        row.action === "create" || (row.action === "link" && !row.variationId);
-      if (usingNewSizeColor && ((size && !color) || (!size && color))) {
-        showToast(
-          `Item ${row.lineNumber}: preencha Tamanho e Cor juntos, ou deixe ambos em branco.`,
-          "error"
-        );
+      const qty = Math.floor(Number(row.quantityEntered));
+      if (!Number.isInteger(qty) || qty < 1) {
+        showToast(`Item ${row.lineNumber}: quantidade invalida.`, "error");
         return false;
       }
+
+      if (row.splitMode) {
+        if (!row.allocations?.length) {
+          showToast(`Item ${row.lineNumber}: adicione ao menos uma alocacao de tamanho/cor.`, "error");
+          return false;
+        }
+        const sum = allocationSum(row.allocations);
+        if (sum !== qty) {
+          showToast(
+            `Item ${row.lineNumber}: soma das alocacoes (${sum}) deve ser ${qty}.`,
+            "error"
+          );
+          return false;
+        }
+        for (let i = 0; i < row.allocations.length; i += 1) {
+          const a = row.allocations[i];
+          const aQty = Math.floor(Number(a.quantity));
+          if (!Number.isInteger(aQty) || aQty < 1) {
+            showToast(`Item ${row.lineNumber}: alocacao ${i + 1} com quantidade invalida.`, "error");
+            return false;
+          }
+          if (!a.variationId) {
+            const size = String(a.size || "").trim();
+            const color = String(a.color || "").trim();
+            if ((size && !color) || (!size && color)) {
+              showToast(
+                `Item ${row.lineNumber}: alocacao ${i + 1} — preencha Tamanho e Cor juntos.`,
+                "error"
+              );
+              return false;
+            }
+            if (!size && !color) {
+              showToast(
+                `Item ${row.lineNumber}: alocacao ${i + 1} — informe tamanho/cor ou escolha uma variacao.`,
+                "error"
+              );
+              return false;
+            }
+          }
+        }
+      } else {
+        const size = String(row.size || "").trim();
+        const color = String(row.color || "").trim();
+        const usingNewSizeColor =
+          row.action === "create" || (row.action === "link" && !row.variationId);
+        if (usingNewSizeColor && ((size && !color) || (!size && color))) {
+          showToast(
+            `Item ${row.lineNumber}: preencha Tamanho e Cor juntos, ou deixe ambos em branco.`,
+            "error"
+          );
+          return false;
+        }
+      }
+
       if (row.action === "create") {
         if (!row.name || row.name.trim().length < 2) {
           showToast(`Item ${row.lineNumber}: informe o nome do produto.`, "error");
@@ -268,11 +362,6 @@ export function NfeImportPage() {
           showToast(`Item ${row.lineNumber}: selecione categoria e marca.`, "error");
           return false;
         }
-      }
-      const qty = Math.floor(Number(row.quantityEntered));
-      if (!Number.isInteger(qty) || qty < 1) {
-        showToast(`Item ${row.lineNumber}: quantidade invalida.`, "error");
-        return false;
       }
     }
     if (supplierAction === "use_existing" && !supplierId && !preview?.supplier?.existing) {
@@ -302,8 +391,9 @@ export function NfeImportPage() {
           const size = String(row.size || "").trim();
           const color = String(row.color || "").trim();
           const sendSizeColor =
-            row.action === "create" || (row.action === "link" && !row.variationId);
-          return {
+            !row.splitMode &&
+            (row.action === "create" || (row.action === "link" && !row.variationId));
+          const base = {
             lineNumber: row.lineNumber,
             action: row.action,
             productId: row.action === "link" ? row.productId : undefined,
@@ -317,11 +407,29 @@ export function NfeImportPage() {
             sku: row.action === "create" ? row.sku?.trim() || null : undefined,
             quantityEntered: Math.floor(Number(row.quantityEntered)),
             updateCost: row.action === "link" ? row.updateCost : undefined,
-            updatePrice: row.action === "link" ? Boolean(row.updatePrice) : undefined,
+            updatePrice: row.action === "link" ? Boolean(row.updatePrice) : undefined
+          };
+
+          if (row.splitMode) {
+            return {
+              ...base,
+              allocations: row.allocations.map((a) => ({
+                variationId: a.variationId || null,
+                size: a.variationId ? null : String(a.size || "").trim() || null,
+                color: a.variationId ? null : String(a.color || "").trim() || null,
+                quantity: Math.floor(Number(a.quantity)),
+                sku: String(a.sku || "").trim() || null
+              }))
+            };
+          }
+
+          return {
+            ...base,
             variationId:
               row.action === "link" && row.variationId ? row.variationId : undefined,
             size: sendSizeColor ? size || null : undefined,
-            color: sendSizeColor ? color || null : undefined
+            color: sendSizeColor ? color || null : undefined,
+            variationSku: String(row.variationSku || "").trim() || null
           };
         })
       };
@@ -746,18 +854,13 @@ export function NfeImportPage() {
                       onClick={() => {
                         const productId = row.matchedProduct?.id || row.productId;
                         const product = products.find((p) => p.id === productId);
-                        const defaultVar =
-                          product?.variations?.find(
-                            (v) =>
-                              !String(v.size || "").trim() && !String(v.color || "").trim()
-                          ) ||
-                          (row.matchedProduct?.variationId
-                            ? { id: row.matchedProduct.variationId }
-                            : product?.variations?.[0]);
                         updateRow(row.lineNumber, {
                           action: "link",
                           productId,
-                          variationId: defaultVar?.id || row.matchedProduct?.variationId || ""
+                          variationId: pickDefaultVariationId(
+                            product,
+                            row.matchedProduct?.variationId
+                          )
                         });
                       }}
                     >
@@ -779,6 +882,37 @@ export function NfeImportPage() {
                     >
                       <Ban className="h-3 w-3" /> Ignorar
                     </Button>
+                    {row.action !== "ignore" ? (
+                      <Button
+                        type="button"
+                        variant={row.splitMode ? "primary" : "secondary"}
+                        className="gap-1 px-2 py-1 text-xs"
+                        onClick={() => {
+                          if (row.splitMode) {
+                            updateRow(row.lineNumber, {
+                              splitMode: false,
+                              allocations: []
+                            });
+                            return;
+                          }
+                          const qty = Math.max(1, Math.floor(Number(row.quantityEntered)) || 1);
+                          updateRow(row.lineNumber, {
+                            splitMode: true,
+                            variationId: "",
+                            size: "",
+                            color: "",
+                            variationSku: "",
+                            allocations: [
+                              emptyAllocation(1),
+                              ...(qty > 1 ? [emptyAllocation(qty - 1)] : [])
+                            ]
+                          });
+                        }}
+                      >
+                        <SplitSquareVertical className="h-3 w-3" />
+                        {row.splitMode ? "Cancelar reparticao" : "Repartir por tamanho"}
+                      </Button>
+                    ) : null}
                   </div>
 
                   {row.action !== "ignore" ? (
@@ -807,14 +941,9 @@ export function NfeImportPage() {
                               onChange={(e) => {
                                 const productId = e.target.value;
                                 const product = products.find((p) => p.id === productId);
-                                const defaultVar =
-                                  product?.variations?.find(
-                                    (v) =>
-                                      !String(v.size || "").trim() && !String(v.color || "").trim()
-                                  ) || product?.variations?.[0];
                                 updateRow(row.lineNumber, {
                                   productId,
-                                  variationId: defaultVar?.id || "",
+                                  variationId: pickDefaultVariationId(product),
                                   size: "",
                                   color: "",
                                   ...(product?.price != null
@@ -832,53 +961,79 @@ export function NfeImportPage() {
                               ))}
                             </Select>
                           </label>
-                          <label className="flex flex-col gap-1 sm:col-span-2">
-                            <span className="text-xs font-medium text-slate-600">
-                              Variacao (tamanho/cor)
-                            </span>
-                            <Select
-                              value={row.variationId || ""}
-                              onChange={(e) =>
-                                updateRow(row.lineNumber, {
-                                  variationId: e.target.value,
-                                  size: "",
-                                  color: ""
-                                })
-                              }
-                              disabled={!row.productId}
-                            >
-                              <option value="">Nova variacao (preencher tamanho/cor abaixo)</option>
-                              {(products.find((p) => p.id === row.productId)?.variations || []).map(
-                                (v) => (
-                                  <option key={v.id} value={v.id}>
-                                    {formatVariationLabel(v)}
-                                  </option>
-                                )
-                              )}
-                            </Select>
-                          </label>
-                          {!row.variationId ? (
+                          {!row.splitMode ? (
                             <>
-                              <label className="flex flex-col gap-1">
-                                <span className="text-xs font-medium text-slate-600">Tamanho</span>
-                                <Input
-                                  value={row.size}
-                                  placeholder="Ex.: M"
+                              <label className="flex flex-col gap-1 sm:col-span-2">
+                                <span className="text-xs font-medium text-slate-600">
+                                  Variacao (tamanho/cor)
+                                </span>
+                                <Select
+                                  value={row.variationId || ""}
                                   onChange={(e) =>
-                                    updateRow(row.lineNumber, { size: e.target.value })
+                                    updateRow(row.lineNumber, {
+                                      variationId: e.target.value,
+                                      size: "",
+                                      color: ""
+                                    })
                                   }
-                                />
+                                  disabled={!row.productId}
+                                >
+                                  <option value="">
+                                    Nova variacao (preencher tamanho/cor abaixo)
+                                  </option>
+                                  {(
+                                    products.find((p) => p.id === row.productId)?.variations || []
+                                  ).map((v) => (
+                                    <option key={v.id} value={v.id}>
+                                      {formatVariationLabel(v)}
+                                    </option>
+                                  ))}
+                                </Select>
                               </label>
-                              <label className="flex flex-col gap-1">
-                                <span className="text-xs font-medium text-slate-600">Cor</span>
-                                <Input
-                                  value={row.color}
-                                  placeholder="Ex.: Preto (obrigatoria com tamanho)"
-                                  onChange={(e) =>
-                                    updateRow(row.lineNumber, { color: e.target.value })
-                                  }
-                                />
-                              </label>
+                              {!row.variationId ? (
+                                <>
+                                  <label className="flex flex-col gap-1">
+                                    <span className="text-xs font-medium text-slate-600">
+                                      Tamanho
+                                    </span>
+                                    <Input
+                                      value={row.size}
+                                      placeholder="Ex.: M"
+                                      onChange={(e) =>
+                                        updateRow(row.lineNumber, { size: e.target.value })
+                                      }
+                                    />
+                                  </label>
+                                  <label className="flex flex-col gap-1">
+                                    <span className="text-xs font-medium text-slate-600">Cor</span>
+                                    <Input
+                                      value={row.color}
+                                      placeholder="Ex.: Preto (obrigatoria com tamanho)"
+                                      onChange={(e) =>
+                                        updateRow(row.lineNumber, { color: e.target.value })
+                                      }
+                                    />
+                                  </label>
+                                  <label className="flex flex-col gap-1 sm:col-span-2">
+                                    <span className="text-xs font-medium text-slate-600">
+                                      Codigo da etiqueta (opcional)
+                                    </span>
+                                    <Input
+                                      value={row.variationSku}
+                                      placeholder={suggestSkuPlaceholder(
+                                        products.find((p) => p.id === row.productId)?.sku ||
+                                          row.ean,
+                                        row.size
+                                      )}
+                                      onChange={(e) =>
+                                        updateRow(row.lineNumber, {
+                                          variationSku: e.target.value
+                                        })
+                                      }
+                                    />
+                                  </label>
+                                </>
+                              ) : null}
                             </>
                           ) : null}
                           <label className="flex items-center gap-2 pt-5 text-xs text-slate-600">
@@ -939,7 +1094,7 @@ export function NfeImportPage() {
                           </label>
                           <label className="flex flex-col gap-1">
                             <span className="text-xs font-medium text-slate-600">
-                              SKU / EAN da etiqueta
+                              SKU / EAN do produto
                             </span>
                             <Input
                               value={row.sku}
@@ -961,22 +1116,42 @@ export function NfeImportPage() {
                               Deixe vazio e bipar se a nota nao trouxer EAN.
                             </span>
                           </label>
-                          <label className="flex flex-col gap-1">
-                            <span className="text-xs font-medium text-slate-600">Tamanho</span>
-                            <Input
-                              value={row.size}
-                              placeholder="Ex.: M (opcional)"
-                              onChange={(e) => updateRow(row.lineNumber, { size: e.target.value })}
-                            />
-                          </label>
-                          <label className="flex flex-col gap-1">
-                            <span className="text-xs font-medium text-slate-600">Cor</span>
-                            <Input
-                              value={row.color}
-                              placeholder="Ex.: Preto (obrigatoria com tamanho)"
-                              onChange={(e) => updateRow(row.lineNumber, { color: e.target.value })}
-                            />
-                          </label>
+                          {!row.splitMode ? (
+                            <>
+                              <label className="flex flex-col gap-1">
+                                <span className="text-xs font-medium text-slate-600">Tamanho</span>
+                                <Input
+                                  value={row.size}
+                                  placeholder="Ex.: M (opcional)"
+                                  onChange={(e) =>
+                                    updateRow(row.lineNumber, { size: e.target.value })
+                                  }
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1">
+                                <span className="text-xs font-medium text-slate-600">Cor</span>
+                                <Input
+                                  value={row.color}
+                                  placeholder="Ex.: Preto (obrigatoria com tamanho)"
+                                  onChange={(e) =>
+                                    updateRow(row.lineNumber, { color: e.target.value })
+                                  }
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 sm:col-span-2">
+                                <span className="text-xs font-medium text-slate-600">
+                                  Codigo da etiqueta desta variacao (opcional)
+                                </span>
+                                <Input
+                                  value={row.variationSku}
+                                  placeholder={suggestSkuPlaceholder(row.sku || row.ean, row.size)}
+                                  onChange={(e) =>
+                                    updateRow(row.lineNumber, { variationSku: e.target.value })
+                                  }
+                                />
+                              </label>
+                            </>
+                          ) : null}
                           <label className="flex flex-col gap-1">
                             <span className="text-xs font-medium text-slate-600">Categoria</span>
                             <Select
@@ -1011,6 +1186,157 @@ export function NfeImportPage() {
                           </label>
                         </>
                       ) : null}
+                    </div>
+                  ) : null}
+
+                  {row.action !== "ignore" && row.splitMode ? (
+                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-medium text-amber-900">
+                          Repartir quantidade por tamanho/cor — soma{" "}
+                          {allocationSum(row.allocations)} /{" "}
+                          {Math.floor(Number(row.quantityEntered)) || 0}
+                        </p>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="px-2 py-0.5 text-xs"
+                          onClick={() =>
+                            updateRow(row.lineNumber, {
+                              allocations: [...(row.allocations || []), emptyAllocation(1)]
+                            })
+                          }
+                        >
+                          + Alocacao
+                        </Button>
+                      </div>
+                      <div className="space-y-2">
+                        {(row.allocations || []).map((alloc, idx) => {
+                          const product =
+                            row.action === "link"
+                              ? products.find((p) => p.id === row.productId)
+                              : null;
+                          const baseSku =
+                            row.action === "create"
+                              ? row.sku || row.ean
+                              : product?.sku || row.ean;
+                          return (
+                            <div
+                              key={alloc.key}
+                              className="grid gap-2 rounded-md border border-amber-100 bg-white p-2 sm:grid-cols-2 lg:grid-cols-6"
+                            >
+                              {row.action === "link" && product ? (
+                                <label className="flex flex-col gap-1 lg:col-span-2">
+                                  <span className="text-[10px] font-medium text-slate-600">
+                                    Variacao existente
+                                  </span>
+                                  <Select
+                                    value={alloc.variationId || ""}
+                                    onChange={(e) => {
+                                      const variationId = e.target.value;
+                                      const next = [...row.allocations];
+                                      const selected = (product.variations || []).find(
+                                        (v) => v.id === variationId
+                                      );
+                                      next[idx] = {
+                                        ...next[idx],
+                                        variationId,
+                                        size: "",
+                                        color: "",
+                                        sku: selected?.sku || next[idx].sku
+                                      };
+                                      updateRow(row.lineNumber, { allocations: next });
+                                    }}
+                                  >
+                                    <option value="">Nova (tamanho/cor abaixo)</option>
+                                    {(product.variations || []).map((v) => (
+                                      <option key={v.id} value={v.id}>
+                                        {formatVariationLabel(v)}
+                                      </option>
+                                    ))}
+                                  </Select>
+                                </label>
+                              ) : null}
+                              {!alloc.variationId ? (
+                                <>
+                                  <label className="flex flex-col gap-1">
+                                    <span className="text-[10px] font-medium text-slate-600">
+                                      Tamanho
+                                    </span>
+                                    <Input
+                                      value={alloc.size}
+                                      placeholder="P"
+                                      onChange={(e) => {
+                                        const next = [...row.allocations];
+                                        next[idx] = { ...next[idx], size: e.target.value };
+                                        updateRow(row.lineNumber, { allocations: next });
+                                      }}
+                                    />
+                                  </label>
+                                  <label className="flex flex-col gap-1">
+                                    <span className="text-[10px] font-medium text-slate-600">
+                                      Cor
+                                    </span>
+                                    <Input
+                                      value={alloc.color}
+                                      placeholder="Preto"
+                                      onChange={(e) => {
+                                        const next = [...row.allocations];
+                                        next[idx] = { ...next[idx], color: e.target.value };
+                                        updateRow(row.lineNumber, { allocations: next });
+                                      }}
+                                    />
+                                  </label>
+                                </>
+                              ) : null}
+                              <label className="flex flex-col gap-1">
+                                <span className="text-[10px] font-medium text-slate-600">Qtd</span>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  value={alloc.quantity}
+                                  onChange={(e) => {
+                                    const next = [...row.allocations];
+                                    next[idx] = { ...next[idx], quantity: e.target.value };
+                                    updateRow(row.lineNumber, { allocations: next });
+                                  }}
+                                />
+                              </label>
+                              <label className="flex flex-col gap-1 lg:col-span-2">
+                                <span className="text-[10px] font-medium text-slate-600">
+                                  Codigo etiqueta
+                                </span>
+                                <Input
+                                  value={alloc.sku}
+                                  placeholder={suggestSkuPlaceholder(baseSku, alloc.size)}
+                                  onChange={(e) => {
+                                    const next = [...row.allocations];
+                                    next[idx] = { ...next[idx], sku: e.target.value };
+                                    updateRow(row.lineNumber, { allocations: next });
+                                  }}
+                                />
+                              </label>
+                              {(row.allocations || []).length > 1 ? (
+                                <div className="flex items-end">
+                                  <Button
+                                    type="button"
+                                    variant="danger"
+                                    className="px-2 py-1 text-xs"
+                                    onClick={() => {
+                                      updateRow(row.lineNumber, {
+                                        allocations: row.allocations.filter((_, i) => i !== idx)
+                                      });
+                                    }}
+                                  >
+                                    Remover
+                                  </Button>
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   ) : null}
                 </div>

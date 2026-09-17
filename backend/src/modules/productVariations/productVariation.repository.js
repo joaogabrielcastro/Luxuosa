@@ -12,19 +12,25 @@ export const productVariationRepository = {
   async listPaged(tenantId, { take = 50, skip = 0, q, categoryId, brandId, productId } = {}) {
     const where = { tenantId };
     if (productId) where.productId = productId;
-    if (categoryId || brandId || q) {
-      where.product = {
-        ...(categoryId ? { categoryId } : {}),
-        ...(brandId ? { brandId } : {}),
-        ...(q
-          ? {
-              OR: [
-                { name: { contains: q, mode: "insensitive" } },
-                { sku: { contains: q, mode: "insensitive" } }
-              ]
-            }
-          : {})
-      };
+
+    const productFilter = {
+      ...(categoryId ? { categoryId } : {}),
+      ...(brandId ? { brandId } : {})
+    };
+
+    if (q) {
+      const searchOr = [
+        { sku: { contains: q, mode: "insensitive" } },
+        { product: { name: { contains: q, mode: "insensitive" } } },
+        { product: { sku: { contains: q, mode: "insensitive" } } }
+      ];
+      if (Object.keys(productFilter).length) {
+        where.AND = [{ product: productFilter }, { OR: searchOr }];
+      } else {
+        where.OR = searchOr;
+      }
+    } else if (Object.keys(productFilter).length) {
+      where.product = productFilter;
     }
 
     const [items, total] = await Promise.all([

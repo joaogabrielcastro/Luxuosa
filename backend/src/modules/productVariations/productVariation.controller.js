@@ -9,11 +9,20 @@ import { productVariationService } from "./productVariation.service.js";
  */
 const trimmed = z.preprocess((v) => (v == null ? v : String(v).trim()), z.string().max(60));
 
+const skuField = z.preprocess(
+  (v) => {
+    if (v == null || v === "") return null;
+    return String(v).trim();
+  },
+  z.string().min(2).max(80).nullable()
+);
+
 const createSchema = z.object({
   productId: z.string().min(1),
   size: trimmed,
   color: trimmed,
-  stock: z.coerce.number().int().nonnegative()
+  stock: z.coerce.number().int().nonnegative(),
+  sku: skuField.optional()
 });
 
 const updateSchema = z
@@ -21,7 +30,8 @@ const updateSchema = z
     productId: z.string().min(1),
     size: trimmed,
     color: trimmed,
-    stock: z.coerce.number().int().nonnegative()
+    stock: z.coerce.number().int().nonnegative(),
+    sku: skuField
   })
   .partial();
 
@@ -64,7 +74,15 @@ export const productVariationController = {
       return res.status(201).json(variation);
     } catch (error) {
       if (error.code === "P2002") {
-        return res.status(409).json({ error: "Variacao ja cadastrada para este produto." });
+        const target = error.meta?.target;
+        const isSku =
+          (Array.isArray(target) && target.includes("sku")) ||
+          String(target || "").includes("sku");
+        return res.status(409).json({
+          error: isSku
+            ? "Ja existe variacao com este codigo/EAN nesta loja."
+            : "Variacao ja cadastrada para este produto."
+        });
       }
       return next(error);
     }
@@ -77,7 +95,15 @@ export const productVariationController = {
       return res.status(204).send();
     } catch (error) {
       if (error.code === "P2002") {
-        return res.status(409).json({ error: "Variacao ja cadastrada para este produto." });
+        const target = error.meta?.target;
+        const isSku =
+          (Array.isArray(target) && target.includes("sku")) ||
+          String(target || "").includes("sku");
+        return res.status(409).json({
+          error: isSku
+            ? "Ja existe variacao com este codigo/EAN nesta loja."
+            : "Variacao ja cadastrada para este produto."
+        });
       }
       return next(error);
     }

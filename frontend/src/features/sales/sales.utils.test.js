@@ -55,6 +55,19 @@ describe("sales.utils", () => {
     expect(findVariationsByExactCodeOrName(vars, "calça").map((v) => v.id)).toEqual(["v3"]);
   });
 
+  it("prioriza sku da variacao na bipagem", () => {
+    const withVarSku = [
+      { ...vars[0], sku: "CAM-01-M" },
+      { ...vars[1], sku: "CAM-01-G" },
+      vars[2]
+    ];
+    expect(findVariationsByExactCodeOrName(withVarSku, "CAM-01-M").map((v) => v.id)).toEqual([
+      "v1"
+    ]);
+    expect(findVariationsByExactCodeOrName(withVarSku, "CAM-01").length).toBe(2);
+    expect(filterVariationsBySearch(withVarSku, "CAM-01-G").map((v) => v.id)).toEqual(["v2"]);
+  });
+
   it("filtra categoria/marca e coleta brands", () => {
     expect(variationsForCategoryAndBrand(vars, "", "b1")).toEqual([]);
     expect(variationsForCategoryAndBrand(vars, "c1", "b1").map((v) => v.id)).toEqual(["v1", "v2"]);

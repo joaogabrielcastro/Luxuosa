@@ -15,6 +15,14 @@ const supplierDecisionSchema = z.object({
   stateRegistration: z.string().max(30).optional().nullable()
 });
 
+const allocationSchema = z.object({
+  variationId: z.string().min(1).optional().nullable(),
+  size: z.string().max(60).optional().nullable(),
+  color: z.string().max(60).optional().nullable(),
+  quantity: z.coerce.number().int().positive(),
+  sku: z.string().max(80).optional().nullable()
+});
+
 const itemDecisionSchema = z.object({
   lineNumber: z.coerce.number().int().positive(),
   action: z.enum(["link", "create", "ignore"]),
@@ -25,13 +33,15 @@ const itemDecisionSchema = z.object({
   brandId: z.string().min(1).optional().nullable(),
   price: z.coerce.number().nonnegative().optional(),
   sku: z.string().max(80).optional().nullable(),
+  variationSku: z.string().max(80).optional().nullable(),
   minStock: z.coerce.number().int().nonnegative().optional(),
   quantityEntered: z.coerce.number().int().positive().optional(),
   updateCost: z.boolean().optional(),
   updatePrice: z.boolean().optional(),
   variationId: z.string().min(1).optional().nullable(),
   size: z.string().max(60).optional().nullable(),
-  color: z.string().max(60).optional().nullable()
+  color: z.string().max(60).optional().nullable(),
+  allocations: z.array(allocationSchema).optional()
 });
 
 const confirmSchema = z.object({

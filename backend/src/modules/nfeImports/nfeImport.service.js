@@ -47,12 +47,14 @@ function serializeImport(row) {
   };
 }
 
+/** So sugere a variacao padrao (sem tamanho/cor). Nao escolhe a primeira grade. */
 function pickDefaultVariation(product) {
   if (!product?.variations?.length) return null;
-  const def = product.variations.find(
-    (v) => String(v.size || "").trim() === "" && String(v.color || "").trim() === ""
+  return (
+    product.variations.find(
+      (v) => String(v.size || "").trim() === "" && String(v.color || "").trim() === ""
+    ) || null
   );
-  return def || product.variations[0];
 }
 
 function matchStatus(matchedProduct) {
@@ -120,6 +122,88 @@ async function resolveVariationForEntry(tx, tenantId, productId, decision, lineN
     });
   }
   return variation;
+}
+
+function normalizeVariationSku(raw) {
+  if (raw == null) return null;
+  const sku = String(raw).trim();
+  return sku === "" ? null : sku;
+}
+
+async function applyVariationSku(tx, tenantId, variation, rawSku, lineNumber) {
+  const sku = normalizeVariationSku(rawSku);
+  if (sku == null) return variation;
+  if (sku.length < 2) {
+    throw createAppError(
+      `Item ${lineNumber}: codigo da variacao deve ter pelo menos 2 caracteres.`,
+      400,
+      ERROR_CODES.VALIDATION
+    );
+  }
+  if (variation.sku === sku) return variation;
+
+  const taken = await tx.productVariation.findFirst({
+    where: { tenantId, sku, NOT: { id: variation.id } }
+  });
+  if (taken) {
+    throw createAppError(
+      `Item ${lineNumber}: ja existe variacao com codigo/EAN ${sku}.`,
+      409,
+      ERROR_CODES.CONFLICT
+    );
+  }
+
+  return tx.productVariation.update({
+    where: { id: variation.id },
+    data: { sku }
+  });
+}
+
+/**
+ * Normaliza alocacoes: se allocations vier vazio, usa variationId/size/color + qty unica.
+ * Soma das quantidades deve bater com quantityEntered.
+ */
+function normalizeAllocations(decision, quantityEntered, lineNumber) {
+  const raw = Array.isArray(decision?.allocations) ? decision.allocations : [];
+  if (raw.length === 0) {
+    return [
+      {
+        variationId: decision?.variationId || null,
+        size: decision?.size ?? null,
+        color: decision?.color ?? null,
+        quantity: quantityEntered,
+        sku: decision?.variationSku ?? null
+      }
+    ];
+  }
+
+  const allocations = raw.map((a, idx) => {
+    const quantity = Math.floor(Number(a?.quantity));
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      throw createAppError(
+        `Item ${lineNumber}: alocacao ${idx + 1} com quantidade invalida.`,
+        400,
+        ERROR_CODES.VALIDATION
+      );
+    }
+    return {
+      variationId: a?.variationId || null,
+      size: a?.size ?? null,
+      color: a?.color ?? null,
+      quantity,
+      sku: a?.sku ?? null
+    };
+  });
+
+  const sum = allocations.reduce((acc, a) => acc + a.quantity, 0);
+  if (sum !== quantityEntered) {
+    throw createAppError(
+      `Item ${lineNumber}: soma das alocacoes (${sum}) deve ser igual a quantidade de entrada (${quantityEntered}).`,
+      400,
+      ERROR_CODES.VALIDATION
+    );
+  }
+  return allocations;
 }
 
 export const nfeImportService = {
@@ -556,29 +640,6 @@ export const nfeImportService = {
           itemAction = NfeImportItemAction.CREATED;
         }
 
-        const variation = await resolveVariationForEntry(
-          tx,
-          tenantId,
-          product.id,
-          decision,
-          item.lineNumber
-        );
-
-        await tx.productVariation.update({
-          where: { id: variation.id },
-          data: { stock: { increment: qty } }
-        });
-
-        const movement = await tx.stockMovement.create({
-          data: {
-            tenantId,
-            productVariationId: variation.id,
-            type: StockMovementType.ENTRY,
-            quantity: qty,
-            nfeImportId: nfeImport.id
-          }
-        });
-
         if (supplier && item.supplierCode) {
           const codeExists = await tx.productSupplierCode.findFirst({
             where: { tenantId, supplierId: supplier.id, code: item.supplierCode }
@@ -597,28 +658,61 @@ export const nfeImportService = {
           }
         }
 
-        const row = await tx.nfeImportItem.create({
-          data: {
+        const allocations = normalizeAllocations(decision, qty, item.lineNumber);
+        for (const allocation of allocations) {
+          let variation = await resolveVariationForEntry(
+            tx,
             tenantId,
-            nfeImportId: nfeImport.id,
-            lineNumber: item.lineNumber,
-            supplierCode: item.supplierCode,
-            ean: item.ean,
-            description: item.description,
-            ncm: item.ncm,
-            cfop: item.cfop,
-            unit: item.unit,
-            quantity: item.quantity,
-            quantityEntered: qty,
-            unitValue: item.unitValue,
-            totalValue: item.totalValue,
-            productId: product.id,
-            productVariationId: variation.id,
-            stockMovementId: movement.id,
-            action: itemAction
-          }
-        });
-        createdItems.push(row);
+            product.id,
+            allocation,
+            item.lineNumber
+          );
+          variation = await applyVariationSku(
+            tx,
+            tenantId,
+            variation,
+            allocation.sku,
+            item.lineNumber
+          );
+
+          await tx.productVariation.update({
+            where: { id: variation.id },
+            data: { stock: { increment: allocation.quantity } }
+          });
+
+          const movement = await tx.stockMovement.create({
+            data: {
+              tenantId,
+              productVariationId: variation.id,
+              type: StockMovementType.ENTRY,
+              quantity: allocation.quantity,
+              nfeImportId: nfeImport.id
+            }
+          });
+
+          const row = await tx.nfeImportItem.create({
+            data: {
+              tenantId,
+              nfeImportId: nfeImport.id,
+              lineNumber: item.lineNumber,
+              supplierCode: item.supplierCode,
+              ean: item.ean,
+              description: item.description,
+              ncm: item.ncm,
+              cfop: item.cfop,
+              unit: item.unit,
+              quantity: item.quantity,
+              quantityEntered: allocation.quantity,
+              unitValue: item.unitValue,
+              totalValue: item.totalValue,
+              productId: product.id,
+              productVariationId: variation.id,
+              stockMovementId: movement.id,
+              action: itemAction
+            }
+          });
+          createdItems.push(row);
+        }
       }
 
       return serializeImport({

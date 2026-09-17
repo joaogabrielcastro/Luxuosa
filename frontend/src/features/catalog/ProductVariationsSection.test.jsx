@@ -44,7 +44,20 @@ describe("ProductVariationsSection", () => {
     await user.type(screen.getByPlaceholderText("Cor"), "Azul");
     await user.type(screen.getByPlaceholderText("Estoque"), "4");
     await user.click(screen.getByRole("button", { name: /adicionar variacao/i }));
-    await waitFor(() => expect(apiClient).toHaveBeenCalledWith("/product-variations", expect.objectContaining({ method: "POST" })));
+    await waitFor(() =>
+      expect(apiClient).toHaveBeenCalledWith(
+        "/product-variations",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.objectContaining({
+            size: "G",
+            color: "Azul",
+            stock: 4,
+            sku: null
+          })
+        })
+      )
+    );
     await user.click(screen.getAllByRole("button", { name: "Excluir" })[0]);
     await user.click(screen.getAllByRole("button", { name: "Excluir" }).at(-1));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());

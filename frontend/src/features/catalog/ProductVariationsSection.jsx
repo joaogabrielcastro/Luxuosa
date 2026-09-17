@@ -8,7 +8,7 @@ import { Button } from "../../shared/components/ui/Button.jsx";
 import { FormErrorSummary } from "../../shared/components/FormErrorSummary.jsx";
 import { isDefaultVariation } from "./catalogConstants.js";
 
-const EMPTY_FORM = { size: "", color: "", stock: "" };
+const EMPTY_FORM = { size: "", color: "", stock: "", sku: "" };
 
 export function ProductVariationsSection({ token, productId, productName, onChanged }) {
   const { showToast } = useToast();
@@ -68,7 +68,8 @@ export function ProductVariationsSection({ token, productId, productName, onChan
           productId,
           size: sizeTrim,
           color: colorTrim,
-          stock: stockNum
+          stock: stockNum,
+          sku: String(form.sku || "").trim() || null
         }
       });
       showToast(editingId ? "Variacao atualizada." : "Variacao criada.");
@@ -108,7 +109,8 @@ export function ProductVariationsSection({ token, productId, productName, onChan
     setForm({
       size: row.size || "",
       color: row.color || "",
-      stock: String(row.stock ?? 0)
+      stock: String(row.stock ?? 0),
+      sku: row.sku || ""
     });
   }
 
@@ -129,7 +131,7 @@ export function ProductVariationsSection({ token, productId, productName, onChan
           : "Uma linha para cada combinação de tamanho e cor."
       }
     >
-      <form className="mt-3 grid gap-2 md:grid-cols-3" onSubmit={submitVariation}>
+      <form className="mt-3 grid gap-2 md:grid-cols-4" onSubmit={submitVariation}>
         <Input
           placeholder="Tamanho"
           value={form.size}
@@ -147,7 +149,12 @@ export function ProductVariationsSection({ token, productId, productName, onChan
           value={form.stock}
           onChange={(e) => setForm((p) => ({ ...p, stock: e.target.value }))}
         />
-        <div className="flex flex-wrap gap-2 md:col-span-3">
+        <Input
+          placeholder="Codigo etiqueta (opcional)"
+          value={form.sku}
+          onChange={(e) => setForm((p) => ({ ...p, sku: e.target.value }))}
+        />
+        <div className="flex flex-wrap gap-2 md:col-span-4">
           <Button type="submit" disabled={loading}>
             {editingId ? "Atualizar variacao" : "Adicionar variacao"}
           </Button>
@@ -168,12 +175,13 @@ export function ProductVariationsSection({ token, productId, productName, onChan
       <FormErrorSummary error={error} className="mt-2" />
 
       <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
-        <table className="w-full min-w-[480px] text-left text-sm">
+        <table className="w-full min-w-[560px] text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs font-medium text-slate-600">
             <tr>
               <th className="px-3 py-2">Tipo</th>
               <th className="px-3 py-2">Tamanho</th>
               <th className="px-3 py-2">Cor</th>
+              <th className="px-3 py-2">Codigo</th>
               <th className="px-3 py-2">Estoque</th>
               <th className="px-3 py-2">Acoes</th>
             </tr>
@@ -181,13 +189,13 @@ export function ProductVariationsSection({ token, productId, productName, onChan
           <tbody>
             {listLoading ? (
               <tr>
-                <td colSpan={5} className="px-3 py-4 text-slate-500">
+                <td colSpan={6} className="px-3 py-4 text-slate-500">
                   Carregando...
                 </td>
               </tr>
             ) : variations.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-3 py-4 text-slate-500">
+                <td colSpan={6} className="px-3 py-4 text-slate-500">
                   Nenhuma combinação ainda. Informe tamanho, cor e quantidade acima.
                 </td>
               </tr>
@@ -207,6 +215,7 @@ export function ProductVariationsSection({ token, productId, productName, onChan
                   </td>
                   <td className="px-3 py-2">{isDefault ? "—" : row.size}</td>
                   <td className="px-3 py-2">{isDefault ? "—" : row.color}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{row.sku || "—"}</td>
                   <td className="px-3 py-2">{row.stock}</td>
                   <td className="px-3 py-2">
                     {isDefault ? (
