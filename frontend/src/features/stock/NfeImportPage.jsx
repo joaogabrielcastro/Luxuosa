@@ -104,11 +104,14 @@ function suggestSkuPlaceholder(baseSku, size) {
 
 function buildInitialRows(preview) {
   return (preview.items || []).map((item) => {
+    const action = item.suggestedAction === "link" ? "link" : "create";
     const matchedPrice = item.matchedProduct?.price;
+    // Criar produto: custo vem da nota (unitValue); preco de venda fica vazio para o usuario.
+    // Vincular: preenche com o preco ja cadastrado do produto, se houver.
     const salePrice =
-      matchedPrice != null && Number.isFinite(Number(matchedPrice))
-        ? Number(matchedPrice)
-        : item.unitValue;
+      action === "link" && matchedPrice != null && Number.isFinite(Number(matchedPrice))
+        ? amountToCurrencyInput(Number(matchedPrice))
+        : "";
     return {
       lineNumber: item.lineNumber,
       supplierCode: item.supplierCode,
@@ -124,15 +127,15 @@ function buildInitialRows(preview) {
       matchStatus: item.matchStatus,
       matchBy: item.matchBy,
       matchedProduct: item.matchedProduct,
-      action: item.suggestedAction === "link" ? "link" : "create",
+      action,
       productId: item.matchedProduct?.id || "",
       name: item.description,
-      price: amountToCurrencyInput(salePrice),
+      price: salePrice,
       categoryId: "",
       brandId: "",
       updateCost: true,
       updatePrice: false,
-      // So EAN da etiqueta (bipavel). Nao usa cProd do fornecedor.
+      // EAN da nota no produto (opcional). Com reparticao, codigo por tamanho fica em cada alocacao.
       sku: item.ean || "",
       variationId: item.matchedProduct?.variationId || "",
       variationSku: "",
@@ -870,7 +873,13 @@ export function NfeImportPage() {
                       type="button"
                       variant={row.action === "create" ? "primary" : "secondary"}
                       className="gap-1 px-2 py-1 text-xs"
-                      onClick={() => updateRow(row.lineNumber, { action: "create" })}
+                      onClick={() =>
+                        updateRow(row.lineNumber, {
+                          action: "create",
+                          price: "",
+                          productId: ""
+                        })
+                      }
                     >
                       <Plus className="h-3 w-3" /> Criar novo
                     </Button>
@@ -1082,9 +1091,21 @@ export function NfeImportPage() {
                             />
                           </label>
                           <label className="flex flex-col gap-1">
+                            <span className="text-xs font-medium text-slate-600">
+                              Custo unitario (nota)
+                            </span>
+                            <Input
+                              value={amountToCurrencyInput(row.unitValue)}
+                              readOnly
+                              className="bg-slate-50 text-slate-700"
+                              title="Valor da peca na NF-e — gravado como custo do produto"
+                            />
+                          </label>
+                          <label className="flex flex-col gap-1">
                             <span className="text-xs font-medium text-slate-600">Preco venda</span>
                             <Input
                               value={row.price}
+                              placeholder="Informe o preco de venda"
                               onChange={(e) =>
                                 updateRow(row.lineNumber, {
                                   price: maskCurrencyInput(e.target.value)
@@ -1099,9 +1120,11 @@ export function NfeImportPage() {
                             <Input
                               value={row.sku}
                               placeholder={
-                                row.ean
-                                  ? "EAN da nota — confira ou bipar a etiqueta"
-                                  : "Bipar a etiqueta (nao use codigo interno do fornecedor)"
+                                row.splitMode
+                                  ? "Opcional — codigo geral do modelo"
+                                  : row.ean
+                                    ? "EAN da nota — confira ou bipar a etiqueta"
+                                    : "Bipar a etiqueta (nao use codigo interno do fornecedor)"
                               }
                               onChange={(e) => updateRow(row.lineNumber, { sku: e.target.value })}
                               onKeyDown={(e) => {
@@ -1112,8 +1135,9 @@ export function NfeImportPage() {
                               }}
                             />
                             <span className="text-[10px] text-slate-500">
-                              Cod. forn. {row.supplierCode || "—"} fica so no vinculo do fornecedor.
-                              Deixe vazio e bipar se a nota nao trouxer EAN.
+                              {row.splitMode
+                                ? "Com reparticao, o codigo de cada tamanho fica em Codigo etiqueta abaixo. Este campo e so o codigo geral do produto (opcional)."
+                                : `Cod. forn. ${row.supplierCode || "—"} fica so no vinculo do fornecedor. Deixe vazio e bipar se a nota nao trouxer EAN.`}
                             </span>
                           </label>
                           {!row.splitMode ? (
@@ -1192,11 +1216,18 @@ export function NfeImportPage() {
                   {row.action !== "ignore" && row.splitMode ? (
                     <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-xs font-medium text-amber-900">
-                          Repartir quantidade por tamanho/cor — soma{" "}
-                          {allocationSum(row.allocations)} /{" "}
-                          {Math.floor(Number(row.quantityEntered)) || 0}
-                        </p>
+                        <div>
+                          <p className="text-xs font-medium text-amber-900">
+                            Repartir quantidade por tamanho/cor — soma{" "}
+                            {allocationSum(row.allocations)} /{" "}
+                            {Math.floor(Number(row.quantityEntered)) || 0}
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-amber-800/80">
+                            Nome, marca, categoria e custo acima sao do produto (nao somam pecas).
+                            So as linhas abaixo entram no estoque. Informe o codigo de cada tamanho
+                            em Codigo etiqueta.
+                          </p>
+                        </div>
                         <Button
                           type="button"
                           variant="secondary"
