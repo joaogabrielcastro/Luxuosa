@@ -1,5 +1,6 @@
 import { StockMovementType } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
+import { AUDIT_ACTIONS, recordAuditInTx } from "../../shared/auditLog.js";
 
 export const stockMovementService = {
   list(tenantId, { take = 100, skip = 0 } = {}) {
@@ -18,7 +19,7 @@ export const stockMovementService = {
     });
   },
 
-  async create(tenantId, payload) {
+  async create(tenantId, payload, { userId } = {}) {
     const type = payload.type === "EXIT" ? StockMovementType.EXIT : StockMovementType.ENTRY;
     const qty = Math.floor(Number(payload.quantity));
     if (!Number.isInteger(qty) || qty < 1) {
@@ -51,7 +52,7 @@ export const stockMovementService = {
         }
       });
 
-      return tx.stockMovement.create({
+      const movement = await tx.stockMovement.create({
         data: {
           tenantId,
           productVariationId: variation.id,
@@ -62,6 +63,27 @@ export const stockMovementService = {
           productVariation: { include: { product: { include: { category: true, brand: true } } } }
         }
       });
+
+      const size = String(variation.size || "").trim();
+      const color = String(variation.color || "").trim();
+      const grade = size || color ? `${size || "—"}/${color || "—"}` : "padrao";
+      const productName = variation.product?.name || "produto";
+      await recordAuditInTx(tx, {
+        tenantId,
+        userId,
+        action: type === StockMovementType.EXIT ? AUDIT_ACTIONS.STOCK_EXIT : AUDIT_ACTIONS.STOCK_ENTRY,
+        entityType: "StockMovement",
+        entityId: movement.id,
+        summary: `${type === StockMovementType.EXIT ? "Saida" : "Entrada"} de ${qty} un. — ${productName} (${grade})`,
+        meta: {
+          productId: variation.productId,
+          productVariationId: variation.id,
+          quantity: qty,
+          type
+        }
+      });
+
+      return movement;
     });
   }
 };

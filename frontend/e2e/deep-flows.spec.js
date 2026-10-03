@@ -260,6 +260,7 @@ test.describe("fluxos profundos", () => {
     const productName = `Produto UI ${stamp}`;
     const form = page.locator("form").filter({ has: page.getByRole("button", { name: /Salvar produto/i }) });
     await form.getByPlaceholder("Nome", { exact: true }).fill(productName);
+    await form.getByRole("button", { name: /custo, descrição e código/i }).click();
     await form.getByPlaceholder("SKU (opcional)").fill(`SKU${stamp}`);
     await form.getByPlaceholder("Preco").fill("99,90");
     await form.getByPlaceholder("Custo").fill("40,00");

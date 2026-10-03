@@ -13,6 +13,7 @@ import {
   restoreStockForLine
 } from "../../shared/saleStockLineItems.js";
 import { saleRepository } from "./sale.repository.js";
+import { AUDIT_ACTIONS, safeRecordAudit } from "../../shared/auditLog.js";
 
 function toNumber(value, fallback = 0) {
   const parsed = Number(value);
@@ -174,6 +175,21 @@ export const saleService = {
         );
       }
       return sale;
+    }).then((sale) => {
+      safeRecordAudit({
+        tenantId,
+        userId,
+        action: AUDIT_ACTIONS.SALE_CREATED,
+        entityType: "Sale",
+        entityId: sale.id,
+        summary: `Venda registrada — R$ ${Number(sale.totalValue).toFixed(2)}`,
+        meta: {
+          totalValue: Number(sale.totalValue),
+          paymentMethod: sale.paymentMethod,
+          itemCount: payload.items?.length
+        }
+      });
+      return sale;
     });
   },
 
@@ -250,19 +266,34 @@ export const saleService = {
     });
   },
 
-  async cancel(tenantId, saleId) {
-    return prisma.$transaction(async (tx) => {
+  async cancel(tenantId, saleId, { userId } = {}) {
+    let didCancel = false;
+    const sale = await prisma.$transaction(async (tx) => {
       const currentSale = await assertSaleMutable(tx, tenantId, saleId);
       if (currentSale.status === SaleStatus.CANCELED) {
         return currentSale;
       }
 
       await restoreSaleEffects(tx, tenantId, currentSale);
+      didCancel = true;
 
       return tx.sale.update({
         where: { id: currentSale.id, tenantId },
         data: { status: SaleStatus.CANCELED }
       });
     });
+
+    if (didCancel) {
+      safeRecordAudit({
+        tenantId,
+        userId,
+        action: AUDIT_ACTIONS.SALE_CANCELED,
+        entityType: "Sale",
+        entityId: sale.id,
+        summary: `Venda cancelada — R$ ${Number(sale.totalValue).toFixed(2)}`,
+        meta: { totalValue: Number(sale.totalValue) }
+      });
+    }
+    return sale;
   }
 };

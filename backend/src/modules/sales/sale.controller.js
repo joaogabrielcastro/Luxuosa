@@ -92,7 +92,9 @@ export const saleController = {
 
   async cancel(req, res, next) {
     try {
-      const sale = await saleService.cancel(req.tenantId, req.params.id);
+      const sale = await saleService.cancel(req.tenantId, req.params.id, {
+        userId: req.user.id
+      });
       return res.json(sale);
     } catch (error) {
       return next(error);

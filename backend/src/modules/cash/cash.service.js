@@ -1,5 +1,6 @@
 import { prisma } from "../../config/prisma.js";
 import { pagedResult } from "../../shared/pagination.js";
+import { AUDIT_ACTIONS, safeRecordAudit } from "../../shared/auditLog.js";
 
 function toNumber(value, fallback = 0) {
   const parsed = Number(value);
@@ -133,6 +134,15 @@ export const cashService = {
         openedBy: { select: { id: true, name: true, email: true } }
       }
     });
+    safeRecordAudit({
+      tenantId,
+      userId,
+      action: AUDIT_ACTIONS.CASH_OPENED,
+      entityType: "CashSession",
+      entityId: created.id,
+      summary: `Caixa aberto (fundo R$ ${float.toFixed(2)})`,
+      meta: { openingFloat: float }
+    });
     return serializeSession(created);
   },
 
@@ -175,6 +185,20 @@ export const cashService = {
       include: {
         openedBy: { select: { id: true, name: true, email: true } },
         closedBy: { select: { id: true, name: true, email: true } }
+      }
+    });
+    safeRecordAudit({
+      tenantId,
+      userId,
+      action: AUDIT_ACTIONS.CASH_CLOSED,
+      entityType: "CashSession",
+      entityId: updated.id,
+      summary: `Caixa fechado (diferença R$ ${Number(differenceCash).toFixed(2)})`,
+      meta: {
+        expectedCash: Number(expectedCash),
+        countedCash: counted,
+        differenceCash: Number(differenceCash),
+        saleCount: totals.saleCount
       }
     });
     return serializeSession(updated);

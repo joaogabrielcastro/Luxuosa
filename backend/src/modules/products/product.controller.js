@@ -78,7 +78,9 @@ export const productController = {
   async create(req, res, next) {
     try {
       const payload = productSchema.parse(req.body);
-      const product = await productService.create(req.tenantId, payload);
+      const product = await productService.create(req.tenantId, payload, {
+        userId: req.user.id
+      });
       return res.status(201).json(product);
     } catch (error) {
       if (error.code === "P2002") return res.status(409).json({ error: "SKU ja cadastrado." });
@@ -89,7 +91,9 @@ export const productController = {
   async update(req, res, next) {
     try {
       const payload = productUpdateSchema.parse(req.body);
-      await productService.update(req.tenantId, req.params.id, payload);
+      await productService.update(req.tenantId, req.params.id, payload, {
+        userId: req.user.id
+      });
       return res.status(204).send();
     } catch (error) {
       if (error.code === "P2002") return res.status(409).json({ error: "SKU ja cadastrado." });

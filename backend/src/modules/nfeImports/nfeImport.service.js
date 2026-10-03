@@ -3,6 +3,7 @@ import { prisma } from "../../config/prisma.js";
 import { parseNfeXml } from "../../shared/nfeXmlParser.js";
 import { createAppError, ERROR_CODES } from "../../utils/appErrors.js";
 import { matchProductForItem } from "./nfeImportMatch.js";
+import { AUDIT_ACTIONS, safeRecordAudit, recordAuditInTx } from "../../shared/auditLog.js";
 
 function formatDateBR(isoOrDate) {
   const d = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate);
@@ -552,6 +553,8 @@ export const nfeImportService = {
           itemAction = NfeImportItemAction.LINKED;
 
           const linkPatch = {};
+          const oldCost = Number(product.cost);
+          const oldPrice = Number(product.price);
           if (decision.updateCost !== false) {
             linkPatch.cost = item.unitValue;
           }
@@ -563,6 +566,28 @@ export const nfeImportService = {
               where: { id: product.id },
               data: linkPatch
             });
+            if (linkPatch.cost != null && Number(linkPatch.cost) !== oldCost) {
+              await recordAuditInTx(tx, {
+                tenantId,
+                userId,
+                action: AUDIT_ACTIONS.PRODUCT_COST_CHANGED,
+                entityType: "Product",
+                entityId: product.id,
+                summary: `Custo via NF-e: ${product.name} (${oldCost} → ${Number(linkPatch.cost)})`,
+                meta: { from: oldCost, to: Number(linkPatch.cost), nfeLine: item.lineNumber }
+              });
+            }
+            if (linkPatch.price != null && Number(linkPatch.price) !== oldPrice) {
+              await recordAuditInTx(tx, {
+                tenantId,
+                userId,
+                action: AUDIT_ACTIONS.PRODUCT_PRICE_CHANGED,
+                entityType: "Product",
+                entityId: product.id,
+                summary: `Preco via NF-e: ${product.name} (${oldPrice} → ${Number(linkPatch.price)})`,
+                meta: { from: oldPrice, to: Number(linkPatch.price), nfeLine: item.lineNumber }
+              });
+            }
           }
         } else if (action === "create") {
           const categoryId = decision.categoryId;
@@ -638,6 +663,20 @@ export const nfeImportService = {
             include: { variations: true }
           });
           itemAction = NfeImportItemAction.CREATED;
+          await recordAuditInTx(tx, {
+            tenantId,
+            userId,
+            action: AUDIT_ACTIONS.PRODUCT_CREATED,
+            entityType: "Product",
+            entityId: product.id,
+            summary: `Produto criado via NF-e: ${product.name}`,
+            meta: {
+              sku: product.sku,
+              price: Number(product.price),
+              cost: Number(product.cost),
+              nfeLine: item.lineNumber
+            }
+          });
         }
 
         if (supplier && item.supplierCode) {
@@ -720,6 +759,23 @@ export const nfeImportService = {
         supplier,
         items: createdItems
       });
+    }).then((serialized) => {
+      safeRecordAudit({
+        tenantId,
+        userId,
+        action: AUDIT_ACTIONS.NFE_IMPORT_COMPLETED,
+        entityType: "NfeImport",
+        entityId: serialized.id,
+        summary: `NF-e ${serialized.number}/${serialized.series} importada (${serialized.itemCount} itens)`,
+        meta: {
+          accessKey: serialized.accessKey,
+          number: serialized.number,
+          series: serialized.series,
+          itemCount: serialized.itemCount,
+          totalValue: Number(serialized.totalValue)
+        }
+      });
+      return serialized;
     });
     } catch (error) {
       if (draftId) {

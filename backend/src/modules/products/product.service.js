@@ -1,5 +1,6 @@
 import { prisma } from "../../config/prisma.js";
 import { productRepository } from "./product.repository.js";
+import { AUDIT_ACTIONS, safeRecordAudit } from "../../shared/auditLog.js";
 
 export const productService = {
   list(tenantId) {
@@ -14,7 +15,7 @@ export const productService = {
     return productRepository.findById(tenantId, id);
   },
 
-  async create(tenantId, payload) {
+  async create(tenantId, payload, { userId } = {}) {
     const category = await prisma.category.findFirst({
       where: { id: payload.categoryId, tenantId }
     });
@@ -31,10 +32,25 @@ export const productService = {
       err.statusCode = 400;
       throw err;
     }
-    return productRepository.create(tenantId, payload);
+    const product = await productRepository.create(tenantId, payload);
+    safeRecordAudit({
+      tenantId,
+      userId,
+      action: AUDIT_ACTIONS.PRODUCT_CREATED,
+      entityType: "Product",
+      entityId: product.id,
+      summary: `Produto criado: ${product.name}`,
+      meta: {
+        name: product.name,
+        sku: product.sku,
+        price: Number(product.price),
+        cost: Number(product.cost)
+      }
+    });
+    return product;
   },
 
-  async update(tenantId, id, payload) {
+  async update(tenantId, id, payload, { userId } = {}) {
     if (payload.categoryId) {
       const category = await prisma.category.findFirst({
         where: { id: payload.categoryId, tenantId }
@@ -56,12 +72,46 @@ export const productService = {
       }
     }
 
+    const before = await prisma.product.findFirst({
+      where: { tenantId, id },
+      select: { id: true, name: true, price: true, cost: true }
+    });
+    if (!before) {
+      const err = new Error("Produto nao encontrado.");
+      err.statusCode = 404;
+      throw err;
+    }
+
     const result = await productRepository.update(tenantId, id, payload);
     if (result.count === 0) {
       const err = new Error("Produto nao encontrado.");
       err.statusCode = 404;
       throw err;
     }
+
+    if (payload.price !== undefined && Number(payload.price) !== Number(before.price)) {
+      safeRecordAudit({
+        tenantId,
+        userId,
+        action: AUDIT_ACTIONS.PRODUCT_PRICE_CHANGED,
+        entityType: "Product",
+        entityId: id,
+        summary: `Preco alterado: ${before.name} (${Number(before.price)} → ${Number(payload.price)})`,
+        meta: { from: Number(before.price), to: Number(payload.price) }
+      });
+    }
+    if (payload.cost !== undefined && Number(payload.cost) !== Number(before.cost)) {
+      safeRecordAudit({
+        tenantId,
+        userId,
+        action: AUDIT_ACTIONS.PRODUCT_COST_CHANGED,
+        entityType: "Product",
+        entityId: id,
+        summary: `Custo alterado: ${before.name} (${Number(before.cost)} → ${Number(payload.cost)})`,
+        meta: { from: Number(before.cost), to: Number(payload.cost) }
+      });
+    }
+
     return result;
   },
 

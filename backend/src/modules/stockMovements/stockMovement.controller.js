@@ -22,7 +22,9 @@ export const stockMovementController = {
   async create(req, res, next) {
     try {
       const body = createSchema.parse(req.body);
-      const created = await stockMovementService.create(req.tenantId, body);
+      const created = await stockMovementService.create(req.tenantId, body, {
+        userId: req.user.id
+      });
       return res.status(201).json(created);
     } catch (error) {
       return next(error);

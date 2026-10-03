@@ -10,6 +10,7 @@ import {
   BarChart3,
   BellRing,
   Boxes,
+  ClipboardList,
   CreditCard,
   FileArchive,
   FileInput,
@@ -92,6 +93,7 @@ function buildNav(userType) {
   const accountItems = isAdmin
     ? [
         { to: "/configuracoes", label: "Configurações", icon: Settings },
+        { to: "/auditoria", label: "Auditoria", icon: ClipboardList },
         { to: "/usuarios", label: "Usuários", icon: UserCog },
         { to: "/assinatura", label: "Assinatura", icon: CreditCard }
       ]

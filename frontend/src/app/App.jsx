@@ -60,6 +60,9 @@ const FiscalClosingPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import("../features/settings/SettingsPage.jsx").then((m) => ({ default: m.SettingsPage }))
 );
+const AuditLogsPage = lazy(() =>
+  import("../features/audit/AuditLogsPage.jsx").then((m) => ({ default: m.AuditLogsPage }))
+);
 
 function PrivateRoute({ children }) {
   const { token } = useAuth();
@@ -103,6 +106,7 @@ function AppRoutes() {
       <Route path="/fiscal/notas" element={<Navigate to="/vendas?aba=notas" replace />} />
       <Route path="/fechamento-fiscal" element={<PrivateShell><FiscalClosingPage /></PrivateShell>} />
       <Route path="/configuracoes" element={<PrivateShell><SettingsPage /></PrivateShell>} />
+      <Route path="/auditoria" element={<PrivateShell><AuditLogsPage /></PrivateShell>} />
       <Route path="/assinatura" element={<PrivateShell><BillingPage /></PrivateShell>} />
       <Route path="/usuarios" element={<PrivateShell><UsersPage /></PrivateShell>} />
       <Route path="*" element={<Navigate to="/" replace />} />

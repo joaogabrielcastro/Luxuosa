@@ -52,6 +52,78 @@ const EMPTY_PRODUCT_FORM = {
   minStock: ""
 };
 
+function newDraftRow() {
+  return {
+    id: `draft-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    size: "",
+    color: "",
+    stock: "",
+    sku: ""
+  };
+}
+
+function collectDraftVariations(rows) {
+  const filled = (rows || []).filter(draftRowHasInput);
+  const accepted = [];
+  for (const row of filled) {
+    const message = validateDraftVariation(row, accepted);
+    if (message) return { error: message };
+    const parsed = normalizeDraftVariation(row);
+    accepted.push({
+      size: parsed.size,
+      color: parsed.color,
+      stock: parsed.stock,
+      sku: parsed.sku
+    });
+  }
+  if (accepted.length === 0) {
+    return { error: "Preencha pelo menos um tamanho e uma cor." };
+  }
+  return { rows: accepted };
+}
+
+function draftRowHasInput(row) {
+  return (
+    String(row?.size || "").trim() !== "" ||
+    String(row?.color || "").trim() !== "" ||
+    String(row?.stock ?? "").trim() !== "" ||
+    String(row?.sku || "").trim() !== ""
+  );
+}
+
+function variationIdentity(row) {
+  return `${String(row.size || "").trim().toLocaleLowerCase("pt-BR")}|${String(row.color || "").trim().toLocaleLowerCase("pt-BR")}`;
+}
+
+function normalizeDraftVariation(row) {
+  const stockText = String(row.stock ?? "").trim();
+  return {
+    size: String(row.size || "").trim(),
+    color: String(row.color || "").trim(),
+    sku: String(row.sku || "").trim(),
+    stockText,
+    stock: Number(stockText)
+  };
+}
+
+function validateDraftVariation(row, existing) {
+  const parsed = normalizeDraftVariation(row);
+  if (!parsed.size || !parsed.color) {
+    return "Informe tamanho e cor juntos.";
+  }
+  if (parsed.stockText === "" || !Number.isInteger(parsed.stock) || parsed.stock < 0) {
+    return "Informe a quantidade em estoque (número inteiro, 0 ou mais).";
+  }
+  if (existing.some((item) => variationIdentity(item) === variationIdentity(parsed))) {
+    return "Esse tamanho e essa cor já estão na lista.";
+  }
+  const skuKey = parsed.sku.toLocaleLowerCase("pt-BR");
+  if (skuKey && existing.some((item) => String(item.sku || "").trim().toLocaleLowerCase("pt-BR") === skuKey)) {
+    return "Esse código de etiqueta já está em outra combinação.";
+  }
+  return "";
+}
+
 function buildProductPayload(form) {
   const skuTrim = String(form.sku || "").trim();
   return {
@@ -86,6 +158,8 @@ export function ProductsPage() {
   const [form, setForm] = useState(EMPTY_PRODUCT_FORM);
   const [currentStockPreview, setCurrentStockPreview] = useState("");
   const [hasVariations, setHasVariations] = useState(false);
+  const [draftVariations, setDraftVariations] = useState([]);
+  const [showDetails, setShowDetails] = useState(false);
 
   const listParams = useMemo(
     () => ({
@@ -191,6 +265,17 @@ export function ProductsPage() {
       setError("Selecione categoria e marca antes de salvar o produto.");
       return;
     }
+
+    let variationsToCreate = [];
+    if (!editingId && hasVariations) {
+      const collected = collectDraftVariations(draftVariations);
+      if (collected.error) {
+        setError(collected.error);
+        return;
+      }
+      variationsToCreate = collected.rows;
+    }
+
     setLoading(true);
     try {
       const payload = buildProductPayload(form);
@@ -200,7 +285,33 @@ export function ProductsPage() {
         body: payload
       });
       const productId = editingId || response?.id;
-      if (productId && !hasVariations) {
+      if (!editingId && hasVariations && productId) {
+        try {
+          for (const row of variationsToCreate) {
+            await apiClient("/product-variations", {
+              method: "POST",
+              token,
+              body: {
+                productId,
+                size: row.size,
+                color: row.color,
+                stock: row.stock,
+                sku: row.sku || null
+              }
+            });
+          }
+        } catch (variationErr) {
+          const full = await apiClient(`/products/${productId}`, { token });
+          patchProductInListCaches(full);
+          await refreshProducts();
+          startEdit(full);
+          setHasVariations(true);
+          const detail = variationErr?.message || "Não foi possível salvar uma combinação.";
+          setError(`O produto foi salvo, mas uma combinação falhou: ${detail} Inclua de novo na lista abaixo.`);
+          showToast("Produto criado. Falta concluir tamanho e cor.", "error");
+          return;
+        }
+      } else if (productId && !hasVariations) {
         const skipStockAdjust = Boolean(editingId) && currentStockPreview === "";
         if (!skipStockAdjust) {
           await syncDefaultStock(productId, currentStockPreview);
@@ -214,11 +325,9 @@ export function ProductsPage() {
         await refreshProducts();
         startEdit(full);
       } else if (response?.id) {
-        showToast("Produto criado.");
-        const full = await apiClient(`/products/${response.id}`, { token });
-        patchProductInListCaches(full);
+        showToast(hasVariations ? "Produto criado com tamanhos e cores." : "Produto criado.");
         await refreshProducts();
-        startEdit(full);
+        resetForm();
       } else {
         await refreshProducts();
       }
@@ -257,7 +366,28 @@ export function ProductsPage() {
     setForm(EMPTY_PRODUCT_FORM);
     setCurrentStockPreview("");
     setHasVariations(false);
+    setDraftVariations([]);
+    setShowDetails(false);
     setScannerSku("");
+  }
+
+  function updateDraftRow(id, patch) {
+    setDraftVariations((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  }
+
+  function addDraftRow() {
+    setDraftVariations((prev) => [...prev, newDraftRow()]);
+  }
+
+  function removeDraftRow(id) {
+    setDraftVariations((prev) => {
+      const next = prev.filter((row) => row.id !== id);
+      return next.length ? next : [newDraftRow()];
+    });
+  }
+
+  function onDraftRowKeyDown(event) {
+    if (event.key === "Enter") event.preventDefault();
   }
 
   function startEdit(item) {
@@ -272,6 +402,8 @@ export function ProductsPage() {
       sku: item.sku || "",
       minStock: Number(item.minStock || 0)
     });
+    setDraftVariations([]);
+    setShowDetails(true);
     const withVars = productHasRealVariations(item);
     setHasVariations(withVars);
     if (withVars) {
@@ -301,29 +433,44 @@ export function ProductsPage() {
       }
     }
     setHasVariations(checked);
-    if (checked) setCurrentStockPreview("");
+    if (checked) {
+      setCurrentStockPreview("");
+      if (!editingId) {
+        setDraftVariations((prev) => (prev.length ? prev : [newDraftRow()]));
+      }
+      return;
+    }
+    setDraftVariations([]);
   }
 
   return (
     <div className="ui-page">
       <PageHeader
         title="Produtos"
-        description="Cadastre peças da loja: dados, preço, tamanhos e cores, estoque e código de barras."
+        description="Nome, preço e quantidade. Se a peça tem tamanho ou cor, preencha as linhas e salve uma vez."
       />
       <ModuleNav items={catalogModuleItems()} label="Catálogo" />
 
       {isAdmin ? (
       <SectionCard title={editingId ? "Editar produto" : "Novo produto"}>
-        <form className="mt-3 space-y-8" onSubmit={createProduct}>
+        <form className="mt-3 space-y-6" onSubmit={createProduct}>
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-900">Produto</h3>
+            <h3 className="text-sm font-semibold text-slate-900">A peça</h3>
             <div className="grid gap-3 md:grid-cols-2">
-              <label className="flex flex-col gap-1">
+              <label className="flex flex-col gap-1 md:col-span-2">
                 <span className="text-xs font-medium text-slate-600">Nome</span>
                 <Input
                   placeholder="Nome"
                   value={form.name}
                   onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-slate-600">Preço de venda</span>
+                <CurrencyInput
+                  placeholder="Preco"
+                  value={form.price}
+                  onChange={(price) => setForm((prev) => ({ ...prev, price }))}
                 />
               </label>
               <label className="flex flex-col gap-1">
@@ -354,55 +501,47 @@ export function ProductsPage() {
                   ))}
                 </Select>
               </label>
-              <label className="flex flex-col gap-1 md:col-span-2">
-                <span className="text-xs font-medium text-slate-600">Descrição</span>
-                <Textarea
-                  placeholder="Descricao"
-                  value={form.description}
-                  onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                />
-              </label>
             </div>
           </section>
 
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-900">Preço</h3>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-slate-600">Preço de venda</span>
-                <CurrencyInput
-                  placeholder="Preco"
-                  value={form.price}
-                  onChange={(price) => setForm((prev) => ({ ...prev, price }))}
+            <h3 className="text-sm font-semibold text-slate-900">Estoque</h3>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label
+                className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 ${
+                  hasVariations ? "border-slate-200 bg-white" : "border-slate-900 bg-slate-50"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="stockMode"
+                  className="mt-1"
+                  checked={!hasVariations}
+                  onChange={() => onToggleVariations(false)}
                 />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-slate-600">Custo</span>
-                <CurrencyInput
-                  placeholder="Custo"
-                  value={form.cost}
-                  onChange={(cost) => setForm((prev) => ({ ...prev, cost }))}
-                />
-              </label>
-            </div>
-          </section>
-
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-900">Variações</h3>
-            <label className="flex cursor-pointer items-start gap-2 rounded-md border border-slate-200 bg-white p-3">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 rounded border-slate-300"
-                checked={hasVariations}
-                onChange={(e) => onToggleVariations(e.target.checked)}
-              />
-              <span>
-                <span className="text-sm font-medium text-slate-800">Este produto possui tamanhos ou cores</span>
-                <span className="mt-0.5 block text-xs text-slate-500">
-                  Ative para camisetas, calças e peças com mais de uma combinação.
+                <span>
+                  <span className="text-sm font-medium text-slate-800">Peça única</span>
+                  <span className="mt-0.5 block text-xs text-slate-500">Uma quantidade, sem tamanho nem cor.</span>
                 </span>
-              </span>
-            </label>
+              </label>
+              <label
+                className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 ${
+                  hasVariations ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-white"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="stockMode"
+                  className="mt-1"
+                  checked={hasVariations}
+                  onChange={() => onToggleVariations(true)}
+                />
+                <span>
+                  <span className="text-sm font-medium text-slate-800">Tamanhos e cores</span>
+                  <span className="mt-0.5 block text-xs text-slate-500">Uma linha para cada combinação.</span>
+                </span>
+              </label>
+            </div>
             {!hasVariations ? (
               <label className="flex max-w-xs flex-col gap-1">
                 <span className="text-xs font-medium text-slate-600">Quantidade em estoque</span>
@@ -415,61 +554,125 @@ export function ProductsPage() {
                   onChange={(e) => setCurrentStockPreview(e.target.value)}
                 />
               </label>
+            ) : editingId ? (
+              <p className="text-xs text-slate-500">Cada tamanho e cor fica na lista abaixo deste formulário.</p>
             ) : (
-              <p className="text-xs text-slate-500">
-                {editingId
-                  ? "Informe tamanho, cor e quantidade na tabela abaixo."
-                  : "Salve o produto para cadastrar cada tamanho e cor."}
-              </p>
+              <div className="space-y-2">
+                {draftVariations.map((row, index) => (
+                  <div key={row.id} className="grid gap-2 md:grid-cols-[1fr_1fr_7rem_auto] md:items-end">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-slate-600">{index === 0 ? "Tamanho" : ""}</span>
+                      <Input
+                        placeholder="P, M, 38..."
+                        aria-label={`Tamanho ${index + 1}`}
+                        value={row.size}
+                        onChange={(e) => updateDraftRow(row.id, { size: e.target.value })}
+                        onKeyDown={onDraftRowKeyDown}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-slate-600">{index === 0 ? "Cor" : ""}</span>
+                      <Input
+                        placeholder="Preto, azul..."
+                        aria-label={`Cor ${index + 1}`}
+                        value={row.color}
+                        onChange={(e) => updateDraftRow(row.id, { color: e.target.value })}
+                        onKeyDown={onDraftRowKeyDown}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-slate-600">{index === 0 ? "Quantidade" : ""}</span>
+                      <Input
+                        placeholder="0"
+                        aria-label={`Quantidade ${index + 1}`}
+                        type="number"
+                        inputMode="numeric"
+                        min="0"
+                        value={row.stock}
+                        onChange={(e) => updateDraftRow(row.id, { stock: e.target.value })}
+                        onKeyDown={onDraftRowKeyDown}
+                      />
+                    </label>
+                    <Button type="button" variant="secondary" className="md:mb-0.5" onClick={() => removeDraftRow(row.id)}>
+                      Tirar
+                    </Button>
+                  </div>
+                ))}
+                <Button type="button" variant="secondary" onClick={addDraftRow}>
+                  Adicionar outra linha
+                </Button>
+              </div>
             )}
           </section>
 
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-900">Estoque mínimo</h3>
-            <label className="flex max-w-xs flex-col gap-1">
-              <span className="text-xs font-medium text-slate-600">Avisar quando faltar</span>
-              <Input
-                placeholder="Quantidade minima"
-                type="number"
-                min="0"
-                value={form.minStock}
-                onChange={(e) => setForm((prev) => ({ ...prev, minStock: e.target.value }))}
-              />
-            </label>
-          </section>
+          <div>
+            <Button type="button" variant="secondary" onClick={() => setShowDetails((open) => !open)}>
+              {showDetails ? "Ocultar custo, descrição e código" : "Custo, descrição e código de barras"}
+            </Button>
+          </div>
 
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-900">Código de barras</h3>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-slate-600">Código (SKU)</span>
-                <Input
-                  placeholder="SKU (opcional)"
-                  value={form.sku}
-                  onChange={(e) => setForm((prev) => ({ ...prev, sku: e.target.value }))}
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-slate-600">Leitor</span>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Bipar e pressionar Enter"
-                    value={scannerSku}
-                    onChange={(e) => setScannerSku(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        applyScannedSku();
-                      }
-                    }}
-                  />
-                  <Button type="button" variant="secondary" onClick={applyScannedSku}>
-                    Aplicar
-                  </Button>
+          {showDetails ? (
+            <>
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold text-slate-900">Detalhes</h3>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-slate-600">Custo</span>
+                    <CurrencyInput
+                      placeholder="Custo"
+                      value={form.cost}
+                      onChange={(cost) => setForm((prev) => ({ ...prev, cost }))}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-slate-600">Avisar quando faltar</span>
+                    <Input
+                      placeholder="Quantidade minima"
+                      type="number"
+                      min="0"
+                      value={form.minStock}
+                      onChange={(e) => setForm((prev) => ({ ...prev, minStock: e.target.value }))}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 md:col-span-2">
+                    <span className="text-xs font-medium text-slate-600">Descrição</span>
+                    <Textarea
+                      placeholder="Descricao"
+                      value={form.description}
+                      onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-slate-600">Código de barras</span>
+                    <Input
+                      placeholder="SKU (opcional)"
+                      value={form.sku}
+                      onChange={(e) => setForm((prev) => ({ ...prev, sku: e.target.value }))}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-slate-600">Leitor</span>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Bipar e pressionar Enter"
+                        value={scannerSku}
+                        onChange={(e) => setScannerSku(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            applyScannedSku();
+                          }
+                        }}
+                      />
+                      <Button type="button" variant="secondary" onClick={applyScannedSku}>
+                        Aplicar
+                      </Button>
+                    </div>
+                  </label>
                 </div>
-              </label>
-            </div>
-          </section>
+              </section>
+            </>
+          ) : null}
 
           <div className="flex gap-2">
             <Button disabled={loading}>
@@ -490,7 +693,7 @@ export function ProductsPage() {
         </SectionCard>
       )}
 
-      {isAdmin && hasVariations ? (
+      {isAdmin && hasVariations && editingId ? (
         <ProductVariationsSection
           token={token}
           productId={editingId}

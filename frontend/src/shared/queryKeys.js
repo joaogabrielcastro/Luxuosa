@@ -52,5 +52,9 @@ export const queryKeys = {
     all: (token) => ["dashboard", token],
     admin: (token) => ["dashboard", token, "admin"]
   },
+  auditLogs: {
+    all: (token) => ["audit-logs", token],
+    list: (token, params) => ["audit-logs", token, "list", params]
+  },
   namedResource: (resource, token) => [resource, token, "list"]
 };

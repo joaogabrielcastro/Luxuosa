@@ -27,7 +27,9 @@ export const userController = {
   async create(req, res, next) {
     try {
       const payload = createUserSchema.parse(req.body);
-      const user = await userService.create(req.tenantId, payload);
+      const user = await userService.create(req.tenantId, payload, {
+        userId: req.user.id
+      });
       return res.status(201).json(user);
     } catch (error) {
       return next(error);

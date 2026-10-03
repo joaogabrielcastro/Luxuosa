@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "../../config/prisma.js";
 import { planMaxUsers } from "../../shared/planCatalog.js";
 import { userRepository, userPublicSelect } from "./user.repository.js";
+import { AUDIT_ACTIONS, safeRecordAudit } from "../../shared/auditLog.js";
 
 export const userService = {
   list(tenantId) {
@@ -12,7 +13,7 @@ export const userService = {
     return userRepository.findPublicById(tenantId, id);
   },
 
-  async create(tenantId, { name, email, password, type }) {
+  async create(tenantId, { name, email, password, type }, { userId: actorUserId } = {}) {
     const existing = await userRepository.findByEmail(tenantId, email);
     if (existing) {
       const err = new Error("Ja existe um usuario com este e-mail nesta loja.");
@@ -43,7 +44,7 @@ export const userService = {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    return userRepository.create(
+    const created = await userRepository.create(
       tenantId,
       {
         name,
@@ -53,9 +54,19 @@ export const userService = {
       },
       { select: userPublicSelect }
     );
+    safeRecordAudit({
+      tenantId,
+      userId: actorUserId,
+      action: AUDIT_ACTIONS.USER_CREATED,
+      entityType: "User",
+      entityId: created.id,
+      summary: `Usuario criado: ${created.name} (${created.type})`,
+      meta: { email: created.email, type: created.type }
+    });
+    return created;
   },
 
-  async update(tenantId, id, payload, _actorUserId) {
+  async update(tenantId, id, payload, actorUserId) {
     const current = await userRepository.findUniqueById(tenantId, id);
     if (!current) {
       const err = new Error("Usuario nao encontrado.");
@@ -86,7 +97,21 @@ export const userService = {
       throw err;
     }
 
-    return userRepository.findPublicById(tenantId, id);
+    const updated = await userRepository.findPublicById(tenantId, id);
+    safeRecordAudit({
+      tenantId,
+      userId: actorUserId,
+      action: AUDIT_ACTIONS.USER_UPDATED,
+      entityType: "User",
+      entityId: id,
+      summary: `Usuario atualizado: ${updated?.name || current.name}`,
+      meta: {
+        name: payload.name,
+        type: payload.type,
+        passwordChanged: Boolean(payload.password)
+      }
+    });
+    return updated;
   },
 
   async remove(tenantId, id, actorUserId) {
@@ -118,6 +143,15 @@ export const userService = {
       err.statusCode = 404;
       throw err;
     }
+    safeRecordAudit({
+      tenantId,
+      userId: actorUserId,
+      action: AUDIT_ACTIONS.USER_DELETED,
+      entityType: "User",
+      entityId: id,
+      summary: `Usuario excluido: ${current.name}`,
+      meta: { email: current.email, type: current.type }
+    });
     return result;
   }
 };

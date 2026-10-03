@@ -127,6 +127,7 @@ model Tenant {
   nfeImportItems NfeImportItem[]
   cashSessions   CashSession[]
   stockAlertLogs StockAlertLog[]
+  auditLogs      AuditLog[]
 }
 
 model User {
@@ -144,6 +145,7 @@ model User {
   nfeImports NfeImport[]
   cashSessionsOpened CashSession[] @relation("CashSessionOpenedBy")
   cashSessionsClosed CashSession[] @relation("CashSessionClosedBy")
+  auditLogs AuditLog[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -546,4 +548,25 @@ model StockAlertLog {
 
   @@index([tenantId, createdAt])
   @@index([tenantId, productId, channel])
+}
+
+/** Historico de acoes da loja (auditoria). */
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String?
+  /** Codigo estavel: STOCK_ENTRY, NFE_IMPORT_COMPLETED, PRODUCT_PRICE_CHANGED, ... */
+  action     String
+  entityType String?
+  entityId   String?
+  summary    String
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, action])
+  @@index([tenantId, userId])
 }
