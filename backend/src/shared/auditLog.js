@@ -1,4 +1,4 @@
-import { prisma } from "../../config/prisma.js";
+import { prisma } from "../config/prisma.js";
 
 export const AUDIT_ACTIONS = {
   STOCK_ENTRY: "STOCK_ENTRY",
