@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { AppShell } from "./AppShell.jsx";
+import { PwaInstallProvider } from "../pwa/PwaInstallProvider.jsx";
 
 const logout = vi.fn();
 
@@ -23,9 +24,11 @@ describe("AppShell", () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>
-        <AppShell>
-          <p>conteudo</p>
-        </AppShell>
+        <PwaInstallProvider>
+          <AppShell>
+            <p>conteudo</p>
+          </AppShell>
+        </PwaInstallProvider>
       </MemoryRouter>
     );
     expect(screen.getByText("Loja Teste")).toBeInTheDocument();

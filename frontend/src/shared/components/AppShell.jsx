@@ -17,6 +17,7 @@ import {
   LayoutGrid,
   LogOut,
   Menu,
+  MonitorDown,
   PackageSearch,
   ReceiptText,
   Settings,
@@ -27,6 +28,7 @@ import {
   WalletCards,
   X
 } from "lucide-react";
+import { usePwaInstall } from "../pwa/PwaInstallProvider.jsx";
 
 function buildNav(userType) {
   const isAdmin = userType === "ADMIN";
@@ -149,6 +151,7 @@ export function AppShell({ children }) {
   const { tenant, user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const { groups, accountItems } = useMemo(() => buildNav(user?.type), [user?.type]);
+  const { installed, openInstall } = usePwaInstall();
 
   useEffect(() => {
     if (!menuOpen) return undefined;
@@ -256,6 +259,19 @@ export function AppShell({ children }) {
                   ))}
                 </div>
               </div>
+            ) : null}
+            {!installed ? (
+              <button
+                type="button"
+                className="ui-nav-item w-full text-left"
+                onClick={() => {
+                  closeMenu();
+                  openInstall();
+                }}
+              >
+                <MonitorDown className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                Instalar aplicativo
+              </button>
             ) : null}
             <button
               type="button"

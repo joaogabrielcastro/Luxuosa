@@ -8,6 +8,8 @@ import { PageLoader } from "../shared/components/PageLoader.jsx";
 import { ToastProvider } from "../shared/components/ToastProvider.jsx";
 import { ConfirmProvider } from "../shared/components/ConfirmProvider.jsx";
 import { QueryProvider } from "../shared/QueryProvider.jsx";
+import { PwaInstallProvider } from "../shared/pwa/PwaInstallProvider.jsx";
+import { InstallAppDialog } from "../shared/pwa/InstallAppDialog.jsx";
 
 const AdminDashboardPage = lazy(() =>
   import("../features/dashboard/AdminDashboardPage.jsx").then((m) => ({ default: m.AdminDashboardPage }))
@@ -117,13 +119,16 @@ function AppRoutes() {
 export function App() {
   return (
     <QueryProvider>
-      <AuthProvider>
-        <ToastProvider>
-          <ConfirmProvider>
-            <AppRoutes />
-          </ConfirmProvider>
-        </ToastProvider>
-      </AuthProvider>
+      <PwaInstallProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <ConfirmProvider>
+              <AppRoutes />
+              <InstallAppDialog />
+            </ConfirmProvider>
+          </ToastProvider>
+        </AuthProvider>
+      </PwaInstallProvider>
     </QueryProvider>
   );
 }
