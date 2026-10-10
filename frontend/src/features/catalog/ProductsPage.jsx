@@ -139,7 +139,7 @@ function buildProductPayload(form) {
 }
 
 export function ProductsPage() {
-  const { token, user } = useAuth();
+  const { token, user, tenant } = useAuth();
   const isAdmin = user?.type === "ADMIN";
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -449,7 +449,7 @@ export function ProductsPage() {
         title="Produtos"
         description="Nome, preço e quantidade. Se a peça tem tamanho ou cor, preencha as linhas e salve uma vez."
       />
-      <ModuleNav items={catalogModuleItems()} label="Catálogo" />
+      <ModuleNav items={catalogModuleItems(tenant?.creditEventOnly === true)} label="Catálogo" />
 
       {isAdmin ? (
       <SectionCard title={editingId ? "Editar produto" : "Novo produto"}>

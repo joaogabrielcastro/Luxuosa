@@ -9,6 +9,7 @@ mock.module("../../config/prisma.js", {
   namedExports: {
     prisma: {
       customer: {
+        findFirst: async () => null,
         findMany: async ({ where }) => {
           if (where.OR) return customers;
           return customers;

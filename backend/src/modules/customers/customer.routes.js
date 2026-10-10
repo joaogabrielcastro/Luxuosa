@@ -9,7 +9,8 @@ router.use(authMiddleware, tenantMiddleware);
 
 router.get("/", customerController.list);
 router.get("/:id", customerController.getById);
-router.post("/", requireAdmin, customerController.create);
+// Atendentes podem cadastrar durante o atendimento; editar/excluir continua administrativo.
+router.post("/", customerController.create);
 router.put("/:id", requireAdmin, customerController.update);
 router.delete("/:id", requireAdmin, customerController.remove);
 

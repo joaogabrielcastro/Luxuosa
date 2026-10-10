@@ -31,6 +31,8 @@ function emptyForm() {
     cpfCnpj: "",
     phone: "",
     email: "",
+    eventCode: "",
+    creditLimit: "",
     address: "",
     uf: "",
     cep: ""
@@ -47,6 +49,9 @@ function buildCreateBody(form) {
   if (phone.length >= 8) body.phone = phone;
   const em = form.email.trim();
   if (em) body.email = em;
+  const eventCode = form.eventCode.trim();
+  if (eventCode) body.eventCode = eventCode;
+  if (form.creditLimit !== "") body.creditLimit = Number(String(form.creditLimit).replace(",", "."));
   const addr = form.address.trim();
   if (addr) body.address = addr;
   const uf = form.uf.trim().toUpperCase();
@@ -64,6 +69,7 @@ function matchesCustomerQuery(row, rawQuery) {
   return (
     (row.name || "").toLowerCase().includes(q) ||
     (row.email || "").toLowerCase().includes(q) ||
+    (row.eventCode || "").toLowerCase().includes(q) ||
     (digits.length >= 2 && String(row.cpfCnpj || "").includes(digits)) ||
     (digits.length >= 2 && String(row.phone || "").includes(digits))
   );
@@ -78,6 +84,8 @@ function buildUpdateBody(form) {
   if (phone.length >= 8) body.phone = phone;
   const em = form.email.trim();
   if (em) body.email = em;
+  body.eventCode = form.eventCode.trim() || null;
+  body.creditLimit = form.creditLimit === "" ? null : Number(String(form.creditLimit).replace(",", "."));
   const addr = form.address.trim();
   if (addr) body.address = addr;
   const uf = form.uf.trim().toUpperCase();
@@ -149,6 +157,8 @@ export function CustomersPage() {
       cpfCnpj: c.cpfCnpj || "",
       phone: c.phone || "",
       email: c.email || "",
+      eventCode: c.eventCode || "",
+      creditLimit: c.creditLimit == null ? "" : String(c.creditLimit),
       address: c.address || "",
       uf: c.uf || "",
       cep: c.cep ? maskCepInput(c.cep) : ""
@@ -163,7 +173,7 @@ export function CustomersPage() {
 
   async function submit(event) {
     event.preventDefault();
-    if (!isAdmin) return;
+    if (!isAdmin && editingId) return;
     setError("");
     if (!form.name.trim() || form.name.trim().length < 2) {
       setError("Informe o nome (minimo 2 caracteres).");
@@ -230,9 +240,6 @@ export function CustomersPage() {
       </section>
 
       <SectionCard title={editingId ? "Editar cliente" : "Novo cliente"}>
-        {!isAdmin ? (
-          <p className="mt-3 text-sm text-slate-600">Consulta de clientes. Somente administradores cadastram ou editam.</p>
-        ) : (
         <form className="mt-3 grid gap-3 md:grid-cols-2" onSubmit={submit}>
           <label className="flex flex-col gap-1 md:col-span-2">
             <span className="text-xs font-medium text-slate-600">Nome completo *</span>
@@ -251,6 +258,27 @@ export function CustomersPage() {
               placeholder="11 digitos (CPF) ou 14 (CNPJ); vazio se nao tiver"
             />
           </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-slate-600">Código ou crachá</span>
+            <Input
+              value={form.eventCode}
+              onChange={(e) => setForm((f) => ({ ...f, eventCode: e.target.value }))}
+              placeholder="Ex.: SERVO-042"
+            />
+          </label>
+          {isAdmin ? (
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-slate-600">Limite individual (R$)</span>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.creditLimit}
+                onChange={(e) => setForm((f) => ({ ...f, creditLimit: e.target.value }))}
+                placeholder="Usa o limite padrão se vazio"
+              />
+            </label>
+          ) : null}
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-slate-600">Telefone</span>
             <Input
@@ -315,7 +343,6 @@ export function CustomersPage() {
             ) : null}
           </div>
         </form>
-        )}
         <FormErrorSummary error={error} />
       </SectionCard>
 
@@ -324,6 +351,7 @@ export function CustomersPage() {
         data={items}
         columns={[
           { key: "name", label: "Nome" },
+          { key: "code", label: "Código" },
           { key: "doc", label: "CPF/CNPJ" },
           { key: "phone", label: "Telefone" },
           { key: "email", label: "E-mail" },
@@ -340,6 +368,7 @@ export function CustomersPage() {
         renderCells={(c) => (
           <>
             <td className="py-2 font-medium text-slate-900">{c.name}</td>
+            <td className="py-2 text-xs font-semibold text-violet-700">{c.eventCode || "—"}</td>
             <td className="py-2 font-mono text-xs text-slate-700">{c.cpfCnpj || "—"}</td>
             <td className="py-2 text-sm text-slate-600">{c.phone || "—"}</td>
             <td className="max-w-[180px] truncate py-2 text-sm text-slate-600">{c.email || "—"}</td>

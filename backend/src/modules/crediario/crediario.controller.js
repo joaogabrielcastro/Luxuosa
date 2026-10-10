@@ -7,6 +7,7 @@ const createSchema = z.object({
   discountValue: z.coerce.number().nonnegative().optional(),
   discountPercent: z.coerce.number().nonnegative().optional(),
   notes: z.string().max(2000).optional(),
+  overrideCreditLimit: z.boolean().optional(),
   items: z
     .array(
       z.object({
@@ -25,7 +26,60 @@ const paymentSchema = z.object({
   note: z.string().max(1000).optional()
 });
 
+const configSchema = z.object({
+  eventMode: z.boolean().optional(),
+  eventOnly: z.boolean().optional(),
+  eventName: z.string().trim().min(2).max(120).optional().nullable(),
+  dueDate: z.string().optional().nullable(),
+  defaultCreditLimit: z.coerce.number().nonnegative().optional().nullable()
+});
+
 export const crediarioController = {
+  async getConfig(req, res, next) {
+    try {
+      return res.json(await crediarioService.getConfig(req.tenantId));
+    } catch (error) {
+      return next(error);
+    }
+  },
+
+  async updateConfig(req, res, next) {
+    try {
+      const payload = configSchema.parse(req.body || {});
+      return res.json(await crediarioService.updateConfig(req.tenantId, req.user.id, payload));
+    } catch (error) {
+      return next(error);
+    }
+  },
+
+  async closeEvent(req, res, next) {
+    try {
+      return res.json(await crediarioService.closeEvent(req.tenantId, req.user.id));
+    } catch (error) {
+      return next(error);
+    }
+  },
+
+  async accounts(req, res, next) {
+    try {
+      const eventName = req.query.eventName ? String(req.query.eventName).trim() : undefined;
+      const q = req.query.q ? String(req.query.q).trim() : undefined;
+      return res.json(await crediarioService.accounts(req.tenantId, { eventName, q }));
+    } catch (error) {
+      return next(error);
+    }
+  },
+
+  async customerStatement(req, res, next) {
+    try {
+      const eventName = req.query.eventName ? String(req.query.eventName).trim() : undefined;
+      const statement = await crediarioService.customerStatement(req.tenantId, req.params.customerId, { eventName });
+      if (!statement) return res.status(404).json({ error: "Cliente nao encontrado." });
+      return res.json(statement);
+    } catch (error) {
+      return next(error);
+    }
+  },
   async list(req, res, next) {
     try {
       const { take, skip } = parsePageQuery(req.query, { defaultTake: 50, maxTake: 200 });
@@ -63,7 +117,7 @@ export const crediarioController = {
   async addPayment(req, res, next) {
     try {
       const payload = paymentSchema.parse(req.body);
-      const updated = await crediarioService.addPayment(req.tenantId, req.params.id, payload);
+      const updated = await crediarioService.addPayment(req.tenantId, req.user.id, req.params.id, payload);
       return res.json(updated);
     } catch (error) {
       return next(error);
@@ -72,7 +126,7 @@ export const crediarioController = {
 
   async cancel(req, res, next) {
     try {
-      const canceled = await crediarioService.cancel(req.tenantId, req.params.id);
+      const canceled = await crediarioService.cancel(req.tenantId, req.user.id, req.params.id);
       return res.json(canceled);
     } catch (error) {
       return next(error);
@@ -81,7 +135,7 @@ export const crediarioController = {
 
   async remove(req, res, next) {
     try {
-      await crediarioService.remove(req.tenantId, req.params.id);
+      await crediarioService.remove(req.tenantId, req.user.id, req.params.id);
       return res.status(204).send();
     } catch (error) {
       return next(error);

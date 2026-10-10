@@ -75,59 +75,90 @@ enum CashSessionStatus {
 }
 
 model Tenant {
-  id               String   @id @default(cuid())
-  name             String
-  cnpj             String   @unique
-  email            String
-  phone            String?
-  plan             Plan     @default(BASIC)
-  /** Lojas legadas: nao aplica bloqueio por plano (NFC-e, import NF-e, alertas). Novos cadastros ficam false. */
-  planGateExempt   Boolean  @default(false)
-  /** Emissao NFC-e. So habilite na loja com projeto/certificado/CSC no Notaas. */
-  enableNfceEmission Boolean @default(false)
-  /** Projeto Notaas (empresa fiscal) — um CNPJ por loja. */
-  notaasProjectId  String?
-  /** API Key do projeto Notaas (ntaas_...). Nunca expor no frontend. */
-  notaasApiKey     String?
-  /** Customer Stripe (cus_...). */
-  stripeCustomerId String?  @unique
-  /** Subscription Stripe ativa/mais recente (sub_...). */
-  stripeSubscriptionId String? @unique
-  /** active | trialing | past_due | canceled | unpaid | incomplete | ... */
+  id                       String    @id @default(cuid())
+  name                     String
+  cnpj                     String    @unique
+  email                    String
+  phone                    String?
+  plan                     Plan      @default(BASIC)
+  /**
+   * Lojas legadas: nao aplica bloqueio por plano (NFC-e, import NF-e, alertas). Novos cadastros ficam false.
+   */
+  planGateExempt           Boolean   @default(false)
+  /**
+   * Emissao NFC-e. So habilite na loja com projeto/certificado/CSC no Notaas.
+   */
+  enableNfceEmission       Boolean   @default(false)
+  /**
+   * Projeto Notaas (empresa fiscal) — um CNPJ por loja.
+   */
+  notaasProjectId          String?
+  /**
+   * API Key do projeto Notaas (ntaas_...). Nunca expor no frontend.
+   */
+  notaasApiKey             String?
+  /**
+   * Customer Stripe (cus_...).
+   */
+  stripeCustomerId         String?   @unique
+  /**
+   * Subscription Stripe ativa/mais recente (sub_...).
+   */
+  stripeSubscriptionId     String?   @unique
+  /**
+   * active | trialing | past_due | canceled | unpaid | incomplete | ...
+   */
   stripeSubscriptionStatus String?
-  /** Fim do periodo atual da assinatura (UTC). */
-  planPeriodEnd    DateTime?
-  /** Alertas de estoque baixo (email / WhatsApp). */
-  stockAlertsEnabled     Boolean @default(false)
-  stockAlertEmail        String?
-  stockAlertPhone        String?
-  /** low | critical — severidade minima para disparar. */
-  stockAlertMinSeverity  String  @default("low")
-  /** Cooldown em minutos entre alertas do mesmo produto. */
-  stockAlertCooldownMin  Int     @default(1440)
-  createdAt        DateTime @default(now())
+  /**
+   * Fim do periodo atual da assinatura (UTC).
+   */
+  planPeriodEnd            DateTime?
+  /**
+   * Alertas de estoque baixo (email / WhatsApp).
+   */
+  stockAlertsEnabled       Boolean   @default(false)
+  stockAlertEmail          String?
+  stockAlertPhone          String?
+  /**
+   * low | critical — severidade minima para disparar.
+   */
+  stockAlertMinSeverity    String    @default("low")
+  /**
+   * Cooldown em minutos entre alertas do mesmo produto.
+   */
+  stockAlertCooldownMin    Int       @default(1440)
+  /**
+   * Operacao temporaria de crediario (retiro, feira, evento).
+   */
+  creditEventMode          Boolean   @default(false)
+  creditEventOnly          Boolean   @default(false)
+  creditEventName          String?
+  creditEventDueDate       DateTime?
+  creditEventClosedAt      DateTime?
+  creditDefaultLimit       Decimal?  @db.Decimal(12, 2)
+  createdAt                DateTime  @default(now())
 
-  users       User[]
-  customers   Customer[]
-  categories  Category[]
-  brands      Brand[]
-  products    Product[]
-  variations  ProductVariation[]
-  stockMoves  StockMovement[]
-  sales       Sale[]
-  saleItems   SaleItem[]
-  invoices    Invoice[]
-  nfceJobs       NfceIssueJob[]
-  creditSales    CreditSale[]
-  creditSaleItems CreditSaleItem[]
-  creditPayments CreditPayment[]
-  suppliers      Supplier[]
+  users                User[]
+  customers            Customer[]
+  categories           Category[]
+  brands               Brand[]
+  products             Product[]
+  variations           ProductVariation[]
+  stockMoves           StockMovement[]
+  sales                Sale[]
+  saleItems            SaleItem[]
+  invoices             Invoice[]
+  nfceJobs             NfceIssueJob[]
+  creditSales          CreditSale[]
+  creditSaleItems      CreditSaleItem[]
+  creditPayments       CreditPayment[]
+  suppliers            Supplier[]
   productSupplierCodes ProductSupplierCode[]
-  nfeImports     NfeImport[]
-  nfeImportItems NfeImportItem[]
-  cashSessions   CashSession[]
-  stockAlertLogs StockAlertLog[]
-  auditLogs      AuditLog[]
+  nfeImports           NfeImport[]
+  nfeImportItems       NfeImportItem[]
+  cashSessions         CashSession[]
+  stockAlertLogs       StockAlertLog[]
+  auditLogs            AuditLog[]
 }
 
 model User {
@@ -139,40 +170,47 @@ model User {
   type      UserType
   createdAt DateTime @default(now())
 
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  sales     Sale[]
-  creditSales CreditSale[]
-  nfeImports NfeImport[]
+  tenant             Tenant        @relation(fields: [tenantId], references: [id])
+  sales              Sale[]
+  creditSales        CreditSale[]
+  nfeImports         NfeImport[]
   cashSessionsOpened CashSession[] @relation("CashSessionOpenedBy")
   cashSessionsClosed CashSession[] @relation("CashSessionClosedBy")
-  auditLogs AuditLog[]
+  auditLogs          AuditLog[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
 }
 
 model Customer {
-  id              String   @id @default(cuid())
-  tenantId        String
-  name            String
-  cpfCnpj         String?
-  phone           String?
-  email           String?
-  address         String?
-  uf              String?
-  cep             String?
-  ibgeMunicipio   String?
-  municipioNome   String?
-  totalPurchases  Decimal  @default(0) @db.Decimal(12, 2)
-  lastPurchaseAt  DateTime?
-  createdAt       DateTime @default(now())
+  id             String    @id @default(cuid())
+  tenantId       String
+  name           String
+  cpfCnpj        String?
+  phone          String?
+  email          String?
+  address        String?
+  uf             String?
+  cep            String?
+  ibgeMunicipio  String?
+  municipioNome  String?
+  /**
+   * Identificador rapido no evento, como numero do cracha.
+   */
+  eventCode      String?
+  creditLimit    Decimal?  @db.Decimal(12, 2)
+  totalPurchases Decimal   @default(0) @db.Decimal(12, 2)
+  lastPurchaseAt DateTime?
+  createdAt      DateTime  @default(now())
 
-  tenant         Tenant   @relation(fields: [tenantId], references: [id])
-  sales          Sale[]
-  creditSales    CreditSale[]
+  tenant      Tenant       @relation(fields: [tenantId], references: [id])
+  sales       Sale[]
+  creditSales CreditSale[]
 
+  @@unique([tenantId, eventCode])
   @@index([tenantId])
   @@index([tenantId, cpfCnpj])
+  @@index([tenantId, phone])
 }
 
 model Category {
@@ -181,11 +219,11 @@ model Category {
   name      String
   createdAt DateTime @default(now())
 
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  products  Product[]
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  products Product[]
 
-  @@index([tenantId])
   @@unique([tenantId, name])
+  @@index([tenantId])
 }
 
 model Brand {
@@ -194,65 +232,67 @@ model Brand {
   name      String
   createdAt DateTime @default(now())
 
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  products  Product[]
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  products Product[]
 
-  @@index([tenantId])
   @@unique([tenantId, name])
+  @@index([tenantId])
 }
 
 model Product {
-  id            String   @id @default(cuid())
-  tenantId      String
-  name          String
-  description   String?
-  price         Decimal  @db.Decimal(12, 2)
-  cost          Decimal  @db.Decimal(12, 2)
-  categoryId    String
-  brandId       String
-  sku           String?
-  minStock      Int
-  ncm           String   @default("61091000")
-  cfop          String   @default("5102")
-  icmsOrig      Int      @default(0)
-  icmsCsosn     String   @default("102")
-  createdAt     DateTime @default(now())
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(12, 2)
+  cost        Decimal  @db.Decimal(12, 2)
+  categoryId  String
+  brandId     String
+  sku         String?
+  minStock    Int
+  ncm         String   @default("61091000")
+  cfop        String   @default("5102")
+  icmsOrig    Int      @default(0)
+  icmsCsosn   String   @default("102")
+  createdAt   DateTime @default(now())
 
-  tenant        Tenant   @relation(fields: [tenantId], references: [id])
-  category      Category @relation(fields: [categoryId], references: [id])
-  brand         Brand    @relation(fields: [brandId], references: [id])
-  variations    ProductVariation[]
-  supplierCodes ProductSupplierCode[]
+  tenant         Tenant                @relation(fields: [tenantId], references: [id])
+  category       Category              @relation(fields: [categoryId], references: [id])
+  brand          Brand                 @relation(fields: [brandId], references: [id])
+  variations     ProductVariation[]
+  supplierCodes  ProductSupplierCode[]
   nfeImportItems NfeImportItem[]
 
+  @@unique([tenantId, sku])
   @@index([tenantId])
   @@index([tenantId, categoryId])
   @@index([tenantId, brandId])
-  @@unique([tenantId, sku])
 }
 
 model ProductVariation {
-  id            String   @id @default(cuid())
-  tenantId      String
-  productId     String
-  size          String
-  color         String
-  /** Codigo/EAN da etiqueta desta variacao (opcional). Se vazio, bipagem usa Product.sku. */
-  sku           String?
-  stock         Int
-  createdAt     DateTime @default(now())
+  id        String   @id @default(cuid())
+  tenantId  String
+  productId String
+  size      String
+  color     String
+  /**
+   * Codigo/EAN da etiqueta desta variacao (opcional). Se vazio, bipagem usa Product.sku.
+   */
+  sku       String?
+  stock     Int
+  createdAt DateTime @default(now())
 
-  tenant        Tenant   @relation(fields: [tenantId], references: [id])
-  product       Product  @relation(fields: [productId], references: [id])
-  stockMoves    StockMovement[]
-  saleItems     SaleItem[]
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  product         Product          @relation(fields: [productId], references: [id])
+  stockMoves      StockMovement[]
+  saleItems       SaleItem[]
   creditSaleItems CreditSaleItem[]
-  nfeImportItems NfeImportItem[]
+  nfeImportItems  NfeImportItem[]
 
-  @@index([tenantId])
-  @@index([tenantId, productId])
   @@unique([tenantId, productId, size, color])
   @@unique([tenantId, sku])
+  @@index([tenantId])
+  @@index([tenantId, productId])
 }
 
 model StockMovement {
@@ -264,9 +304,9 @@ model StockMovement {
   occurredAt         DateTime          @default(now())
   nfeImportId        String?
 
-  tenant             Tenant            @relation(fields: [tenantId], references: [id])
-  productVariation   ProductVariation  @relation(fields: [productVariationId], references: [id])
-  nfeImport          NfeImport?        @relation(fields: [nfeImportId], references: [id])
+  tenant           Tenant           @relation(fields: [tenantId], references: [id])
+  productVariation ProductVariation @relation(fields: [productVariationId], references: [id])
+  nfeImport        NfeImport?       @relation(fields: [nfeImportId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, productVariationId])
@@ -274,17 +314,17 @@ model StockMovement {
 }
 
 model Supplier {
-  id                 String   @id @default(cuid())
-  tenantId           String
-  name               String
-  tradeName          String?
-  cnpj               String
-  stateRegistration  String?
-  createdAt          DateTime @default(now())
+  id                String   @id @default(cuid())
+  tenantId          String
+  name              String
+  tradeName         String?
+  cnpj              String
+  stateRegistration String?
+  createdAt         DateTime @default(now())
 
-  tenant             Tenant   @relation(fields: [tenantId], references: [id])
-  productCodes       ProductSupplierCode[]
-  nfeImports         NfeImport[]
+  tenant       Tenant                @relation(fields: [tenantId], references: [id])
+  productCodes ProductSupplierCode[]
+  nfeImports   NfeImport[]
 
   @@unique([tenantId, cnpj])
   @@index([tenantId])
@@ -298,9 +338,9 @@ model ProductSupplierCode {
   code       String
   createdAt  DateTime @default(now())
 
-  tenant     Tenant   @relation(fields: [tenantId], references: [id])
-  product    Product  @relation(fields: [productId], references: [id])
-  supplier   Supplier @relation(fields: [supplierId], references: [id])
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+  supplier Supplier @relation(fields: [supplierId], references: [id])
 
   @@unique([tenantId, supplierId, code])
   @@index([tenantId])
@@ -308,29 +348,31 @@ model ProductSupplierCode {
 }
 
 model NfeImport {
-  id            String          @id @default(cuid())
-  tenantId      String
-  accessKey     String
-  number        String
-  series        String
-  issuedAt      DateTime
-  importedAt    DateTime        @default(now())
-  supplierId    String?
-  supplierCnpj  String
-  supplierName  String
-  totalValue    Decimal         @db.Decimal(12, 2)
-  paymentInfo   String?
-  itemCount     Int
-  status        NfeImportStatus @default(COMPLETED)
-  /** XML original da NF-e de entrada (arquivo contabil). */
-  xmlContent    String?         @db.Text
-  userId        String
+  id           String          @id @default(cuid())
+  tenantId     String
+  accessKey    String
+  number       String
+  series       String
+  issuedAt     DateTime
+  importedAt   DateTime        @default(now())
+  supplierId   String?
+  supplierCnpj String
+  supplierName String
+  totalValue   Decimal         @db.Decimal(12, 2)
+  paymentInfo  String?
+  itemCount    Int
+  status       NfeImportStatus @default(COMPLETED)
+  /**
+   * XML original da NF-e de entrada (arquivo contabil).
+   */
+  xmlContent   String?         @db.Text
+  userId       String
 
-  tenant        Tenant          @relation(fields: [tenantId], references: [id])
-  supplier      Supplier?       @relation(fields: [supplierId], references: [id])
-  user          User            @relation(fields: [userId], references: [id])
-  items         NfeImportItem[]
-  stockMoves    StockMovement[]
+  tenant     Tenant          @relation(fields: [tenantId], references: [id])
+  supplier   Supplier?       @relation(fields: [supplierId], references: [id])
+  user       User            @relation(fields: [userId], references: [id])
+  items      NfeImportItem[]
+  stockMoves StockMovement[]
 
   @@unique([tenantId, accessKey])
   @@index([tenantId])
@@ -358,33 +400,33 @@ model NfeImportItem {
   stockMovementId    String?
   action             NfeImportItemAction
 
-  tenant             Tenant              @relation(fields: [tenantId], references: [id])
-  nfeImport          NfeImport           @relation(fields: [nfeImportId], references: [id], onDelete: Cascade)
-  product            Product?            @relation(fields: [productId], references: [id])
-  productVariation   ProductVariation?   @relation(fields: [productVariationId], references: [id])
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  nfeImport        NfeImport         @relation(fields: [nfeImportId], references: [id], onDelete: Cascade)
+  product          Product?          @relation(fields: [productId], references: [id])
+  productVariation ProductVariation? @relation(fields: [productVariationId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, nfeImportId])
 }
 
 model Sale {
-  id                 String        @id @default(cuid())
-  tenantId           String
-  customerId         String?
-  userId             String
-  totalValue         Decimal       @db.Decimal(12, 2)
-  discountValue      Decimal       @default(0) @db.Decimal(12, 2)
-  discountPercent    Decimal       @default(0) @db.Decimal(5, 2)
-  paymentMethod      PaymentMethod
-  installments       Int           @default(1)
-  status             SaleStatus    @default(PAID)
-  occurredAt         DateTime      @default(now())
+  id              String        @id @default(cuid())
+  tenantId        String
+  customerId      String?
+  userId          String
+  totalValue      Decimal       @db.Decimal(12, 2)
+  discountValue   Decimal       @default(0) @db.Decimal(12, 2)
+  discountPercent Decimal       @default(0) @db.Decimal(5, 2)
+  paymentMethod   PaymentMethod
+  installments    Int           @default(1)
+  status          SaleStatus    @default(PAID)
+  occurredAt      DateTime      @default(now())
 
-  tenant             Tenant        @relation(fields: [tenantId], references: [id])
-  customer           Customer?     @relation(fields: [customerId], references: [id])
-  user               User          @relation(fields: [userId], references: [id])
-  items              SaleItem[]
-  invoice            Invoice?
+  tenant   Tenant     @relation(fields: [tenantId], references: [id])
+  customer Customer?  @relation(fields: [customerId], references: [id])
+  user     User       @relation(fields: [userId], references: [id])
+  items    SaleItem[]
+  invoice  Invoice?
 
   @@index([tenantId])
   @@index([tenantId, userId])
@@ -392,40 +434,44 @@ model Sale {
 }
 
 model SaleItem {
-  id                 String            @id @default(cuid())
+  id                 String  @id @default(cuid())
   tenantId           String
   saleId             String
   productVariationId String
   quantity           Int
-  unitPrice          Decimal           @db.Decimal(12, 2)
+  unitPrice          Decimal @db.Decimal(12, 2)
 
-  tenant             Tenant            @relation(fields: [tenantId], references: [id])
-  sale               Sale              @relation(fields: [saleId], references: [id])
-  productVariation   ProductVariation  @relation(fields: [productVariationId], references: [id])
+  tenant           Tenant           @relation(fields: [tenantId], references: [id])
+  sale             Sale             @relation(fields: [saleId], references: [id])
+  productVariation ProductVariation @relation(fields: [productVariationId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, saleId])
 }
 
 model Invoice {
-  id                  String        @id @default(cuid())
-  tenantId            String
-  saleId              String        @unique
-  externalId          String?       @unique
-  number              String?
-  key                 String?
-  status              InvoiceStatus @default(PENDING)
-  /** XML autorizado da NFC-e (arquivo contabil). */
-  xmlContent          String?       @db.Text
-  xmlUrl              String?
-  pdfUrl              String?
-  lastError           String?       @db.Text
-  issuedAt            DateTime?
-  /** Evita emissao concorrente (HTTP + worker / duplo clique). TTL em codigo (lease). */
-  emissionStartedAt   DateTime?
+  id                String        @id @default(cuid())
+  tenantId          String
+  saleId            String        @unique
+  externalId        String?       @unique
+  number            String?
+  key               String?
+  status            InvoiceStatus @default(PENDING)
+  /**
+   * XML autorizado da NFC-e (arquivo contabil).
+   */
+  xmlContent        String?       @db.Text
+  xmlUrl            String?
+  pdfUrl            String?
+  lastError         String?       @db.Text
+  issuedAt          DateTime?
+  /**
+   * Evita emissao concorrente (HTTP + worker / duplo clique). TTL em codigo (lease).
+   */
+  emissionStartedAt DateTime?
 
-  tenant              Tenant        @relation(fields: [tenantId], references: [id])
-  sale                Sale          @relation(fields: [saleId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  sale   Sale   @relation(fields: [saleId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, status])
@@ -437,13 +483,15 @@ model NfceIssueJob {
   saleId    String             @unique
   status    NfceIssueJobStatus @default(PENDING)
   attempts  Int                @default(0)
-  /** Quando definido, o worker so processa apos esta data (backoff). */
+  /**
+   * Quando definido, o worker so processa apos esta data (backoff).
+   */
   runAt     DateTime?
   lastError String?            @db.Text
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
 
-  tenant    Tenant             @relation(fields: [tenantId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, status])
@@ -461,11 +509,13 @@ model CreditSale {
   paidTotal       Decimal          @default(0) @db.Decimal(12, 2)
   status          CreditSaleStatus @default(OPEN)
   notes           String?
+  eventName       String?
+  dueDate         DateTime?
   occurredAt      DateTime         @default(now())
 
-  tenant   Tenant   @relation(fields: [tenantId], references: [id])
-  customer Customer @relation(fields: [customerId], references: [id])
-  user     User     @relation(fields: [userId], references: [id])
+  tenant   Tenant           @relation(fields: [tenantId], references: [id])
+  customer Customer         @relation(fields: [customerId], references: [id])
+  user     User             @relation(fields: [userId], references: [id])
   items    CreditSaleItem[]
   payments CreditPayment[]
 
@@ -476,32 +526,32 @@ model CreditSale {
 }
 
 model CreditSaleItem {
-  id                 String           @id @default(cuid())
+  id                 String  @id @default(cuid())
   tenantId           String
   creditSaleId       String
   productVariationId String
   quantity           Int
-  unitPrice          Decimal          @db.Decimal(12, 2)
+  unitPrice          Decimal @db.Decimal(12, 2)
 
-  tenant             Tenant           @relation(fields: [tenantId], references: [id])
-  creditSale         CreditSale       @relation(fields: [creditSaleId], references: [id], onDelete: Cascade)
-  productVariation   ProductVariation @relation(fields: [productVariationId], references: [id])
+  tenant           Tenant           @relation(fields: [tenantId], references: [id])
+  creditSale       CreditSale       @relation(fields: [creditSaleId], references: [id], onDelete: Cascade)
+  productVariation ProductVariation @relation(fields: [productVariationId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, creditSaleId])
 }
 
 model CreditPayment {
-  id             String          @id @default(cuid())
-  tenantId       String
-  creditSaleId   String
-  amount         Decimal         @db.Decimal(12, 2)
-  paymentMethod  PaymentMethod   @default(CASH)
-  paidAt         DateTime        @default(now())
-  note           String?
+  id            String        @id @default(cuid())
+  tenantId      String
+  creditSaleId  String
+  amount        Decimal       @db.Decimal(12, 2)
+  paymentMethod PaymentMethod @default(CASH)
+  paidAt        DateTime      @default(now())
+  note          String?
 
-  tenant         Tenant          @relation(fields: [tenantId], references: [id])
-  creditSale     CreditSale      @relation(fields: [creditSaleId], references: [id], onDelete: Cascade)
+  tenant     Tenant     @relation(fields: [tenantId], references: [id])
+  creditSale CreditSale @relation(fields: [creditSaleId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([tenantId, creditSaleId])
@@ -550,12 +600,16 @@ model StockAlertLog {
   @@index([tenantId, productId, channel])
 }
 
-/** Historico de acoes da loja (auditoria). */
+/**
+ * Historico de acoes da loja (auditoria).
+ */
 model AuditLog {
   id         String   @id @default(cuid())
   tenantId   String
   userId     String?
-  /** Codigo estavel: STOCK_ENTRY, NFE_IMPORT_COMPLETED, PRODUCT_PRICE_CHANGED, ... */
+  /**
+   * Codigo estavel: STOCK_ENTRY, NFE_IMPORT_COMPLETED, PRODUCT_PRICE_CHANGED, ...
+   */
   action     String
   entityType String?
   entityId   String?

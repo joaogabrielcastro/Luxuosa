@@ -7,6 +7,7 @@ import {
   buildAndValidateSaleLineItems,
   restoreStockForLine
 } from "../../shared/saleStockLineItems.js";
+import { AUDIT_ACTIONS, recordAuditInTx } from "../../shared/auditLog.js";
 
 function toNumber(value, fallback = 0) {
   const parsed = Number(value);
@@ -50,6 +51,165 @@ async function restoreCreditSaleEffects(tx, tenantId, creditSale) {
 }
 
 export const crediarioService = {
+  async getConfig(tenantId) {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        creditEventMode: true,
+        creditEventOnly: true,
+        creditEventName: true,
+        creditEventDueDate: true,
+        creditEventClosedAt: true,
+        creditDefaultLimit: true
+      }
+    });
+    if (!tenant) {
+      const err = new Error("Loja nao encontrada.");
+      err.statusCode = 404;
+      throw err;
+    }
+    return {
+      eventMode: tenant.creditEventMode,
+      eventOnly: tenant.creditEventOnly,
+      eventName: tenant.creditEventName,
+      dueDate: tenant.creditEventDueDate,
+      closedAt: tenant.creditEventClosedAt,
+      defaultCreditLimit: tenant.creditDefaultLimit == null ? null : toNumber(tenant.creditDefaultLimit)
+    };
+  },
+
+  async updateConfig(tenantId, userId, payload) {
+    const data = {};
+    if (payload.eventMode !== undefined) data.creditEventMode = Boolean(payload.eventMode);
+    if (payload.eventOnly !== undefined) data.creditEventOnly = Boolean(payload.eventOnly);
+    if (payload.eventName !== undefined) data.creditEventName = payload.eventName || null;
+    if (payload.defaultCreditLimit !== undefined) data.creditDefaultLimit = payload.defaultCreditLimit;
+    if (payload.dueDate !== undefined) {
+      const due = payload.dueDate ? new Date(`${payload.dueDate}T12:00:00.000Z`) : null;
+      if (due && Number.isNaN(due.getTime())) {
+        const err = new Error("Data de vencimento invalida.");
+        err.statusCode = 400;
+        throw err;
+      }
+      data.creditEventDueDate = due;
+    }
+    if (payload.eventName || payload.eventMode === true) data.creditEventClosedAt = null;
+    const updated = await prisma.$transaction(async (tx) => {
+      const tenant = await tx.tenant.update({ where: { id: tenantId }, data });
+      await recordAuditInTx(tx, {
+        tenantId,
+        userId,
+        action: AUDIT_ACTIONS.CREDIT_EVENT_CONFIGURED,
+        entityType: "Tenant",
+        entityId: tenantId,
+        summary: `Configuracao do crediario atualizada${tenant.creditEventName ? `: ${tenant.creditEventName}` : ""}`,
+        meta: { eventMode: tenant.creditEventMode, eventName: tenant.creditEventName }
+      });
+      return tenant;
+    });
+    return {
+      eventMode: updated.creditEventMode,
+      eventOnly: updated.creditEventOnly,
+      eventName: updated.creditEventName,
+      dueDate: updated.creditEventDueDate,
+      closedAt: updated.creditEventClosedAt,
+      defaultCreditLimit: updated.creditDefaultLimit == null ? null : toNumber(updated.creditDefaultLimit)
+    };
+  },
+
+  async closeEvent(tenantId, userId) {
+    const config = await this.getConfig(tenantId);
+    if (!config.eventMode || !config.eventName) {
+      const err = new Error("Nenhum evento de crediario esta ativo.");
+      err.statusCode = 409;
+      throw err;
+    }
+    const accounts = await this.accounts(tenantId, { eventName: config.eventName });
+    const closedAt = new Date();
+    await prisma.$transaction(async (tx) => {
+      await tx.tenant.update({
+        where: { id: tenantId },
+        data: { creditEventMode: false, creditEventClosedAt: closedAt }
+      });
+      await recordAuditInTx(tx, {
+        tenantId,
+        userId,
+        action: AUDIT_ACTIONS.CREDIT_EVENT_CLOSED,
+        entityType: "Tenant",
+        entityId: tenantId,
+        summary: `Evento de crediario fechado: ${config.eventName}`,
+        meta: { accountCount: accounts.items.length, openBalance: accounts.openBalance }
+      });
+    });
+    return { eventName: config.eventName, closedAt, ...accounts };
+  },
+
+  async accounts(tenantId, { eventName, q } = {}) {
+    const where = { tenantId, status: CreditSaleStatus.OPEN };
+    if (eventName) where.eventName = eventName;
+    const sales = await prisma.creditSale.findMany({
+      where,
+      orderBy: { occurredAt: "asc" },
+      include: { customer: true, _count: { select: { items: true } } }
+    });
+    const grouped = new Map();
+    for (const sale of sales) {
+      const current = grouped.get(sale.customerId) || {
+        customer: sale.customer,
+        saleCount: 0,
+        itemCount: 0,
+        totalValue: 0,
+        paidTotal: 0,
+        remaining: 0,
+        firstPurchaseAt: sale.occurredAt,
+        lastPurchaseAt: sale.occurredAt,
+        dueDate: sale.dueDate || null
+      };
+      current.saleCount += 1;
+      current.itemCount += sale._count.items;
+      current.totalValue += toNumber(sale.totalValue);
+      current.paidTotal += toNumber(sale.paidTotal);
+      current.remaining += Math.max(toNumber(sale.totalValue) - toNumber(sale.paidTotal), 0);
+      current.lastPurchaseAt = sale.occurredAt;
+      if (sale.dueDate) current.dueDate = sale.dueDate;
+      grouped.set(sale.customerId, current);
+    }
+    let items = [...grouped.values()].sort((a, b) => b.remaining - a.remaining);
+    if (q) {
+      const text = q.toLowerCase();
+      const digits = q.replace(/\D/g, "");
+      items = items.filter(({ customer }) =>
+        customer.name.toLowerCase().includes(text) ||
+        (digits && [customer.cpfCnpj, customer.phone, customer.eventCode].some((v) => String(v || "").includes(digits))) ||
+        String(customer.eventCode || "").toLowerCase().includes(text)
+      );
+    }
+    return {
+      eventName: eventName || null,
+      items,
+      openBalance: items.reduce((sum, item) => sum + item.remaining, 0)
+    };
+  },
+
+  async customerStatement(tenantId, customerId, { eventName } = {}) {
+    const customer = await prisma.customer.findFirst({ where: { tenantId, id: customerId } });
+    if (!customer) return null;
+    const where = { tenantId, customerId, status: { not: CreditSaleStatus.CANCELED } };
+    if (eventName) where.eventName = eventName;
+    const sales = await prisma.creditSale.findMany({
+      where,
+      orderBy: { occurredAt: "asc" },
+      include: {
+        user: { select: { id: true, name: true } },
+        items: { include: { productVariation: { include: { product: true } } } },
+        payments: { orderBy: { paidAt: "asc" } }
+      }
+    });
+    const totalValue = sales.reduce((sum, sale) => sum + toNumber(sale.totalValue), 0);
+    const paidTotal = sales.reduce((sum, sale) => sum + toNumber(sale.paidTotal), 0);
+    return { customer, eventName: eventName || null, sales, totalValue, paidTotal, remaining: Math.max(totalValue - paidTotal, 0) };
+  },
+
   async list(tenantId, { skip = 0, take = 50, status, q } = {}) {
     const where = { tenantId };
     if (status && Object.values(CreditSaleStatus).includes(status)) {
@@ -152,6 +312,27 @@ export const crediarioService = {
       const percentDiscountValue = (grossTotal * discountPercent) / 100;
       const totalValue = Math.max(grossTotal - discountValue - percentDiscountValue, 0);
 
+      const tenant = await tx.tenant.findUnique({
+        where: { id: tenantId },
+        select: { creditEventMode: true, creditEventName: true, creditEventDueDate: true, creditDefaultLimit: true }
+      });
+      const limit = customer.creditLimit == null ? toNumber(tenant?.creditDefaultLimit, 0) : toNumber(customer.creditLimit, 0);
+      const open = await tx.creditSale.aggregate({
+        where: { tenantId, customerId: payload.customerId, status: CreditSaleStatus.OPEN },
+        _sum: { totalValue: true, paidTotal: true }
+      });
+      const currentBalance = Math.max(toNumber(open._sum.totalValue) - toNumber(open._sum.paidTotal), 0);
+      if (limit > 0 && currentBalance + totalValue > limit + 0.0001) {
+        const mayOverride = userType === "ADMIN" && payload.overrideCreditLimit === true;
+        if (!mayOverride) {
+          const err = new Error(`Limite de crediario excedido. Saldo atual R$ ${currentBalance.toFixed(2)}, limite R$ ${limit.toFixed(2)}.`);
+          err.statusCode = 409;
+          err.code = "CREDIT_LIMIT_EXCEEDED";
+          err.details = { currentBalance, saleTotal: totalValue, limit };
+          throw err;
+        }
+      }
+
       const creditSale = await tx.creditSale.create({
         data: {
           tenantId,
@@ -163,6 +344,8 @@ export const crediarioService = {
           paidTotal: 0,
           status: CreditSaleStatus.OPEN,
           notes: payload.notes?.trim() || null,
+          eventName: tenant?.creditEventMode ? tenant.creditEventName : null,
+          dueDate: tenant?.creditEventMode ? tenant.creditEventDueDate : null,
           items: {
             create: saleItems.map((item) => ({
               tenantId,
@@ -190,11 +373,21 @@ export const crediarioService = {
         }
       });
 
+      await recordAuditInTx(tx, {
+        tenantId,
+        userId,
+        action: AUDIT_ACTIONS.CREDIT_SALE_CREATED,
+        entityType: "CreditSale",
+        entityId: creditSale.id,
+        summary: `Venda a prazo registrada para ${customer.name}`,
+        meta: { customerId: customer.id, totalValue, eventName: tenant?.creditEventName || null }
+      });
+
       return creditSale;
     });
   },
 
-  async addPayment(tenantId, creditSaleId, payload) {
+  async addPayment(tenantId, userId, creditSaleId, payload) {
     return prisma.$transaction(async (tx) => {
       const sale = await tx.creditSale.findFirst({
         where: { tenantId, id: creditSaleId }
@@ -250,6 +443,16 @@ export const crediarioService = {
         }
       });
 
+      await recordAuditInTx(tx, {
+        tenantId,
+        userId,
+        action: AUDIT_ACTIONS.CREDIT_PAYMENT_RECEIVED,
+        entityType: "CreditSale",
+        entityId: creditSaleId,
+        summary: `Recebimento de crediario: R$ ${amount.toFixed(2)}`,
+        meta: { amount, paymentMethod: method }
+      });
+
       const newPaid = paidTotal + amount;
       const nextStatus = newPaid >= totalValue - 0.0001 ? CreditSaleStatus.PAID : CreditSaleStatus.OPEN;
 
@@ -267,7 +470,7 @@ export const crediarioService = {
     });
   },
 
-  async cancel(tenantId, creditSaleId) {
+  async cancel(tenantId, userId, creditSaleId) {
     return prisma.$transaction(async (tx) => {
       const sale = await tx.creditSale.findFirst({
         where: { tenantId, id: creditSaleId },
@@ -294,6 +497,16 @@ export const crediarioService = {
 
       await restoreCreditSaleEffects(tx, tenantId, sale);
 
+      await recordAuditInTx(tx, {
+        tenantId,
+        userId,
+        action: AUDIT_ACTIONS.CREDIT_SALE_CANCELED,
+        entityType: "CreditSale",
+        entityId: creditSaleId,
+        summary: "Venda a prazo cancelada",
+        meta: { customerId: sale.customerId, totalValue: toNumber(sale.totalValue) }
+      });
+
       return tx.creditSale.update({
         where: { id: creditSaleId },
         data: { status: CreditSaleStatus.CANCELED }
@@ -301,7 +514,7 @@ export const crediarioService = {
     });
   },
 
-  async remove(tenantId, creditSaleId) {
+  async remove(tenantId, userId, creditSaleId) {
     return prisma.$transaction(async (tx) => {
       const sale = await tx.creditSale.findFirst({
         where: { tenantId, id: creditSaleId },
@@ -330,6 +543,15 @@ export const crediarioService = {
       }
 
       await tx.creditSale.delete({ where: { id: creditSaleId } });
+      await recordAuditInTx(tx, {
+        tenantId,
+        userId,
+        action: AUDIT_ACTIONS.CREDIT_SALE_DELETED,
+        entityType: "CreditSale",
+        entityId: creditSaleId,
+        summary: "Registro de crediario excluido",
+        meta: { customerId: sale.customerId, status: sale.status }
+      });
       return { ok: true };
     });
   }

@@ -209,3 +209,16 @@
 .animate-toast-in {
   animation: ui-slide-in 0.25s ease-out;
 }
+
+@media print {
+  body * { visibility: hidden !important; }
+  .credit-statement, .credit-statement * { visibility: visible !important; }
+  .credit-statement {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    padding: 16px;
+    color: #0f172a;
+    background: #fff;
+  }
+}

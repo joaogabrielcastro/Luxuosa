@@ -18,7 +18,7 @@ function productStock(item) {
 }
 
 export function StockOverviewPage() {
-  const { token, user } = useAuth();
+  const { token, user, tenant } = useAuth();
   const isAdmin = user?.type === "ADMIN";
 
   const productsQuery = useQuery({
@@ -46,7 +46,7 @@ export function StockOverviewPage() {
         title="Estoque"
         description="Veja o que a loja tem, o que precisa repor e registre entradas."
       />
-      <ModuleNav items={stockModuleItems(isAdmin)} label="Estoque" />
+      <ModuleNav items={stockModuleItems(isAdmin, tenant?.creditEventOnly === true)} label="Estoque" />
 
       <section className="grid gap-3 sm:grid-cols-3">
         <StatCard

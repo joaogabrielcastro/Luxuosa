@@ -61,4 +61,42 @@ describe("App autenticado", () => {
     );
     expect(await screen.findByRole("heading", { level: 1, name: title }, { timeout: 8000 })).toBeInTheDocument();
   }, 15000);
+
+  it("redireciona rotas fora do perfil enxuto para o crediário", async () => {
+    const eventSession = {
+      ...session,
+      tenant: { ...session.tenant, creditEventOnly: true }
+    };
+    apiClient.mockImplementation(async (path, opts) => {
+      if (path === "/auth/me") return { user: eventSession.user, tenant: eventSession.tenant };
+      return mockApi(path, opts);
+    });
+    localStorage.setItem("luxuosa_session", JSON.stringify(eventSession));
+
+    render(
+      <MemoryRouter initialEntries={["/vendas"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Crediário" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Vendas" })).not.toBeInTheDocument();
+  });
+
+  it("permite relatórios ao administrador no perfil enxuto", async () => {
+    const eventSession = { ...session, tenant: { ...session.tenant, creditEventOnly: true } };
+    apiClient.mockImplementation(async (path, opts) => {
+      if (path === "/auth/me") return { user: eventSession.user, tenant: eventSession.tenant };
+      return mockApi(path, opts);
+    });
+    localStorage.setItem("luxuosa_session", JSON.stringify(eventSession));
+
+    render(
+      <MemoryRouter initialEntries={["/relatorios"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Relatórios" })).toBeInTheDocument();
+  });
 });

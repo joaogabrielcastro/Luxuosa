@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { parsePageQuery } from "../../shared/pagination.js";
 import { customerService } from "./customer.service.js";
+import { AUDIT_ACTIONS, safeRecordAudit } from "../../shared/auditLog.js";
 
 function digitsOnly(value) {
   return String(value ?? "").replace(/\D/g, "");
@@ -25,7 +26,9 @@ const customerSchema = z.object({
   uf: z.string().length(2).optional(),
   cep: z.string().min(8).optional(),
   ibgeMunicipio: z.string().length(7).optional(),
-  municipioNome: z.string().min(2).optional()
+  municipioNome: z.string().min(2).optional(),
+  eventCode: z.string().trim().max(40).optional().nullable(),
+  creditLimit: z.coerce.number().nonnegative().optional().nullable()
 });
 
 export const customerController = {
@@ -56,6 +59,15 @@ export const customerController = {
     try {
       const payload = customerSchema.parse(req.body);
       const customer = await customerService.create(req.tenantId, payload);
+      safeRecordAudit({
+        tenantId: req.tenantId,
+        userId: req.user.id,
+        action: AUDIT_ACTIONS.CUSTOMER_CREATED,
+        entityType: "Customer",
+        entityId: customer.id,
+        summary: `Cliente cadastrado: ${customer.name}`,
+        meta: { eventCode: customer.eventCode || null }
+      });
       return res.status(201).json(customer);
     } catch (error) {
       return next(error);

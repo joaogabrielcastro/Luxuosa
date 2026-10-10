@@ -20,7 +20,8 @@ export function isNavItemActive(item, location) {
   return null;
 }
 
-export function catalogModuleItems() {
+export function catalogModuleItems(eventOnly = false) {
+  if (eventOnly) return [{ to: "/catalog/products", label: "Produtos" }];
   return [
     { to: "/catalog/products", label: "Produtos" },
     { to: "/catalog/categories", label: "Categorias" },
@@ -28,7 +29,8 @@ export function catalogModuleItems() {
   ];
 }
 
-export function stockModuleItems(isAdmin) {
+export function stockModuleItems(isAdmin, eventOnly = false) {
+  if (eventOnly) return [{ to: "/estoque", label: "Estoque", end: true }];
   const items = [
     { to: "/estoque", label: "Estoque", end: true },
     { to: "/estoque/movimentos", label: "Movimentações" }

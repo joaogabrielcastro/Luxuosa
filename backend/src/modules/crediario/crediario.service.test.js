@@ -27,6 +27,11 @@ mock.module("../../config/prisma.js", {
       },
       async $transaction(fn) {
         const tx = {
+          tenant: {
+            findUnique: async () => ({ creditEventMode: true, creditEventName: "Retiro", creditEventDueDate: null, creditDefaultLimit: null }),
+            update: async ({ data }) => ({ id: "t1", ...data })
+          },
+          auditLog: { create: async ({ data }) => ({ id: "a1", ...data }) },
           customer: {
             findFirst: async ({ where }) => customers.get(where.id) || null,
             updateMany: async () => ({ count: 1 })
@@ -47,6 +52,10 @@ mock.module("../../config/prisma.js", {
           },
           stockMovement: { create: async () => ({ id: "m1" }) },
           creditSale: {
+            aggregate: async ({ where }) => {
+              const rows = creditSales.filter((sale) => sale.customerId === where.customerId && sale.status === CreditSaleStatus.OPEN);
+              return { _sum: { totalValue: rows.reduce((sum, sale) => sum + Number(sale.totalValue), 0), paidTotal: rows.reduce((sum, sale) => sum + Number(sale.paidTotal), 0) } };
+            },
             create: async ({ data }) => {
               const row = {
                 id: `cs-${creditSales.length + 1}`,
@@ -166,54 +175,54 @@ describe("crediarioService", () => {
     const byId = await crediarioService.getById("t1", created.id);
     assert.ok(byId.remaining > 0);
 
-    await assert.rejects(() => crediarioService.addPayment("t1", "x", { amount: 10 }), /nao encontrada/);
+    await assert.rejects(() => crediarioService.addPayment("t1", "u1", "x", { amount: 10 }), /nao encontrada/);
     await assert.rejects(
-      () => crediarioService.addPayment("t1", created.id, { amount: 0 }),
+      () => crediarioService.addPayment("t1", "u1", created.id, { amount: 0 }),
       /maior que zero/
     );
     await assert.rejects(
-      () => crediarioService.addPayment("t1", created.id, { amount: 999 }),
+      () => crediarioService.addPayment("t1", "u1", created.id, { amount: 999 }),
       /excede/
     );
     await assert.rejects(
-      () => crediarioService.addPayment("t1", created.id, { amount: 10, paidAt: "nope" }),
+      () => crediarioService.addPayment("t1", "u1", created.id, { amount: 10, paidAt: "nope" }),
       /Data/
     );
 
-    const paidPart = await crediarioService.addPayment("t1", created.id, {
+    const paidPart = await crediarioService.addPayment("t1", "u1", created.id, {
       amount: 20,
       paymentMethod: "pix",
       note: "parcela"
     });
     assert.equal(paidPart.status, CreditSaleStatus.OPEN);
 
-    await assert.rejects(() => crediarioService.cancel("t1", created.id), /apos recebimento/);
-    await assert.rejects(() => crediarioService.remove("t1", created.id), /recebimento em aberto/);
+    await assert.rejects(() => crediarioService.cancel("t1", "u1", created.id), /apos recebimento/);
+    await assert.rejects(() => crediarioService.remove("t1", "u1", created.id), /recebimento em aberto/);
 
-    const settled = await crediarioService.addPayment("t1", created.id, {
+    const settled = await crediarioService.addPayment("t1", "u1", created.id, {
       amount: toNum(created.totalValue) - 20,
       paymentMethod: "dinheiro"
     });
     assert.equal(settled.status, CreditSaleStatus.PAID);
     await assert.rejects(
-      () => crediarioService.addPayment("t1", created.id, { amount: 1 }),
+      () => crediarioService.addPayment("t1", "u1", created.id, { amount: 1 }),
       /em aberto/
     );
-    await assert.rejects(() => crediarioService.cancel("t1", created.id), /em aberto/);
+    await assert.rejects(() => crediarioService.cancel("t1", "u1", created.id), /em aberto/);
 
-    const removed = await crediarioService.remove("t1", created.id);
+    const removed = await crediarioService.remove("t1", "u1", created.id);
     assert.equal(removed.ok, true);
 
     const open2 = await crediarioService.create("t1", "u1", "ADMIN", {
       customerId: "c1",
       items: [{ productVariationId: "v1", quantity: 1, unitPrice: 80 }]
     });
-    const canceled = await crediarioService.cancel("t1", open2.id);
+    const canceled = await crediarioService.cancel("t1", "u1", open2.id);
     assert.equal(canceled.status, CreditSaleStatus.CANCELED);
-    const again = await crediarioService.cancel("t1", open2.id);
+    const again = await crediarioService.cancel("t1", "u1", open2.id);
     assert.equal(again.status, CreditSaleStatus.CANCELED);
-    await assert.rejects(() => crediarioService.cancel("t1", "missing"), /nao encontrada/);
-    await assert.rejects(() => crediarioService.remove("t1", "missing"), /nao encontrada/);
-    await crediarioService.remove("t1", open2.id);
+    await assert.rejects(() => crediarioService.cancel("t1", "u1", "missing"), /nao encontrada/);
+    await assert.rejects(() => crediarioService.remove("t1", "u1", "missing"), /nao encontrada/);
+    await crediarioService.remove("t1", "u1", open2.id);
   });
 });

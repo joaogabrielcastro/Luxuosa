@@ -156,6 +156,7 @@ export async function seedCatalog(baseUrl, token, { stock = 10, price = 50, cost
 export async function destroyTenant(tenantId) {
   if (!tenantId) return;
   const tables = [
+    () => prisma.auditLog.deleteMany({ where: { tenantId } }),
     () => prisma.nfeImportItem.deleteMany({ where: { tenantId } }),
     () => prisma.nfeImport.deleteMany({ where: { tenantId } }),
     () => prisma.productSupplierCode.deleteMany({ where: { tenantId } }),

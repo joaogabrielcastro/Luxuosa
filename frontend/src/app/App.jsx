@@ -71,6 +71,18 @@ function PrivateRoute({ children }) {
   return token ? children : <Navigate to="/login" replace />;
 }
 
+const EVENT_ONLY_PATHS = ["/crediario", "/clientes", "/catalog/products", "/estoque", "/relatorios", "/configuracoes", "/auditoria", "/usuarios", "/assinatura"];
+
+function TenantProfileRoute({ path, children }) {
+  const { tenant, user } = useAuth();
+  if (tenant?.creditEventOnly !== true) return children;
+  const allowed = EVENT_ONLY_PATHS.includes(path);
+  if (!allowed || (user?.type !== "ADMIN" && !["/crediario", "/clientes"].includes(path))) {
+    return <Navigate to="/crediario" replace />;
+  }
+  return children;
+}
+
 /** Layout + página numa única árvore — evita Outlet aninhado (tela branca em /vendas). */
 function PrivateShell({ children }) {
   return (
@@ -82,35 +94,39 @@ function PrivateShell({ children }) {
   );
 }
 
+function ProfiledShell({ path, children }) {
+  return <TenantProfileRoute path={path}><PrivateShell>{children}</PrivateShell></TenantProfileRoute>;
+}
+
 function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/cadastro" element={<RegisterPage />} />
-      <Route path="/" element={<PrivateShell><AdminDashboardPage /></PrivateShell>} />
-      <Route path="/catalog/categories" element={<PrivateShell><CategoriesPage /></PrivateShell>} />
-      <Route path="/catalog/brands" element={<PrivateShell><BrandsPage /></PrivateShell>} />
-      <Route path="/catalog/products" element={<PrivateShell><ProductsPage /></PrivateShell>} />
+      <Route path="/" element={<ProfiledShell path="/"><AdminDashboardPage /></ProfiledShell>} />
+      <Route path="/catalog/categories" element={<ProfiledShell path="/catalog/categories"><CategoriesPage /></ProfiledShell>} />
+      <Route path="/catalog/brands" element={<ProfiledShell path="/catalog/brands"><BrandsPage /></ProfiledShell>} />
+      <Route path="/catalog/products" element={<ProfiledShell path="/catalog/products"><ProductsPage /></ProfiledShell>} />
       <Route path="/catalog/variations" element={<Navigate to="/catalog/products" replace />} />
       <Route path="/sales" element={<Navigate to="/vendas" replace />} />
       <Route path="/stock" element={<Navigate to="/estoque/movimentos" replace />} />
       <Route path="/reports" element={<Navigate to="/relatorios" replace />} />
-      <Route path="/vendas" element={<PrivateShell><SalesPage /></PrivateShell>} />
-      <Route path="/crediario" element={<PrivateShell><CrediarioPage /></PrivateShell>} />
-      <Route path="/clientes" element={<PrivateShell><CustomersPage /></PrivateShell>} />
-      <Route path="/estoque" element={<PrivateShell><StockOverviewPage /></PrivateShell>} />
-      <Route path="/estoque/movimentos" element={<PrivateShell><StockMovementsPage /></PrivateShell>} />
-      <Route path="/estoque/importar-nfe" element={<PrivateShell><NfeImportPage /></PrivateShell>} />
-      <Route path="/estoque/alertas" element={<PrivateShell><StockAlertsPage /></PrivateShell>} />
-      <Route path="/caixa" element={<PrivateShell><CashPage /></PrivateShell>} />
-      <Route path="/relatorios" element={<PrivateShell><ReportsPage /></PrivateShell>} />
+      <Route path="/vendas" element={<ProfiledShell path="/vendas"><SalesPage /></ProfiledShell>} />
+      <Route path="/crediario" element={<ProfiledShell path="/crediario"><CrediarioPage /></ProfiledShell>} />
+      <Route path="/clientes" element={<ProfiledShell path="/clientes"><CustomersPage /></ProfiledShell>} />
+      <Route path="/estoque" element={<ProfiledShell path="/estoque"><StockOverviewPage /></ProfiledShell>} />
+      <Route path="/estoque/movimentos" element={<ProfiledShell path="/estoque/movimentos"><StockMovementsPage /></ProfiledShell>} />
+      <Route path="/estoque/importar-nfe" element={<ProfiledShell path="/estoque/importar-nfe"><NfeImportPage /></ProfiledShell>} />
+      <Route path="/estoque/alertas" element={<ProfiledShell path="/estoque/alertas"><StockAlertsPage /></ProfiledShell>} />
+      <Route path="/caixa" element={<ProfiledShell path="/caixa"><CashPage /></ProfiledShell>} />
+      <Route path="/relatorios" element={<ProfiledShell path="/relatorios"><ReportsPage /></ProfiledShell>} />
       <Route path="/fiscal" element={<Navigate to="/vendas?aba=notas" replace />} />
       <Route path="/fiscal/notas" element={<Navigate to="/vendas?aba=notas" replace />} />
-      <Route path="/fechamento-fiscal" element={<PrivateShell><FiscalClosingPage /></PrivateShell>} />
-      <Route path="/configuracoes" element={<PrivateShell><SettingsPage /></PrivateShell>} />
-      <Route path="/auditoria" element={<PrivateShell><AuditLogsPage /></PrivateShell>} />
-      <Route path="/assinatura" element={<PrivateShell><BillingPage /></PrivateShell>} />
-      <Route path="/usuarios" element={<PrivateShell><UsersPage /></PrivateShell>} />
+      <Route path="/fechamento-fiscal" element={<ProfiledShell path="/fechamento-fiscal"><FiscalClosingPage /></ProfiledShell>} />
+      <Route path="/configuracoes" element={<ProfiledShell path="/configuracoes"><SettingsPage /></ProfiledShell>} />
+      <Route path="/auditoria" element={<ProfiledShell path="/auditoria"><AuditLogsPage /></ProfiledShell>} />
+      <Route path="/assinatura" element={<ProfiledShell path="/assinatura"><BillingPage /></ProfiledShell>} />
+      <Route path="/usuarios" element={<ProfiledShell path="/usuarios"><UsersPage /></ProfiledShell>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

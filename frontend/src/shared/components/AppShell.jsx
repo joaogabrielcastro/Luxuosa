@@ -30,8 +30,40 @@ import {
 } from "lucide-react";
 import { usePwaInstall } from "../pwa/PwaInstallProvider.jsx";
 
-function buildNav(userType) {
+function buildNav(userType, eventOnly = false) {
   const isAdmin = userType === "ADMIN";
+
+  if (eventOnly) {
+    return {
+      groups: [
+        {
+          label: "Retiro",
+          items: [
+            { to: "/crediario", label: "Crediário", icon: WalletCards },
+            { to: "/clientes", label: "Clientes", icon: Users }
+          ]
+        },
+        ...(isAdmin
+          ? [{
+              label: "Administração",
+              items: [
+                { to: "/catalog/products", label: "Produtos", icon: PackageSearch },
+                { to: "/estoque", label: "Estoque", icon: Boxes },
+                { to: "/relatorios", label: "Relatórios", icon: BarChart3 }
+              ]
+            }]
+          : [])
+      ],
+      accountItems: isAdmin
+        ? [
+            { to: "/configuracoes", label: "Configurações", icon: Settings },
+            { to: "/auditoria", label: "Auditoria", icon: ClipboardList },
+            { to: "/usuarios", label: "Usuários", icon: UserCog },
+            { to: "/assinatura", label: "Assinatura", icon: CreditCard }
+          ]
+        : []
+    };
+  }
 
   const groups = [
     {
@@ -150,7 +182,10 @@ function NavItem({ item, onNavigate }) {
 export function AppShell({ children }) {
   const { tenant, user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
-  const { groups, accountItems } = useMemo(() => buildNav(user?.type), [user?.type]);
+  const { groups, accountItems } = useMemo(
+    () => buildNav(user?.type, tenant?.creditEventOnly === true),
+    [user?.type, tenant?.creditEventOnly]
+  );
   const { installed, openInstall } = usePwaInstall();
 
   useEffect(() => {
