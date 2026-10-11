@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
+import { prisma } from "../config/prisma.js";
 
 export function authMiddleware(req, _res, next) {
   const authHeader = req.headers.authorization;
@@ -40,4 +41,21 @@ export function requireAdmin(req, _res, next) {
     return next(err);
   }
   return next();
+}
+
+/** Permissão excepcional usada apenas por tenants no perfil operacional de crediário. */
+export async function requireAdminOrCreditEventOperator(req, _res, next) {
+  if (req.user?.type === "ADMIN") return next();
+  try {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: req.tenantId },
+      select: { creditEventOnly: true }
+    });
+    if (tenant?.creditEventOnly === true) return next();
+    const err = new Error("Acesso permitido apenas para admin.");
+    err.statusCode = 403;
+    return next(err);
+  } catch (error) {
+    return next(error);
+  }
 }

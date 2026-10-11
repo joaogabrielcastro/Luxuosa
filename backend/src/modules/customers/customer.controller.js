@@ -77,7 +77,17 @@ export const customerController = {
   async update(req, res, next) {
     try {
       const payload = customerSchema.partial().parse(req.body);
+      if (req.user.type !== "ADMIN") delete payload.creditLimit;
       await customerService.update(req.tenantId, req.params.id, payload);
+      safeRecordAudit({
+        tenantId: req.tenantId,
+        userId: req.user.id,
+        action: AUDIT_ACTIONS.CUSTOMER_UPDATED,
+        entityType: "Customer",
+        entityId: req.params.id,
+        summary: "Cadastro de cliente atualizado",
+        meta: { fields: Object.keys(payload) }
+      });
       return res.status(204).send();
     } catch (error) {
       return next(error);
@@ -86,7 +96,15 @@ export const customerController = {
 
   async remove(req, res, next) {
     try {
-      await customerService.remove(req.tenantId, req.params.id);
+      const removed = await customerService.remove(req.tenantId, req.params.id);
+      safeRecordAudit({
+        tenantId: req.tenantId,
+        userId: req.user.id,
+        action: AUDIT_ACTIONS.CUSTOMER_DELETED,
+        entityType: "Customer",
+        entityId: req.params.id,
+        summary: `Cliente excluido: ${removed.name}`
+      });
       return res.status(204).send();
     } catch (error) {
       return next(error);

@@ -96,8 +96,10 @@ function buildUpdateBody(form) {
 }
 
 export function CustomersPage() {
-  const { token, user } = useAuth();
+  const { token, user, tenant } = useAuth();
   const isAdmin = user?.type === "ADMIN";
+  const canCreate = isAdmin || tenant?.creditEventOnly === true;
+  const canManageCustomers = canCreate;
   const { showToast } = useToast();
   const { confirm } = useConfirm();
   const [form, setForm] = useState(emptyForm);
@@ -173,7 +175,7 @@ export function CustomersPage() {
 
   async function submit(event) {
     event.preventDefault();
-    if (!isAdmin && editingId) return;
+    if ((!canCreate && !editingId) || (!canManageCustomers && editingId)) return;
     setError("");
     if (!form.name.trim() || form.name.trim().length < 2) {
       setError("Informe o nome (minimo 2 caracteres).");
@@ -206,7 +208,7 @@ export function CustomersPage() {
   }
 
   async function removeCustomer(id) {
-    if (!isAdmin) return;
+    if (!canManageCustomers) return;
     try {
       const ok = await confirm({
         title: "Excluir cliente",
@@ -239,7 +241,7 @@ export function CustomersPage() {
         />
       </section>
 
-      <SectionCard title={editingId ? "Editar cliente" : "Novo cliente"}>
+      {canCreate ? <SectionCard title={editingId ? "Editar cliente" : "Novo cliente"}>
         <form className="mt-3 grid gap-3 md:grid-cols-2" onSubmit={submit}>
           <label className="flex flex-col gap-1 md:col-span-2">
             <span className="text-xs font-medium text-slate-600">Nome completo *</span>
@@ -344,7 +346,7 @@ export function CustomersPage() {
           </div>
         </form>
         <FormErrorSummary error={error} />
-      </SectionCard>
+      </SectionCard> : null}
 
       <DataTable
         title="Lista de clientes"
@@ -373,7 +375,7 @@ export function CustomersPage() {
             <td className="py-2 text-sm text-slate-600">{c.phone || "—"}</td>
             <td className="max-w-[180px] truncate py-2 text-sm text-slate-600">{c.email || "—"}</td>
             <td className="py-2">
-              {isAdmin ? (
+              {canManageCustomers ? (
                 <>
               <Button
                 type="button"

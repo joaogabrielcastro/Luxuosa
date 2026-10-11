@@ -73,12 +73,31 @@ export const customerService = {
   },
 
   async remove(tenantId, id) {
+    const customer = await prisma.customer.findFirst({
+      where: { tenantId, id },
+      select: { id: true, name: true }
+    });
+    if (!customer) {
+      const err = new Error("Cliente nao encontrado.");
+      err.statusCode = 404;
+      throw err;
+    }
+    const [sales, creditSales] = await Promise.all([
+      prisma.sale.count({ where: { tenantId, customerId: id } }),
+      prisma.creditSale.count({ where: { tenantId, customerId: id } })
+    ]);
+    if (sales > 0 || creditSales > 0) {
+      const err = new Error("Este cliente possui vendas ou crediario vinculados e nao pode ser excluido. Corrija o cadastro em vez de apagar.");
+      err.statusCode = 409;
+      err.code = "CUSTOMER_HAS_TRANSACTIONS";
+      throw err;
+    }
     const result = await customerRepository.delete(tenantId, id);
     if (result.count === 0) {
       const err = new Error("Cliente nao encontrado.");
       err.statusCode = 404;
       throw err;
     }
-    return result;
+    return customer;
   }
 };

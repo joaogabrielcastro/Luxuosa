@@ -9,13 +9,15 @@ mock.module("../../config/prisma.js", {
   namedExports: {
     prisma: {
       customer: {
-        findFirst: async () => null,
+        findFirst: async ({ where }) => (where.id ? customers.find((c) => c.id === where.id) || null : null),
         findMany: async ({ where }) => {
           if (where.OR) return customers;
           return customers;
         },
         count: async () => customers.length
-      }
+      },
+      sale: { count: async () => 0 },
+      creditSale: { count: async () => 0 }
     }
   }
 });
@@ -43,6 +45,6 @@ describe("customerService", () => {
     assert.equal((await customerService.update("t1", "c1", { name: "Maria S" })).count, 1);
     await assert.rejects(() => customerService.update("t1", "x", { name: "X" }), /nao encontrado/);
     await assert.rejects(() => customerService.remove("t1", "x"), /nao encontrado/);
-    assert.equal((await customerService.remove("t1", "c1")).count, 1);
+    assert.equal((await customerService.remove("t1", "c1")).name, "Maria");
   });
 });

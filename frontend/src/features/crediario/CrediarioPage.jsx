@@ -63,8 +63,9 @@ const emptyLine = () => ({
 });
 
 export function CrediarioPage() {
-  const { token, user } = useAuth();
+  const { token, user, tenant } = useAuth();
   const isAdmin = user?.type === "ADMIN";
+  const canCreateCreditSale = isAdmin || tenant?.creditEventOnly === true;
   const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
@@ -146,12 +147,12 @@ export function CrediarioPage() {
   }, [customerSearch, customers]);
 
   useEffect(() => {
-    if (searchParams.get("nova") !== "1") return;
+    if (searchParams.get("nova") !== "1" || !canCreateCreditSale) return;
     setCreateOpen(true);
     const next = new URLSearchParams(searchParams);
     next.delete("nova");
     setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
+  }, [canCreateCreditSale, searchParams, setSearchParams]);
 
   const [detailId, setDetailId] = useState(null);
 
@@ -301,6 +302,7 @@ export function CrediarioPage() {
   }
 
   async function submitCreate() {
+    if (!canCreateCreditSale) return;
     if (!createForm.customerId) {
       showToast("Selecione o cliente.", "error");
       return;
@@ -460,7 +462,7 @@ export function CrediarioPage() {
       <PageHeader
         title="Crediário"
         description="Cliente leva agora e paga depois na loja (fiado). Não é cartão parcelado — use Crediário para saldo em aberto e recebimentos."
-        actions={<Button type="button" onClick={() => setCreateOpen(true)}>Nova venda a prazo</Button>}
+        actions={canCreateCreditSale ? <Button type="button" onClick={() => setCreateOpen(true)}>Nova venda a prazo</Button> : null}
       />
 
       {!online ? (
