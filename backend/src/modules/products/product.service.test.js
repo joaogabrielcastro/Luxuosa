@@ -14,6 +14,9 @@ mock.module("../../config/prisma.js", {
       brand: {
         findFirst: async ({ where }) => brands.get(where.id) || null
       },
+      product: {
+        findFirst: async ({ where }) => products.get(where.id) || null
+      },
       async $transaction(fn) {
         const tx = {
           product: {

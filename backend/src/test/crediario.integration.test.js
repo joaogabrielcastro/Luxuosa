@@ -6,7 +6,8 @@ import {
   prisma,
   registerTenant,
   seedCatalog,
-  startTestServer
+  startTestServer,
+  uniqueEmail
 } from "./helpers.js";
 
 const runDb = Boolean(process.env.DATABASE_URL) && process.env.SKIP_DB_TESTS !== "1";
@@ -139,5 +140,87 @@ describe("crediario integration", { skip: !runDb }, () => {
       }
     });
     assert.equal(badCustomer.status, 404);
+  });
+
+  it("isola o perfil do retiro e libera o fluxo do atendente somente no tenant ativado", async () => {
+    const session = await registerTenant(server.baseUrl);
+    tenantIds.push(session.tenantId);
+    const catalog = await seedCatalog(server.baseUrl, session.token, { stock: 5, price: 45 });
+    const attendantEmail = uniqueEmail("att-retiro");
+    const attendantPassword = "senha123";
+    const createdUser = await api(server.baseUrl, "/users", {
+      method: "POST",
+      token: session.token,
+      body: { name: "Atendente Retiro", email: attendantEmail, password: attendantPassword, type: "ATTENDANT" }
+    });
+    assert.equal(createdUser.status, 201);
+    const login = await api(server.baseUrl, "/auth/login", {
+      method: "POST",
+      body: { email: attendantEmail, password: attendantPassword }
+    });
+    assert.equal(login.status, 200);
+    const attendantToken = login.data.token;
+
+    const blocked = await api(server.baseUrl, "/customers", {
+      method: "POST",
+      token: attendantToken,
+      body: { name: "Bloqueado Fora do Evento", phone: "41999990000" }
+    });
+    assert.equal(blocked.status, 403);
+
+    const config = await api(server.baseUrl, "/crediario/config", {
+      method: "PUT",
+      token: session.token,
+      body: { eventMode: true, eventOnly: true, eventName: "Retiro Mariana", dueDate: "2026-10-20", defaultCreditLimit: 300 }
+    });
+    assert.equal(config.status, 200);
+    assert.equal(config.data.eventOnly, true);
+
+    const disposable = await api(server.baseUrl, "/customers", {
+      method: "POST",
+      token: attendantToken,
+      body: { name: "Cadastro para Excluir", phone: "41999990001", eventCode: "TESTE-EXCLUIR" }
+    });
+    assert.equal(disposable.status, 201);
+    const removed = await api(server.baseUrl, `/customers/${disposable.data.id}`, {
+      method: "DELETE",
+      token: attendantToken
+    });
+    assert.equal(removed.status, 204);
+
+    const customer = await api(server.baseUrl, "/customers", {
+      method: "POST",
+      token: attendantToken,
+      body: { name: "Servo Retiro", phone: "41999990002", eventCode: "SERVO-001" }
+    });
+    assert.equal(customer.status, 201);
+    const edited = await api(server.baseUrl, `/customers/${customer.data.id}`, {
+      method: "PUT",
+      token: attendantToken,
+      body: { phone: "41988880002" }
+    });
+    assert.equal(edited.status, 204);
+
+    const sale = await api(server.baseUrl, "/crediario", {
+      method: "POST",
+      token: attendantToken,
+      body: { customerId: customer.data.id, items: [{ productVariationId: catalog.variationId, quantity: 2, unitPrice: 45 }] }
+    });
+    assert.equal(sale.status, 201);
+    assert.equal(sale.data.eventName, "Retiro Mariana");
+
+    const protectedDelete = await api(server.baseUrl, `/customers/${customer.data.id}`, {
+      method: "DELETE",
+      token: attendantToken
+    });
+    assert.equal(protectedDelete.status, 409);
+
+    const accounts = await api(server.baseUrl, "/crediario/accounts?eventName=Retiro%20Mariana", { token: attendantToken });
+    assert.equal(accounts.status, 200);
+    assert.equal(accounts.data.items.length, 1);
+    assert.equal(accounts.data.openBalance, 90);
+    const statement = await api(server.baseUrl, `/crediario/customers/${customer.data.id}/statement?eventName=Retiro%20Mariana`, { token: attendantToken });
+    assert.equal(statement.status, 200);
+    assert.equal(statement.data.remaining, 90);
   });
 });

@@ -30,7 +30,8 @@ mock.module("../../config/prisma.js", {
               ...data,
               productVariation: { product: variation.product }
             })
-          }
+          },
+          auditLog: { create: async ({ data }) => ({ id: "a1", ...data }) }
         };
         return fn(tx);
       }

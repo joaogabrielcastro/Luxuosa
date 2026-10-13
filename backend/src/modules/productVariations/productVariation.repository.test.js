@@ -43,7 +43,7 @@ describe("productVariationRepository", () => {
     assert.equal((await productVariationRepository.create("t1", { size: "M" })).id, "v2");
     assert.equal((await productVariationRepository.update("t1", "v1", { stock: 2 })).count, 1);
     assert.equal((await productVariationRepository.remove("t1", "v1")).count, 1);
-    const filtered = calls.find((c) => c[0] === "findMany" && c[1]?.where?.product);
+    const filtered = calls.find((c) => c[0] === "findMany" && c[1]?.where?.AND?.[0]?.product);
     assert.ok(filtered);
   });
 });
