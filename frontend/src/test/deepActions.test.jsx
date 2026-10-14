@@ -167,8 +167,10 @@ describe("fluxos profundos", () => {
     renderPage(<CrediarioPage />);
     await screen.findAllByText("Maria Silva");
     await user.click(screen.getByRole("button", { name: "Nova venda a prazo" }));
-    await user.selectOptions(screen.getByDisplayValue("Selecione..."), "cust1");
-    await user.selectOptions(screen.getByDisplayValue("Variacao..."), "var1");
+    await user.type(screen.getByRole("combobox", { name: "Buscar cliente" }), "Maria");
+    await user.click(screen.getByRole("option", { name: /Maria Silva/ }));
+    await user.type(screen.getByRole("combobox", { name: "Buscar produto do item 1" }), "Camisa");
+    await user.click(screen.getByRole("option", { name: /Camisa/ }));
     await user.click(screen.getByRole("button", { name: "Salvar" }));
     await waitFor(() => expect(apiClient).toHaveBeenCalledWith("/crediario", expect.objectContaining({ method: "POST" })));
   });

@@ -58,6 +58,7 @@ function formatDt(iso) {
 
 const emptyLine = () => ({
   productVariationId: "",
+  productSearch: "",
   quantity: 1,
   unitPrice: ""
 });
@@ -65,7 +66,8 @@ const emptyLine = () => ({
 export function CrediarioPage() {
   const { token, user, tenant } = useAuth();
   const isAdmin = user?.type === "ADMIN";
-  const canCreateCreditSale = isAdmin || tenant?.creditEventOnly === true;
+  const eventSaleMode = tenant?.creditEventOnly === true;
+  const canCreateCreditSale = isAdmin || eventSaleMode;
   const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
@@ -84,6 +86,8 @@ export function CrediarioPage() {
   const customers = customersQuery.data ?? [];
   const [online, setOnline] = useState(() => navigator.onLine !== false);
   const [customerSearch, setCustomerSearch] = useState("");
+  const [customerSuggestionsOpen, setCustomerSuggestionsOpen] = useState(false);
+  const [openProductSearchIndex, setOpenProductSearchIndex] = useState(null);
   const [barcode, setBarcode] = useState("");
   const [quickCustomerOpen, setQuickCustomerOpen] = useState(false);
   const [quickCustomer, setQuickCustomer] = useState({ name: "", eventCode: "", cpfCnpj: "", phone: "" });
@@ -137,7 +141,7 @@ export function CrediarioPage() {
 
   const filteredCustomers = useMemo(() => {
     const raw = customerSearch.trim().toLowerCase();
-    if (!raw) return customers.slice(0, 30);
+    if (!raw) return [];
     const digits = raw.replace(/\D/g, "");
     return customers.filter((c) =>
       String(c.name || "").toLowerCase().includes(raw) ||
@@ -145,6 +149,12 @@ export function CrediarioPage() {
       (digits && [c.cpfCnpj, c.phone].some((v) => String(v || "").includes(digits)))
     ).slice(0, 30);
   }, [customerSearch, customers]);
+
+  function selectCustomer(customer) {
+    setCreateForm((form) => ({ ...form, customerId: customer.id }));
+    setCustomerSearch(customer.name);
+    setCustomerSuggestionsOpen(false);
+  }
 
   useEffect(() => {
     if (searchParams.get("nova") !== "1" || !canCreateCreditSale) return;
@@ -240,6 +250,31 @@ export function CrediarioPage() {
     }));
   }
 
+  function findVariations(search) {
+    const raw = String(search || "").trim().toLowerCase();
+    if (!raw) return [];
+    const compact = raw.replace(/\s/g, "");
+    return variations.filter((variation) => {
+      const values = [
+        variation.product?.name,
+        variation.size,
+        variation.color,
+        variation.sku,
+        variation.product?.sku
+      ].map((value) => String(value || "").toLowerCase());
+      return values.some((value) => value.includes(raw) || (compact && value.replace(/\s/g, "").includes(compact)));
+    }).slice(0, 20);
+  }
+
+  function selectVariation(index, variation) {
+    updateLine(index, {
+      productVariationId: variation.id,
+      productSearch: variationLabel.get(variation.id),
+      unitPrice: amountToCurrencyInput(variation.product?.price || 0)
+    });
+    setOpenProductSearchIndex(null);
+  }
+
   function addByBarcode(event) {
     event.preventDefault();
     const code = barcode.trim().toLowerCase();
@@ -261,6 +296,7 @@ export function CrediarioPage() {
       }
       const next = {
         productVariationId: variation.id,
+        productSearch: variationLabel.get(variation.id),
         quantity: 1,
         unitPrice: amountToCurrencyInput(variation.product?.price || 0)
       };
@@ -331,9 +367,12 @@ export function CrediarioPage() {
         body: {
           customerId: createForm.customerId,
           items,
-          discountValue:
-            createForm.discountValue === "" ? undefined : parseCurrencyInput(createForm.discountValue),
-          discountPercent: createForm.discountPercent === "" ? undefined : Number(createForm.discountPercent),
+          discountValue: eventSaleMode || createForm.discountValue === ""
+            ? undefined
+            : parseCurrencyInput(createForm.discountValue),
+          discountPercent: eventSaleMode || createForm.discountPercent === ""
+            ? undefined
+            : Number(createForm.discountPercent),
           notes: createForm.notes || undefined,
           overrideCreditLimit: isAdmin && createForm.overrideCreditLimit
         }
@@ -675,19 +714,52 @@ export function CrediarioPage() {
               <label className="block text-xs font-medium text-slate-600">Buscar cliente por nome, código, CPF ou telefone</label>
               <Button type="button" variant="secondary" className="text-xs" onClick={() => setQuickCustomerOpen(true)}><UserPlus className="h-4 w-4" /> Novo rápido</Button>
             </div>
-            <Input className="mb-2" value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} placeholder="Digite para buscar antes de cadastrar..." />
-            <Select
-              className="w-full text-sm"
-              value={createForm.customerId}
-              onChange={(e) => setCreateForm((f) => ({ ...f, customerId: e.target.value }))}
-            >
-              <option value="">Selecione...</option>
-              {filteredCustomers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.cpfCnpj ? `${c.name} — ${c.cpfCnpj}` : c.name}
-                </option>
-              ))}
-            </Select>
+            <div className="relative">
+              <Input
+                value={customerSearch}
+                role="combobox"
+                aria-label="Buscar cliente"
+                aria-autocomplete="list"
+                aria-controls="credit-customer-suggestions"
+                aria-expanded={customerSuggestionsOpen && customerSearch.trim().length > 0}
+                autoComplete="off"
+                onFocus={() => setCustomerSuggestionsOpen(true)}
+                onBlur={() => setCustomerSuggestionsOpen(false)}
+                onChange={(event) => {
+                  setCustomerSearch(event.target.value);
+                  setCreateForm((form) => ({ ...form, customerId: "" }));
+                  setCustomerSuggestionsOpen(true);
+                }}
+                placeholder="Comece a digitar o nome do cliente..."
+              />
+              {customerSuggestionsOpen && customerSearch.trim() ? (
+                <div
+                  id="credit-customer-suggestions"
+                  role="listbox"
+                  aria-label="Clientes encontrados"
+                  className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+                >
+                  {filteredCustomers.length ? filteredCustomers.map((customer) => (
+                    <button
+                      key={customer.id}
+                      type="button"
+                      role="option"
+                      aria-selected={createForm.customerId === customer.id}
+                      className="block w-full rounded-md px-3 py-2 text-left hover:bg-violet-50 focus:bg-violet-50 focus:outline-none"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => selectCustomer(customer)}
+                    >
+                      <span className="block text-sm font-medium text-slate-800">{customer.name}</span>
+                      <span className="block text-xs text-slate-500">
+                        {[customer.eventCode, customer.cpfCnpj, customer.phone].filter(Boolean).join(" · ") || "Cliente sem documento ou telefone"}
+                      </span>
+                    </button>
+                  )) : (
+                    <p className="px-3 py-2 text-sm text-slate-500">Nenhum cliente encontrado.</p>
+                  )}
+                </div>
+              ) : null}
+            </div>
           </div>
           {createForm.customerId ? (
             <Alert variant={limitRatio >= 1 ? "danger" : limitRatio >= 0.8 ? "warning" : "info"} title="Conta do cliente">
@@ -698,24 +770,26 @@ export function CrediarioPage() {
               ) : null}
             </Alert>
           ) : null}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Desconto R$</label>
-              <CurrencyInput
-                className="text-sm"
-                value={createForm.discountValue}
-                onChange={(discountValue) => setCreateForm((f) => ({ ...f, discountValue }))}
-              />
+          {!eventSaleMode ? (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Desconto R$</label>
+                <CurrencyInput
+                  className="text-sm"
+                  value={createForm.discountValue}
+                  onChange={(discountValue) => setCreateForm((form) => ({ ...form, discountValue }))}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Desconto %</label>
+                <Input
+                  className="text-sm"
+                  value={createForm.discountPercent}
+                  onChange={(event) => setCreateForm((form) => ({ ...form, discountPercent: event.target.value }))}
+                />
+              </div>
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Desconto %</label>
-              <Input
-                className="text-sm"
-                value={createForm.discountPercent}
-                onChange={(e) => setCreateForm((f) => ({ ...f, discountPercent: e.target.value }))}
-              />
-            </div>
-          </div>
+          ) : null}
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Observacoes</label>
             <Input className="text-sm" value={createForm.notes} onChange={(e) => setCreateForm((f) => ({ ...f, notes: e.target.value }))} />
@@ -730,26 +804,50 @@ export function CrediarioPage() {
             {createForm.items.map((line, i) => (
               <div key={i} className="mb-2 grid grid-cols-1 gap-2 rounded-lg border border-slate-100 p-2 md:grid-cols-12">
                 <div className="md:col-span-5">
-                  <Select
-                    className="w-full text-sm"
-                    value={line.productVariationId}
-                    onChange={(e) => {
-                      const vid = e.target.value;
-                      const v = variations.find((x) => x.id === vid);
-                      const price = v?.product?.price;
-                      updateLine(i, {
-                        productVariationId: vid,
-                        unitPrice: price != null ? amountToCurrencyInput(price) : ""
-                      });
-                    }}
-                  >
-                    <option value="">Variacao...</option>
-                    {variations.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {variationLabel.get(v.id)}
-                      </option>
-                    ))}
-                  </Select>
+                  <div className="relative">
+                    <Input
+                      className="text-sm"
+                      value={line.productSearch}
+                      role="combobox"
+                      aria-label={`Buscar produto do item ${i + 1}`}
+                      aria-autocomplete="list"
+                      aria-controls={`credit-product-suggestions-${i}`}
+                      aria-expanded={openProductSearchIndex === i && Boolean(line.productSearch.trim())}
+                      autoComplete="off"
+                      placeholder="Digite o produto, variação ou código"
+                      onFocus={() => setOpenProductSearchIndex(i)}
+                      onBlur={() => setOpenProductSearchIndex(null)}
+                      onChange={(event) => {
+                        updateLine(i, { productSearch: event.target.value, productVariationId: "" });
+                        setOpenProductSearchIndex(i);
+                      }}
+                    />
+                    {openProductSearchIndex === i && line.productSearch.trim() ? (
+                      <div
+                        id={`credit-product-suggestions-${i}`}
+                        role="listbox"
+                        aria-label={`Produtos encontrados para o item ${i + 1}`}
+                        className="absolute z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+                      >
+                        {findVariations(line.productSearch).length ? findVariations(line.productSearch).map((variation) => (
+                          <button
+                            key={variation.id}
+                            type="button"
+                            role="option"
+                            aria-selected={line.productVariationId === variation.id}
+                            className="block w-full rounded-md px-3 py-2 text-left hover:bg-violet-50 focus:bg-violet-50 focus:outline-none"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => selectVariation(i, variation)}
+                          >
+                            <span className="block text-sm font-medium text-slate-800">{variationLabel.get(variation.id)}</span>
+                            <span className="block text-xs text-slate-500">Código: {variation.sku || variation.product?.sku || "não informado"}</span>
+                          </button>
+                        )) : (
+                          <p className="px-3 py-2 text-sm text-slate-500">Nenhum produto encontrado.</p>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="md:col-span-2">
                   <Input

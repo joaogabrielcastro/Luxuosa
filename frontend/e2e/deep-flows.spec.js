@@ -160,8 +160,10 @@ test.describe("fluxos profundos", () => {
     });
 
     const modal = page.locator('[role="dialog"]').filter({ hasText: /Nova venda a prazo/i });
-    await modal.locator("select").first().selectOption(customer.data.id);
-    await modal.locator("select").nth(1).selectOption(catalog.variationId);
+    await modal.getByRole("combobox", { name: "Buscar cliente" }).fill(customer.data.name);
+    await modal.getByRole("option", { name: new RegExp(customer.data.name, "i") }).click();
+    await modal.getByRole("combobox", { name: "Buscar produto do item 1" }).fill(catalog.sku);
+    await modal.getByRole("option", { name: new RegExp(catalog.sku, "i") }).click();
     await modal.getByPlaceholder("Qtd").fill("1");
     await modal.getByRole("button", { name: /^Salvar$/i }).click();
     await expect(page.getByText(/Venda a prazo registrada/i).first()).toBeVisible({
