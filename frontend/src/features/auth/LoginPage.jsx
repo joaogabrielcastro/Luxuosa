@@ -52,7 +52,7 @@ export function LoginPage() {
       headline="Quanto vendeu, o que receber e o que está acabando — num só painel."
       description="Entre para registrar a venda, acompanhar o crediário e cuidar do estoque no dia a dia da loja."
     >
-      <div className="ui-surface-interactive p-5 sm:p-8">
+      <div className="ui-surface p-6 sm:p-8">
         <div className="mb-5 flex items-center gap-2 text-violet-700">
           <ShieldCheck className="h-5 w-5" aria-hidden />
           <span className="text-xs font-semibold uppercase tracking-wide">Acesso seguro</span>

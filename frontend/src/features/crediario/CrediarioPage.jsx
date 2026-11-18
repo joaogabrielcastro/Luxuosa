@@ -18,6 +18,9 @@ import { CurrencyInput } from "../../shared/components/ui/CurrencyInput.jsx";
 import { Select } from "../../shared/components/ui/Select.jsx";
 import { Modal } from "../../shared/components/ui/Modal.jsx";
 import { Alert } from "../../shared/components/ui/Alert.jsx";
+import { Badge } from "../../shared/components/ui/Badge.jsx";
+import { StatCard } from "../../shared/components/ui/StatCard.jsx";
+import { AlertCircle, Users as UsersIcon, WalletCards } from "lucide-react";
 import { paymentLabel } from "../sales/sales.utils.js";
 import { unwrapList } from "../../shared/apiList.js";
 import {
@@ -25,6 +28,8 @@ import {
   formatCurrencyBRL,
   parseCurrencyInput
 } from "../../shared/formatters.js";
+
+const CREDIT_STATUS_VARIANT = { OPEN: "warning", PAID: "success", CANCELED: "neutral" };
 
 const CREDIT_STATUS_LABEL = {
   OPEN: "Em aberto",
@@ -504,6 +509,27 @@ export function CrediarioPage() {
         actions={canCreateCreditSale ? <Button type="button" onClick={() => setCreateOpen(true)}>Nova venda a prazo</Button> : null}
       />
 
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3" aria-label="Resumo do crediário">
+        <StatCard
+          label="Saldo a receber"
+          value={formatCurrencyBRL(accountsQuery.data?.openBalance || 0)}
+          loading={accountsQuery.isLoading}
+          tone={(accountsQuery.data?.openBalance || 0) > 0 ? "warning" : "default"}
+          icon={WalletCards}
+        />
+        <StatCard label="Clientes devendo" value={(accountsQuery.data?.items || []).length} loading={accountsQuery.isLoading} icon={UsersIcon} />
+        <StatCard
+          label="Acima do limite"
+          value={(accountsQuery.data?.items || []).filter((a) => {
+            const lim = Number(a.customer?.creditLimit ?? config.defaultCreditLimit ?? 0);
+            return lim > 0 && Number(a.remaining) > lim;
+          }).length}
+          loading={accountsQuery.isLoading}
+          icon={AlertCircle}
+          hint="Saldo maior que o limite do cliente (ou o padrão da loja)."
+        />
+      </section>
+
       {!online ? (
         <Alert variant="danger" title="Sem conexão com a internet">
           <span className="flex items-start gap-2"><WifiOff className="mt-0.5 h-4 w-4 shrink-0" />Não finalize retiradas agora. Anote código do servo, itens e quantidades na ficha de contingência e lance quando a conexão voltar.</span>
@@ -626,7 +652,7 @@ export function CrediarioPage() {
                     <td className="py-2 pr-2">{formatCurrencyBRL(row.totalValue)}</td>
                     <td className="py-2 pr-2">{formatCurrencyBRL(row.paidTotal)}</td>
                     <td className="py-2 pr-2 font-medium text-amber-800">{formatCurrencyBRL(row.remaining)}</td>
-                    <td className="py-2 pr-2">{CREDIT_STATUS_LABEL[row.status] || row.status}</td>
+                    <td className="py-2 pr-2"><Badge variant={CREDIT_STATUS_VARIANT[row.status] || "neutral"} dot>{CREDIT_STATUS_LABEL[row.status] || row.status}</Badge></td>
                     <td className="py-2 text-right">
                       <div className="flex flex-wrap justify-end gap-1">
                         <Button variant="secondary" className="px-2 py-1 text-xs" type="button" onClick={() => setDetailId(row.id)}>

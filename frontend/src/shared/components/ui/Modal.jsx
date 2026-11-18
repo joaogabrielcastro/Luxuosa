@@ -17,8 +17,10 @@ function useDialogBehavior(open, onClose, panelRef) {
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const t = window.setTimeout(() => {
-      const el = panelRef.current?.querySelector("[data-autofocus], input:not([type=hidden]), select, textarea");
-      (el || panelRef.current)?.focus?.();
+      const panel = panelRef.current;
+      if (!panel || panel.contains(document.activeElement)) return;
+      const el = panel.querySelector("[data-autofocus], input:not([type=hidden]), select, textarea");
+      (el || panel).focus?.();
     }, 30);
     return () => {
       window.clearTimeout(t);

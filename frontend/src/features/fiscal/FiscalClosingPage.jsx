@@ -11,6 +11,8 @@ import { Button } from "../../shared/components/ui/Button.jsx";
 import { Input } from "../../shared/components/ui/Input.jsx";
 import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
+import { useEntitlements } from "../../shared/plans/useEntitlements.js";
+import { UpgradeNotice } from "../../shared/plans/PlanGate.jsx";
 import { ModuleNav } from "../../shared/components/ModuleNav.jsx";
 import { fiscalModuleItems } from "../../shared/navConfig.js";
 
@@ -38,13 +40,14 @@ export function FiscalClosingPage() {
   const { token, user } = useAuth();
   const { showToast } = useToast();
   const isAdmin = user?.type === "ADMIN";
+  const allowed = useEntitlements().has("fiscalClosing");
   const [{ year, month }, setPeriod] = useState(defaultPeriod);
   const [applied, setApplied] = useState(defaultPeriod);
   const [exporting, setExporting] = useState(false);
 
   const summaryQuery = useQuery({
     queryKey: ["fiscal-closing", token, applied.year, applied.month],
-    enabled: Boolean(token) && isAdmin,
+    enabled: Boolean(token) && isAdmin && allowed,
     queryFn: async () => {
       const res = await fetch(
         `${apiBaseUrl}/fiscal-closing/summary?year=${applied.year}&month=${applied.month}`,
@@ -97,7 +100,7 @@ export function FiscalClosingPage() {
 
   if (!isAdmin) {
     return (
-      <div>
+      <div className="ui-page">
         <PageHeader title="Fechamento fiscal" description="Resumo mensal para contabilidade." />
         <ModuleNav items={fiscalModuleItems(false)} label="Fiscal" />
         <EmptyState title="Acesso restrito" description="Somente administradores podem acessar o fechamento fiscal." />
@@ -105,8 +108,21 @@ export function FiscalClosingPage() {
     );
   }
 
+  if (!allowed) {
+    return (
+      <div className="ui-page">
+        <PageHeader title="Fechamento fiscal" description="Resumo mensal e pacote ZIP para o contador." />
+        <ModuleNav items={fiscalModuleItems(isAdmin)} label="Fiscal" />
+        <UpgradeNotice
+          feature="fiscalClosing"
+          description="Gere todo mês um pacote com os XML das NFC-e, NF-e de entrada, vendas e totais, pronto para enviar ao contador."
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="ui-page">
       <PageHeader
         title="Fechamento fiscal"
         description="Resumo mensal e pacote ZIP com NFC-e, NF-e de entrada, vendas e totais para o contador."

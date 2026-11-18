@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { UpgradeNotice } from "../../shared/plans/PlanGate.jsx";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../../shared/apiClient.js";
 import { useAuth } from "../auth/useAuth.jsx";
@@ -166,11 +167,24 @@ export function ReportsPage() {
                     total: Number(row.amount || 0)
                   }))}
                 >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip formatter={(v) => formatCurrencyBRL(v)} />
-                  <Line type="monotone" dataKey="total" stroke="#7C3AED" strokeWidth={2.5} dot={false} />
+                  <CartesianGrid vertical={false} stroke="rgb(231 228 223)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "rgb(120 113 106)" }} tickLine={false} axisLine={false} minTickGap={16} />
+                  <YAxis
+                    width={60}
+                    tick={{ fontSize: 11, fill: "rgb(120 113 106)" }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil` : `R$ ${v}`)}
+                  />
+                  <Tooltip formatter={(v) => [formatCurrencyBRL(v), "Faturamento"]} contentStyle={{ borderRadius: 8, borderColor: "rgb(231 228 223)", fontSize: 12 }} />
+                  <Line
+                    type="monotone"
+                    dataKey="total"
+                    stroke="rgb(94 51 106)"
+                    strokeWidth={2}
+                    dot={{ r: 4, fill: "rgb(94 51 106)", stroke: "#fff", strokeWidth: 2 }}
+                    activeDot={{ r: 5, fill: "rgb(94 51 106)", stroke: "#fff", strokeWidth: 2 }}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -285,14 +299,12 @@ export function ReportsPage() {
           ) : null}
         </SectionCard>
       ) : (
-        <SectionCard title="Análise Enterprise">
-          <p className="mt-2 text-sm text-slate-600">
-            Lucro no intervalo, comparação com o período anterior e produtos parados entram no plano Enterprise.
-          </p>
-          <Link to="/assinatura" className="mt-2 inline-block text-sm text-violet-700 hover:underline">
-            Ver planos
-          </Link>
-        </SectionCard>
+        <UpgradeNotice
+          compact
+          feature="advancedReports"
+          title="Análise avançada"
+          description="Lucro no intervalo, comparação com o período anterior e produtos parados fazem parte do plano Enterprise."
+        />
       )}
 
       <SectionCard title="Estoque abaixo do mínimo">

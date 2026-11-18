@@ -71,6 +71,7 @@ describe("acoes das telas", () => {
     const user = userEvent.setup();
     renderPage(<CustomersPage />);
     await screen.findByRole("heading", { level: 1, name: "Clientes" });
+    await user.click(screen.getByRole("button", { name: "Novo cliente" }));
     await user.type(screen.getByPlaceholderText("Nome do cliente"), "Joao");
     await user.click(screen.getByRole("button", { name: "Salvar" }));
     await waitFor(() => expect(apiClient).toHaveBeenCalledWith("/customers", expect.objectContaining({ method: "POST" })));

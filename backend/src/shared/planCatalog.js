@@ -32,38 +32,38 @@ export const STRIPE_PLAN_LOOKUP_KEYS = {
 export const PLAN_CATALOG = {
   BASIC: {
     id: "BASIC",
-    name: "Basico",
-    description: "Catalogo, vendas, estoque manual e crediario.",
+    name: "Básico",
+    description: "Catálogo, vendas, estoque manual e crediário.",
     priceLabel: "Gratis",
     amountCents: 0,
-    features: ["Catalogo e variacoes", "Vendas e estoque", "Crediario", "Ate 3 usuarios"]
+    features: ["Catálogo e variações", "Vendas e estoque", "Crediário", "Até 3 usuários"]
   },
   PRO: {
     id: "PRO",
     name: "Pro",
-    description: "Fiscal NFC-e, importacao de NF-e e alertas de estoque.",
+    description: "Fiscal NFC-e, importação de NF-e e alertas de estoque.",
     priceLabel: "R$ 97/mes",
     amountCents: 9700,
     features: [
-      "Tudo do Basico",
-      "Emissao NFC-e (quando habilitada na loja)",
-      "Importacao de NF-e de entrada",
-      "Relatorios e exportacao",
-      "Ate 10 usuarios"
+      "Tudo do Básico",
+      "Emissão NFC-e (quando habilitada na loja)",
+      "Importação de NF-e de entrada",
+      "Relatórios e exportação",
+      "Até 10 usuários"
     ]
   },
   ENTERPRISE: {
     id: "ENTERPRISE",
     name: "Enterprise",
-    description: "Rede de lojas no mesmo e-mail, relatorios avancados e usuarios ilimitados.",
+    description: "Rede de lojas no mesmo e-mail, relatórios avançados e usuários ilimitados.",
     priceLabel: "R$ 250/mes",
     amountCents: 25000,
     features: [
       "Tudo do Pro",
       "Troca de loja no mesmo e-mail",
-      "Relatorios avancados (lucro, comparacao, parados)",
-      "Usuarios ilimitados",
-      "Suporte prioritario"
+      "Relatórios avançados (lucro, comparação, parados)",
+      "Usuários ilimitados",
+      "Suporte prioritário"
     ]
   }
 };
