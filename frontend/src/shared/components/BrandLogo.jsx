@@ -10,8 +10,8 @@ function digitsOnly(value) {
 function LuxuosaMark({ compact }) {
   return (
     <div
-      className={`flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-blue-800 font-bold text-white shadow-md ring-1 ring-violet-500/20 ${
-        compact ? "h-9 w-9 text-sm" : "h-10 w-10 text-base"
+      className={`flex shrink-0 items-center justify-center rounded-xl bg-brand-800 font-display text-champagne-100 shadow-sm ${
+        compact ? "h-9 w-9 text-xl" : "h-10 w-10 text-2xl"
       }`}
       aria-hidden
     >
@@ -40,7 +40,7 @@ export function BrandLogo({ compact = false, tenant = null }) {
         ) : (
           <LuxuosaMark compact={compact} />
         )}
-        {!compact ? <span className="ui-brand-text hidden text-lg sm:inline">Luxuosa</span> : null}
+        {!compact ? <span className="ui-brand-text hidden text-2xl sm:inline">Luxuosa</span> : null}
       </div>
     );
   }
@@ -50,8 +50,8 @@ export function BrandLogo({ compact = false, tenant = null }) {
 
   return (
     <div
-      className={`flex shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-blue-800 font-bold text-white shadow-md ring-1 ring-violet-500/20 ${
-        compact ? "h-9 w-9 text-xs" : "h-10 w-10 text-sm"
+      className={`flex shrink-0 items-center justify-center rounded-xl bg-brand-800 font-display text-champagne-100 shadow-sm ${
+        compact ? "h-9 w-9 text-xl" : "h-10 w-10 text-2xl"
       }`}
       title={raw}
       aria-hidden

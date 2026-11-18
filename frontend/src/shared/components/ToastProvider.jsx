@@ -16,7 +16,7 @@ export function ToastProvider({ children }) {
     (message, type = "success") => {
       const id = ++toastSeq;
       setToasts((prev) => [...prev, { id, message, type }]);
-      window.setTimeout(() => removeToast(id), 3200);
+      window.setTimeout(() => removeToast(id), type === "error" ? 6000 : 3200);
     },
     [removeToast]
   );
@@ -27,7 +27,7 @@ export function ToastProvider({ children }) {
     <ToastContext.Provider value={value}>
       {children}
       <div
-        className="pointer-events-none fixed inset-x-3 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[80] flex flex-col gap-2 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-[min(100%,22rem)]"
+        className="pointer-events-none fixed inset-x-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[90] flex flex-col gap-2 sm:inset-x-auto sm:right-6 lg:bottom-6 sm:w-[min(100%,22rem)]"
         aria-live="polite"
       >
         {toasts.map((toast) => {
@@ -35,17 +35,13 @@ export function ToastProvider({ children }) {
           return (
             <div
               key={toast.id}
-              className={`animate-toast-in pointer-events-auto flex items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-lg ${
-                isError
-                  ? "border-red-200/80 bg-white text-red-900 ring-1 ring-red-100"
-                  : "border-emerald-200/80 bg-white text-emerald-900 ring-1 ring-emerald-100"
-              }`}
-              role="status"
+              className="animate-toast-in pointer-events-auto flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 shadow-pop"
+              role={isError ? "alert" : "status"}
             >
               {isError ? (
                 <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" aria-hidden />
               ) : (
-                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" aria-hidden />
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden />
               )}
               <p className="flex-1 leading-snug">{toast.message}</p>
               <button

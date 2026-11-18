@@ -1,15 +1,19 @@
-export function PageHeader({ title, description, actions = null, badge = null }) {
+/**
+ * Cabeçalho de página: título em serifa (identidade), descrição curta e ações.
+ */
+export function PageHeader({ title, description, actions = null, badge = null, eyebrow = null }) {
   return (
-    <header className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+    <header className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
+        {eyebrow ? <p className="ui-eyebrow mb-1">{eyebrow}</p> : null}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h1 className="ui-page-title">{title}</h1>
           {badge}
         </div>
-        {description ? <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-slate-600">{description}</p> : null}
+        {description ? <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-slate-500">{description}</p> : null}
       </div>
       {actions ? (
-        <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end [&>a]:w-full sm:[&>a]:w-auto [&>button]:w-full sm:[&>button]:w-auto [&_button]:w-full sm:[&_button]:w-auto">
+        <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end [&>a]:flex-1 sm:[&>a]:flex-none [&>button]:flex-1 sm:[&>button]:flex-none">
           {actions}
         </div>
       ) : null}

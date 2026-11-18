@@ -3,12 +3,18 @@
   "short_name": "Luxuosa",
   "id": "/",
   "description": "Sistema de gestão da sua loja de roupas",
+  "categories": ["business", "productivity", "shopping"],
+  "shortcuts": [
+    { "name": "Nova venda", "short_name": "Vender", "url": "/vendas", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Produtos", "url": "/catalog/products", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Crediário", "url": "/crediario", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ],
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#f4f6fb",
-  "theme_color": "#7c3aed",
+  "background_color": "#f7f5f2",
+  "theme_color": "#5e336a",
   "lang": "pt-BR",
   "icons": [
     {

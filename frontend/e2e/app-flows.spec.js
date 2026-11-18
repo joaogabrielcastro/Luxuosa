@@ -20,7 +20,7 @@ test.describe("fluxos da aplicacao", () => {
     await expect(page.getByRole("heading", { name: "Produtos", exact: true })).toBeVisible({
       timeout: 15_000
     });
-    await expect(page.getByText("Lista de produtos")).toBeVisible();
+    await expect(page.getByRole("searchbox", { name: /buscar por nome ou código/i })).toBeVisible();
   });
 
   test("login → pagina Clientes", async ({ page }) => {

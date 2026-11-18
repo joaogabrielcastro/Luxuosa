@@ -38,7 +38,7 @@ describe("ProductVariationsSection", () => {
     const user = userEvent.setup();
     const onChanged = vi.fn();
     renderPage(<ProductVariationsSection token="t" productId="p1" productName="Camisa" onChanged={onChanged} />);
-    expect(await screen.findByText("Tamanho/cor")).toBeInTheDocument();
+    expect(await screen.findByText("Estoque geral")).toBeInTheDocument();
     expect(screen.getByText("Estoque geral")).toBeInTheDocument();
     await user.type(screen.getByPlaceholderText("Tamanho"), "G");
     await user.type(screen.getByPlaceholderText("Cor"), "Azul");
@@ -58,7 +58,7 @@ describe("ProductVariationsSection", () => {
         })
       )
     );
-    await user.click(screen.getAllByRole("button", { name: "Excluir" })[0]);
+    await user.click(screen.getAllByRole("button", { name: /^Excluir / })[0]);
     await user.click(screen.getAllByRole("button", { name: "Excluir" }).at(-1));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });

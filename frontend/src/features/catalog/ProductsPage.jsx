@@ -10,12 +10,16 @@ import { amountToCurrencyInput, formatCurrencyBRL, parseCurrencyInput } from "..
 import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
 import { DataTable } from "../../shared/components/DataTable.jsx";
 import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
-import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
+import { Sheet } from "../../shared/components/ui/Modal.jsx";
+import { Badge } from "../../shared/components/ui/Badge.jsx";
+import { Alert } from "../../shared/components/ui/Alert.jsx";
+import { FormField } from "../../shared/components/ui/FormField.jsx";
+import { Plus, Pencil, Trash2, X } from "lucide-react";
 import { Input } from "../../shared/components/ui/Input.jsx";
 import { CurrencyInput } from "../../shared/components/ui/CurrencyInput.jsx";
 import { Select } from "../../shared/components/ui/Select.jsx";
 import { Textarea } from "../../shared/components/ui/Textarea.jsx";
-import { Button } from "../../shared/components/ui/Button.jsx";
+import { Button, IconButton } from "../../shared/components/ui/Button.jsx";
 import { FormErrorSummary } from "../../shared/components/FormErrorSummary.jsx";
 import { ModuleNav } from "../../shared/components/ModuleNav.jsx";
 import { catalogModuleItems } from "../../shared/navConfig.js";
@@ -28,17 +32,6 @@ function productCurrentStock(item) {
 
 function productHasRealVariations(item) {
   return (item.variations || []).some((v) => !isDefaultVariation(v));
-}
-
-function productLowStockClass(item) {
-  const min = Number(item.minStock ?? 0);
-  if (min <= 0) return "";
-  const current = productCurrentStock(item);
-  if (current > min) return "";
-  if (current === 0) {
-    return "border-l-4 border-l-rose-500 bg-rose-50/90 hover:bg-rose-50";
-  }
-  return "border-l-4 border-l-amber-500 bg-amber-50/80 hover:bg-amber-50/90";
 }
 
 const EMPTY_PRODUCT_FORM = {
@@ -160,6 +153,7 @@ export function ProductsPage() {
   const [hasVariations, setHasVariations] = useState(false);
   const [draftVariations, setDraftVariations] = useState([]);
   const [showDetails, setShowDetails] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
 
   const listParams = useMemo(
     () => ({
@@ -328,6 +322,7 @@ export function ProductsPage() {
         showToast(hasVariations ? "Produto criado com tamanhos e cores." : "Produto criado.");
         await refreshProducts();
         resetForm();
+        setFormOpen(false);
       } else {
         await refreshProducts();
       }
@@ -443,42 +438,187 @@ export function ProductsPage() {
     setDraftVariations([]);
   }
 
+  function openNew() {
+    resetForm();
+    setError("");
+    setFormOpen(true);
+  }
+
+  function openEdit(item) {
+    setError("");
+    startEdit(item);
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    setFormOpen(false);
+    resetForm();
+    setError("");
+  }
+
+  const priceNum = parseCurrencyInput(form.price);
+  const costNum = parseCurrencyInput(form.cost);
+  const marginPct = priceNum > 0 && costNum > 0 ? ((priceNum - costNum) / priceNum) * 100 : null;
+
+  function stockBadge(item) {
+    const current = productCurrentStock(item);
+    const min = Number(item.minStock ?? 0);
+    if (current === 0) return <Badge variant="danger" dot><span className="num">0</span></Badge>;
+    if (min > 0 && current <= min) return <Badge variant="warning" dot><span className="num">{current}</span></Badge>;
+    return <span className="num font-medium text-slate-900">{current}</span>;
+  }
+
+  function gridSummary(item) {
+    const real = (item.variations || []).filter((v) => !isDefaultVariation(v));
+    if (!real.length) return <span className="text-xs text-slate-400">Peça única</span>;
+    const sizes = [...new Set(real.map((v) => String(v.size || "").trim()).filter(Boolean))];
+    const colors = [...new Set(real.map((v) => String(v.color || "").trim()).filter(Boolean))];
+    return (
+      <div className="min-w-0">
+        <div className="flex flex-wrap gap-1">
+          {sizes.slice(0, 6).map((sz) => (
+            <span key={sz} className="rounded border border-slate-200 px-1.5 py-0.5 text-2xs font-medium text-slate-600">
+              {sz}
+            </span>
+          ))}
+          {sizes.length > 6 ? <span className="text-2xs text-slate-400">+{sizes.length - 6}</span> : null}
+        </div>
+        <p className="mt-1 truncate text-2xs text-slate-500">
+          {colors.length} {colors.length === 1 ? "cor" : "cores"} · {real.length} combinações
+        </p>
+      </div>
+    );
+  }
+
+  const lowOnPage = products.filter((p) => Number(p.minStock || 0) > 0 && productCurrentStock(p) <= Number(p.minStock || 0)).length;
+
   return (
     <div className="ui-page">
       <PageHeader
         title="Produtos"
-        description="Nome, preço e quantidade. Se a peça tem tamanho ou cor, preencha as linhas e salve uma vez."
+        description="Encontre, cadastre e atualize suas peças com tamanhos, cores, preço e estoque."
+        actions={
+          isAdmin ? (
+            <Button icon={Plus} onClick={openNew}>
+              Novo produto
+            </Button>
+          ) : null
+        }
       />
       <ModuleNav items={catalogModuleItems(tenant?.creditEventOnly === true)} label="Catálogo" />
 
-      {isAdmin ? (
-      <SectionCard title={editingId ? "Editar produto" : "Novo produto"}>
-        <form className="mt-3 space-y-6" onSubmit={createProduct}>
+      {!isAdmin ? (
+        <Alert variant="info">Consulta de produtos. Somente administradores cadastram ou editam.</Alert>
+      ) : null}
+      {error && !formOpen ? <FormErrorSummary error={error} className="" /> : null}
+
+      <DataTable
+        data={products}
+        loading={listLoading}
+        columns={[
+          { key: "name", label: "Produto" },
+          { key: "grid", label: "Grade" },
+          { key: "stock", label: "Estoque", className: "text-right" },
+          { key: "price", label: "Preço", className: "text-right" },
+          ...(isAdmin ? [{ key: "actions", label: <span className="sr-only">Ações</span>, className: "w-24" }] : [])
+        ]}
+        getRowKey={(row) => row.id}
+        onRowClick={isAdmin ? openEdit : undefined}
+        emptyTitle={query || categoryFilter || brandFilter ? "Nenhum produto encontrado" : "Nenhum produto cadastrado"}
+        emptyMessage={query || categoryFilter || brandFilter ? "Ajuste a busca ou os filtros." : "Cadastre a primeira peça para começar a vender."}
+        emptyActions={isAdmin && !query ? <Button size="sm" icon={Plus} onClick={openNew}>Novo produto</Button> : null}
+        serverPagination={{ skip: productSkip, take: productTake, total: totalProducts, onChange: setProductSkip }}
+        search={{ query, onQueryChange: setQuery, placeholder: "Buscar por nome ou código" }}
+        toolbar={lowOnPage ? <Badge variant="warning" dot>{lowOnPage} com estoque baixo nesta página</Badge> : null}
+        filters={[
+          {
+            id: "category",
+            label: "Categoria",
+            value: categoryFilter,
+            onChange: (v) => {
+              setCategoryFilter(v);
+              setBrandFilter("");
+            },
+            options: [{ value: "", label: "Todas as categorias" }, ...categories.map((item) => ({ value: item.id, label: item.name }))]
+          },
+          {
+            id: "brand",
+            label: "Marca",
+            value: brandFilter,
+            onChange: setBrandFilter,
+            options: [{ value: "", label: "Todas as marcas" }, ...brands.map((item) => ({ value: item.id, label: item.name }))]
+          }
+        ]}
+        renderCells={(item) => (
+          <>
+            <td>
+              <p className="font-medium text-slate-900">{item.name}</p>
+              <p className="text-xs text-slate-500">
+                {[item.sku?.trim() || null, item.category?.name, item.brand?.name].filter(Boolean).join(" · ")}
+              </p>
+            </td>
+            <td className="max-w-[16rem]">{gridSummary(item)}</td>
+            <td className="text-right">
+              {stockBadge(item)}
+              {Number(item.minStock) > 0 ? <p className="num text-2xs text-slate-400">mín. {item.minStock}</p> : null}
+            </td>
+            <td className="num whitespace-nowrap text-right font-medium text-slate-900">{formatCurrencyBRL(item.price)}</td>
+            {isAdmin ? (
+              <td onClick={(e) => e.stopPropagation()}>
+                <div className="flex justify-end gap-1">
+                  <IconButton icon={Pencil} label="Editar" size="sm" onClick={() => openEdit(item)} />
+                  <IconButton icon={Trash2} label="Excluir" size="sm" className="hover:bg-red-50 hover:text-red-600" onClick={() => removeProduct(item.id)} />
+                </div>
+              </td>
+            ) : null}
+          </>
+        )}
+        renderMobileCard={(item) => (
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate font-medium text-slate-900">{item.name}</p>
+              <p className="truncate text-xs text-slate-500">{[item.sku, item.brand?.name].filter(Boolean).join(" · ")}</p>
+              <div className="mt-1.5">{gridSummary(item)}</div>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="num font-semibold text-slate-900">{formatCurrencyBRL(item.price)}</p>
+              <div className="mt-1">{stockBadge(item)}</div>
+            </div>
+          </div>
+        )}
+      />
+
+      <Sheet
+        open={isAdmin && formOpen}
+        onClose={closeForm}
+        title={editingId ? "Editar produto" : "Novo produto"}
+        description={editingId ? form.name : "Preencha o essencial; o restante pode ser ajustado depois."}
+        width="max-w-2xl"
+        footer={
+          <>
+            <Button type="button" variant="secondary" onClick={closeForm}>
+              {editingId ? "Fechar" : "Cancelar"}
+            </Button>
+            <Button type="submit" form="product-form" loading={loading}>
+              {editingId ? "Atualizar produto" : "Salvar produto"}
+            </Button>
+          </>
+        }
+      >
+        <form id="product-form" className="space-y-6" onSubmit={createProduct}>
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-900">A peça</h3>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="flex flex-col gap-1 md:col-span-2">
-                <span className="text-xs font-medium text-slate-600">Nome</span>
-                <Input
-                  placeholder="Nome"
-                  value={form.name}
-                  onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-slate-600">Preço de venda</span>
-                <CurrencyInput
-                  placeholder="Preco"
-                  value={form.price}
-                  onChange={(price) => setForm((prev) => ({ ...prev, price }))}
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-slate-600">Categoria</span>
-                <Select
-                  value={form.categoryId}
-                  onChange={(e) => setForm((prev) => ({ ...prev, categoryId: e.target.value }))}
-                >
+            <h3 className="ui-eyebrow">A peça</h3>
+            <FormField label="Nome" htmlFor="product-name" required>
+              <Input
+                id="product-name"
+                placeholder="Nome"
+                value={form.name}
+                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+              />
+            </FormField>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FormField label="Categoria" required>
+                <Select value={form.categoryId} onChange={(e) => setForm((prev) => ({ ...prev, categoryId: e.target.value }))}>
                   <option value="">Selecione categoria</option>
                   {categories.map((item) => (
                     <option key={item.id} value={item.id}>
@@ -486,13 +626,9 @@ export function ProductsPage() {
                     </option>
                   ))}
                 </Select>
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-slate-600">Marca</span>
-                <Select
-                  value={form.brandId}
-                  onChange={(e) => setForm((prev) => ({ ...prev, brandId: e.target.value }))}
-                >
+              </FormField>
+              <FormField label="Marca" required>
+                <Select value={form.brandId} onChange={(e) => setForm((prev) => ({ ...prev, brandId: e.target.value }))}>
                   <option value="">Selecione marca</option>
                   {brands.map((item) => (
                     <option key={item.id} value={item.id}>
@@ -500,68 +636,88 @@ export function ProductsPage() {
                     </option>
                   ))}
                 </Select>
-              </label>
+              </FormField>
             </div>
           </section>
 
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-900">Estoque</h3>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <label
-                className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 ${
-                  hasVariations ? "border-slate-200 bg-white" : "border-slate-900 bg-slate-50"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="stockMode"
-                  className="mt-1"
-                  checked={!hasVariations}
-                  onChange={() => onToggleVariations(false)}
-                />
-                <span>
-                  <span className="text-sm font-medium text-slate-800">Peça única</span>
-                  <span className="mt-0.5 block text-xs text-slate-500">Uma quantidade, sem tamanho nem cor.</span>
+            <h3 className="ui-eyebrow">Preço</h3>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <FormField label="Preço de venda" required>
+                <CurrencyInput placeholder="Preco" value={form.price} onChange={(price) => setForm((prev) => ({ ...prev, price }))} />
+              </FormField>
+              <FormField label="Custo" hint="Usado no cálculo de lucro.">
+                <CurrencyInput placeholder="Custo" value={form.cost} onChange={(cost) => setForm((prev) => ({ ...prev, cost }))} />
+              </FormField>
+              <div className="flex flex-col justify-center rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-xs text-slate-500">Margem</span>
+                <span className={`num text-lg font-semibold ${marginPct !== null && marginPct < 0 ? "text-red-700" : "text-slate-900"}`}>
+                  {marginPct === null ? "—" : `${marginPct.toFixed(0)}%`}
                 </span>
-              </label>
-              <label
-                className={`flex cursor-pointer items-start gap-2 rounded-md border p-3 ${
-                  hasVariations ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-white"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="stockMode"
-                  className="mt-1"
-                  checked={hasVariations}
-                  onChange={() => onToggleVariations(true)}
-                />
-                <span>
-                  <span className="text-sm font-medium text-slate-800">Tamanhos e cores</span>
-                  <span className="mt-0.5 block text-xs text-slate-500">Uma linha para cada combinação.</span>
-                </span>
-              </label>
+              </div>
             </div>
-            {!hasVariations ? (
-              <label className="flex max-w-xs flex-col gap-1">
-                <span className="text-xs font-medium text-slate-600">Quantidade em estoque</span>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="ui-eyebrow">Estoque</h3>
+            <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Tipo de estoque">
+              {[
+                { value: false, title: "Peça única", text: "Uma quantidade, sem tamanho nem cor." },
+                { value: true, title: "Tamanhos e cores", text: "Uma linha para cada combinação." }
+              ].map((opt) => {
+                const active = hasVariations === opt.value;
+                return (
+                  <label
+                    key={String(opt.value)}
+                    className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${
+                      active ? "border-brand-600 bg-brand-50/60 ring-1 ring-brand-600" : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="stockMode"
+                      className="mt-1 accent-[rgb(var(--brand-700))]"
+                      checked={active}
+                      onChange={() => onToggleVariations(opt.value)}
+                    />
+                    <span>
+                      <span className="text-sm font-medium text-slate-900">{opt.title}</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">{opt.text}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {!hasVariations ? (
+                <FormField label="Quantidade em estoque" hint={editingId ? "Para reduzir, use Estoque → Movimentações." : null}>
+                  <Input
+                    placeholder="Quantidade atual"
+                    type="number"
+                    inputMode="numeric"
+                    min="0"
+                    value={currentStockPreview}
+                    onChange={(e) => setCurrentStockPreview(e.target.value)}
+                  />
+                </FormField>
+              ) : null}
+              <FormField label="Avisar quando faltar" hint="Estoque mínimo do produto (soma da grade).">
                 <Input
-                  placeholder="Quantidade atual"
+                  placeholder="Quantidade minima"
                   type="number"
-                  inputMode="numeric"
                   min="0"
-                  value={currentStockPreview}
-                  onChange={(e) => setCurrentStockPreview(e.target.value)}
+                  inputMode="numeric"
+                  value={form.minStock}
+                  onChange={(e) => setForm((prev) => ({ ...prev, minStock: e.target.value }))}
                 />
-              </label>
-            ) : editingId ? (
-              <p className="text-xs text-slate-500">Cada tamanho e cor fica na lista abaixo deste formulário.</p>
-            ) : (
-              <div className="space-y-2">
+              </FormField>
+            </div>
+            {hasVariations && !editingId ? (
+              <div className="space-y-2 rounded-xl border border-slate-200 p-3">
                 {draftVariations.map((row, index) => (
-                  <div key={row.id} className="grid gap-2 md:grid-cols-[1fr_1fr_7rem_auto] md:items-end">
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-slate-600">{index === 0 ? "Tamanho" : ""}</span>
+                  <div key={row.id} className="grid grid-cols-[1fr_1fr_5.5rem_auto] items-end gap-2">
+                    <label className="flex min-w-0 flex-col gap-1">
+                      {index === 0 ? <span className="ui-label mb-0">Tamanho</span> : null}
                       <Input
                         placeholder="P, M, 38..."
                         aria-label={`Tamanho ${index + 1}`}
@@ -570,8 +726,8 @@ export function ProductsPage() {
                         onKeyDown={onDraftRowKeyDown}
                       />
                     </label>
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-slate-600">{index === 0 ? "Cor" : ""}</span>
+                    <label className="flex min-w-0 flex-col gap-1">
+                      {index === 0 ? <span className="ui-label mb-0">Cor</span> : null}
                       <Input
                         placeholder="Preto, azul..."
                         aria-label={`Cor ${index + 1}`}
@@ -580,8 +736,8 @@ export function ProductsPage() {
                         onKeyDown={onDraftRowKeyDown}
                       />
                     </label>
-                    <label className="flex flex-col gap-1">
-                      <span className="text-xs font-medium text-slate-600">{index === 0 ? "Quantidade" : ""}</span>
+                    <label className="flex min-w-0 flex-col gap-1">
+                      {index === 0 ? <span className="ui-label mb-0">Qtd.</span> : null}
                       <Input
                         placeholder="0"
                         aria-label={`Quantidade ${index + 1}`}
@@ -593,216 +749,70 @@ export function ProductsPage() {
                         onKeyDown={onDraftRowKeyDown}
                       />
                     </label>
-                    <Button type="button" variant="secondary" className="md:mb-0.5" onClick={() => removeDraftRow(row.id)}>
-                      Tirar
-                    </Button>
+                    <IconButton icon={X} label={`Tirar linha ${index + 1}`} onClick={() => removeDraftRow(row.id)} />
                   </div>
                 ))}
-                <Button type="button" variant="secondary" onClick={addDraftRow}>
+                <Button type="button" variant="ghost" size="sm" icon={Plus} onClick={addDraftRow}>
                   Adicionar outra linha
                 </Button>
               </div>
-            )}
+            ) : null}
           </section>
 
-          <div>
-            <Button type="button" variant="secondary" onClick={() => setShowDetails((open) => !open)}>
-              {showDetails ? "Ocultar custo, descrição e código" : "Custo, descrição e código de barras"}
-            </Button>
-          </div>
-
-          {showDetails ? (
-            <>
-              <section className="space-y-3">
-                <h3 className="text-sm font-semibold text-slate-900">Detalhes</h3>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-slate-600">Custo</span>
-                    <CurrencyInput
-                      placeholder="Custo"
-                      value={form.cost}
-                      onChange={(cost) => setForm((prev) => ({ ...prev, cost }))}
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-slate-600">Avisar quando faltar</span>
+          <section className="space-y-3">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between text-left"
+              onClick={() => setShowDetails((open) => !open)}
+              aria-expanded={showDetails}
+            >
+              <span className="ui-eyebrow">Código de barras e descrição</span>
+              <span className="text-xs font-medium text-brand-700">{showDetails ? "Ocultar" : "Mostrar"}</span>
+            </button>
+            {showDetails ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <FormField label="Código de barras / SKU">
+                  <Input placeholder="SKU (opcional)" value={form.sku} onChange={(e) => setForm((prev) => ({ ...prev, sku: e.target.value }))} />
+                </FormField>
+                <FormField label="Ler com o leitor">
+                  <div className="flex gap-2">
                     <Input
-                      placeholder="Quantidade minima"
-                      type="number"
-                      min="0"
-                      value={form.minStock}
-                      onChange={(e) => setForm((prev) => ({ ...prev, minStock: e.target.value }))}
+                      placeholder="Bipar e pressionar Enter"
+                      value={scannerSku}
+                      onChange={(e) => setScannerSku(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          applyScannedSku();
+                        }
+                      }}
                     />
-                  </label>
-                  <label className="flex flex-col gap-1 md:col-span-2">
-                    <span className="text-xs font-medium text-slate-600">Descrição</span>
-                    <Textarea
-                      placeholder="Descricao"
-                      value={form.description}
-                      onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-slate-600">Código de barras</span>
-                    <Input
-                      placeholder="SKU (opcional)"
-                      value={form.sku}
-                      onChange={(e) => setForm((prev) => ({ ...prev, sku: e.target.value }))}
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs font-medium text-slate-600">Leitor</span>
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Bipar e pressionar Enter"
-                        value={scannerSku}
-                        onChange={(e) => setScannerSku(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            applyScannedSku();
-                          }
-                        }}
-                      />
-                      <Button type="button" variant="secondary" onClick={applyScannedSku}>
-                        Aplicar
-                      </Button>
-                    </div>
-                  </label>
-                </div>
-              </section>
-            </>
-          ) : null}
-
-          <div className="flex gap-2">
-            <Button disabled={loading}>
-              {editingId ? "Atualizar produto" : "Salvar produto"}
-            </Button>
-            {editingId ? (
-              <Button type="button" variant="secondary" onClick={resetForm}>
-                Cancelar
-              </Button>
+                    <Button type="button" variant="secondary" onClick={applyScannedSku}>
+                      Aplicar
+                    </Button>
+                  </div>
+                </FormField>
+                <FormField label="Descrição" className="sm:col-span-2">
+                  <Textarea placeholder="Descricao" value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} />
+                </FormField>
+              </div>
             ) : null}
-          </div>
+          </section>
+          <FormErrorSummary error={error} className="" />
         </form>
-        <FormErrorSummary error={error} className="mt-2" />
-      </SectionCard>
-      ) : (
-        <SectionCard title="Catálogo">
-          <p className="text-sm text-slate-600">Consulta de produtos. Somente administradores cadastram ou editam.</p>
-        </SectionCard>
-      )}
 
-      {isAdmin && hasVariations && editingId ? (
-        <ProductVariationsSection
-          token={token}
-          productId={editingId}
-          productName={form.name?.trim() || ""}
-          onChanged={() => refreshProducts().catch(() => {})}
-        />
-      ) : null}
-
-      <SectionCard title="Lista de produtos">
-        <div className="mb-3 flex items-center justify-between text-xs text-slate-600">
-          <span>{listLoading ? "Carregando..." : `Mostrando ${products.length} de ${totalProducts} produtos`}</span>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              className="px-2 py-1 text-xs"
-              disabled={productSkip === 0 || listLoading}
-              onClick={() => setProductSkip((v) => Math.max(v - productTake, 0))}
-            >
-              Anterior
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              className="px-2 py-1 text-xs"
-              disabled={productSkip + productTake >= totalProducts || listLoading}
-              onClick={() => setProductSkip((v) => v + productTake)}
-            >
-              Proxima
-            </Button>
+        {hasVariations && editingId ? (
+          <div className="mt-6 border-t border-slate-100 pt-6">
+            <ProductVariationsSection
+              embedded
+              token={token}
+              productId={editingId}
+              productName={form.name?.trim() || ""}
+              onChanged={() => refreshProducts().catch(() => {})}
+            />
           </div>
-        </div>
-        <DataTable
-          data={products}
-          getRowClassName={productLowStockClass}
-          columns={[
-            { key: "name", label: "Nome" },
-            { key: "sku", label: "SKU" },
-            { key: "category", label: "Categoria" },
-            { key: "brand", label: "Marca" },
-            { key: "stock", label: "Qtd atual" },
-            { key: "min", label: "Mín" },
-            { key: "price", label: "Preço" },
-            { key: "actions", label: "Ações" }
-          ]}
-          getRowKey={(row) => row.id}
-          emptyMessage="Nenhum produto encontrado. Cadastre o primeiro no formulário acima."
-          search={{
-            query,
-            onQueryChange: setQuery,
-            placeholder: "Buscar por nome ou SKU...",
-            matcher: () => true
-          }}
-          filters={[
-            {
-              id: "category",
-              value: categoryFilter,
-              onChange: (v) => {
-                setCategoryFilter(v);
-                setBrandFilter("");
-              },
-              options: [{ value: "", label: "Todas as categorias" }, ...categories.map((item) => ({ value: item.id, label: item.name }))],
-              matcher: () => true
-            },
-            {
-              id: "brand",
-              value: brandFilter,
-              onChange: setBrandFilter,
-              options: [{ value: "", label: "Todas as marcas" }, ...brands.map((item) => ({ value: item.id, label: item.name }))],
-              matcher: () => true
-            }
-          ]}
-          renderCells={(item) => {
-            const current = productCurrentStock(item);
-            const min = Number(item.minStock ?? 0);
-            const low = min > 0 && current <= min;
-            const stockClass = low
-              ? current === 0
-                ? "font-semibold text-rose-700"
-                : "font-semibold text-amber-800"
-              : "";
-            return (
-            <>
-              <td className="py-2">{item.name}</td>
-              <td className="py-2">{item.sku?.trim() ? item.sku : "—"}</td>
-              <td className="py-2">{item.category?.name}</td>
-              <td className="py-2">{item.brand?.name}</td>
-              <td className={`py-2 ${stockClass}`}>{current}</td>
-              <td className="py-2">{item.minStock}</td>
-              <td className="py-2">{formatCurrencyBRL(item.price)}</td>
-              <td className="py-2">
-                {isAdmin ? (
-                  <>
-                    <Button variant="secondary" className="mr-2 px-2 py-1 text-xs" onClick={() => startEdit(item)}>
-                      Editar
-                    </Button>
-                    <Button variant="danger" className="px-2 py-1 text-xs" onClick={() => removeProduct(item.id)}>
-                      Excluir
-                    </Button>
-                  </>
-                ) : (
-                  <span className="text-xs text-slate-400">—</span>
-                )}
-              </td>
-            </>
-            );
-          }}
-        />
-      </SectionCard>
+        ) : null}
+      </Sheet>
     </div>
   );
 }

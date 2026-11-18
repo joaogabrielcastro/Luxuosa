@@ -4,7 +4,7 @@ import { env } from "../../config/env.js";
 import { prisma } from "../../config/prisma.js";
 import { authRepository } from "./auth.repository.js";
 import { buildTenantFiscalContext } from "../../shared/fiscal/tenantEmitente.js";
-import { FEATURE_MIN_PLAN, tenantMeetsPlan } from "../../shared/planCatalog.js";
+import { FEATURE_MIN_PLAN, tenantEntitlements, tenantMeetsPlan } from "../../shared/planCatalog.js";
 
 function digitsOnly(value) {
   return String(value ?? "").replace(/\D/g, "");
@@ -44,6 +44,8 @@ function buildAuthResponse(user, tenant) {
       hasNotaasApiKey,
       stripeSubscriptionStatus: tenant.stripeSubscriptionStatus ?? null,
       planPeriodEnd: tenant.planPeriodEnd ?? null,
+      planGateExempt: Boolean(tenant.planGateExempt),
+      entitlements: tenantEntitlements(tenant),
       fiscal: buildTenantFiscalContext({ ...tenant, hasNotaasApiKey })
     }
   };
@@ -184,7 +186,8 @@ export const authService = {
           notaasProjectId: true,
           notaasApiKey: true,
           stripeSubscriptionStatus: true,
-          planPeriodEnd: true
+          planPeriodEnd: true,
+          planGateExempt: true
         }
       }),
       prisma.user.findUnique({
@@ -208,6 +211,8 @@ export const authService = {
       tenant: {
         ...tenantSafe,
         hasNotaasApiKey,
+        planGateExempt: Boolean(tenant.planGateExempt),
+        entitlements: tenantEntitlements(tenant),
         fiscal: buildTenantFiscalContext({ ...tenant, hasNotaasApiKey })
       },
       user: profile

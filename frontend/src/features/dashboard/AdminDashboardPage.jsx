@@ -1,43 +1,37 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { useApiQuery } from "../../shared/hooks/useApiQuery.js";
-import { apiClient } from "../../shared/apiClient.js";
-import { formatCurrencyBRL, formatDateBR, formatDateTimeBR } from "../../shared/formatters.js";
-import { useAuth } from "../auth/useAuth.jsx";
-import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
-import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
-import { StatCard } from "../../shared/components/ui/StatCard.jsx";
-import { Alert } from "../../shared/components/ui/Alert.jsx";
-import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
-import { queryKeys } from "../../shared/queryKeys.js";
-import { paymentLabel } from "../sales/sales.utils.js";
 import {
   AlertTriangle,
   ArrowRight,
-  DollarSign,
+  Banknote,
+  Lock,
   PackagePlus,
-  ShoppingCart,
+  Receipt,
+  ShoppingBag,
+  TrendingUp,
   UserPlus,
   Wallet,
   WalletCards,
   Warehouse
 } from "lucide-react";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis
-} from "recharts";
-import {
-  PERIOD_PRESETS,
-  fillDailySeries,
-  lastDayDelta,
-  rangeForPreset
-} from "./periodRange.js";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useApiQuery } from "../../shared/hooks/useApiQuery.js";
+import { apiClient } from "../../shared/apiClient.js";
+import { formatCurrencyBRL, formatDateBR, formatDateTimeBR } from "../../shared/formatters.js";
+import { useAuth } from "../auth/useAuth.jsx";
+import { useEntitlements } from "../../shared/plans/useEntitlements.js";
+import { PageHeader } from "../../shared/components/ui/PageHeader.jsx";
+import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
+import { StatCard } from "../../shared/components/ui/StatCard.jsx";
+import { Alert } from "../../shared/components/ui/Alert.jsx";
+import { Badge } from "../../shared/components/ui/Badge.jsx";
+import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
+import { SegmentedControl } from "../../shared/components/ui/SegmentedControl.jsx";
+import { Skeleton } from "../../shared/components/ui/Skeleton.jsx";
+import { queryKeys } from "../../shared/queryKeys.js";
+import { paymentLabel } from "../sales/sales.utils.js";
+import { PERIOD_PRESETS, fillDailySeries, rangeForPreset } from "./periodRange.js";
 
 const EMPTY_DASHBOARD = {
   monthlyRevenue: 0,
@@ -56,89 +50,121 @@ const EMPTY_DASHBOARD = {
   stockConsolidated: []
 };
 
+const BRAND_STROKE = "rgb(94 51 106)";
+
 function toNum(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
 }
 
+function pctChange(current, previous) {
+  if (!previous) return null;
+  return ((current - previous) / previous) * 100;
+}
+
+function greeting(now = new Date()) {
+  const h = now.getHours();
+  if (h < 12) return "Bom dia";
+  if (h < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
 function TextLink({ to, children }) {
   return (
-    <Link to={to} className="inline-flex items-center gap-1 text-sm font-medium text-violet-700 hover:underline">
+    <Link to={to} className="inline-flex items-center gap-1 text-[13px] font-medium text-brand-700 hover:text-brand-900">
       {children}
       <ArrowRight className="h-3.5 w-3.5" aria-hidden />
     </Link>
   );
 }
 
-function QuickAction({ to, icon: Icon, title, description }) {
+function QuickAction({ to, icon: Icon, title, description, primary = false }) {
   return (
     <Link
       to={to}
-      className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-white p-3 text-inherit no-underline shadow-sm transition-colors hover:border-violet-200 hover:bg-violet-50/40 sm:gap-3 sm:p-3.5"
+      className={
+        primary
+          ? "group flex items-center gap-3 rounded-xl bg-brand-800 p-3.5 text-white shadow-card transition-colors hover:bg-brand-900"
+          : "group flex items-center gap-3 rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-card transition-[border-color,box-shadow] hover:border-brand-200 hover:shadow-card-hover"
+      }
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-700">
-        <Icon className="h-4 w-4" />
+      <span
+        className={
+          primary
+            ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15"
+            : "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700"
+        }
+      >
+        <Icon className="h-4 w-4" aria-hidden />
       </span>
       <span className="min-w-0">
-        <span className="block text-sm font-semibold text-slate-900">{title}</span>
-        <span className="mt-0.5 hidden text-xs text-slate-600 sm:block">{description}</span>
+        <span className="block text-sm font-semibold">{title}</span>
+        <span className={primary ? "hidden text-xs text-white/70 sm:block" : "hidden text-xs text-slate-500 sm:block"}>{description}</span>
       </span>
     </Link>
   );
 }
 
-function NewSaleButton({ className = "ui-btn ui-btn-primary w-full text-sm sm:w-auto" }) {
+function RankList({ rows, valueKey = "amount", labelKey = "name", format = formatCurrencyBRL, empty }) {
+  if (!rows.length) return empty;
+  const max = Math.max(...rows.map((r) => toNum(r[valueKey])), 1);
   return (
-    <Link to="/vendas" className={className}>
-      Nova venda
-    </Link>
+    <ol className="space-y-3">
+      {rows.map((row, i) => (
+        <li key={row.productId || row.userId || row[labelKey] || i}>
+          <div className="flex items-baseline justify-between gap-3 text-sm">
+            <span className="min-w-0 truncate text-slate-800">
+              <span className="num mr-2 text-xs text-slate-400">{i + 1}</span>
+              {row[labelKey]}
+            </span>
+            <span className="num shrink-0 font-medium text-slate-900">{format(row[valueKey])}</span>
+          </div>
+          <div className="mt-1.5 h-1.5 rounded-full bg-slate-100">
+            <div className="h-1.5 rounded-full bg-brand-600" style={{ width: `${Math.max(2, (toNum(row[valueKey]) / max) * 100)}%` }} />
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function ChartTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0].payload;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-pop">
+      <p className="font-medium text-slate-900">{formatDateBR(row.date)}</p>
+      <p className="num mt-0.5 text-slate-700">{formatCurrencyBRL(row.amount)}</p>
+      <p className="num text-slate-500">
+        {row.count} {row.count === 1 ? "venda" : "vendas"}
+      </p>
+    </div>
   );
 }
 
 function AttendantHome() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const lowStockQuery = useApiQuery(queryKeys.reports.lowStock(token), "/reports/low-stock", { token });
   const lowItems = lowStockQuery.data?.items ?? [];
-  const criticalCount = lowItems.filter(
-    (item) => item.severity === "critical" || Number(item.currentStock) === 0
-  ).length;
+  const criticalCount = lowItems.filter((item) => item.severity === "critical" || Number(item.currentStock) === 0).length;
 
   return (
     <div className="ui-page">
       <PageHeader
+        eyebrow={`${greeting()}, ${String(user?.name || "").split(" ")[0]}`}
         title="Início"
         description="Atalhos do dia: vender, receber fiado e conferir o que falta no estoque."
-        actions={<NewSaleButton />}
       />
-      <section className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
-        <QuickAction
-          to="/vendas"
-          icon={ShoppingCart}
-          title="Nova venda"
-          description="Registrar uma venda à vista."
-        />
-        <QuickAction
-          to="/crediario"
-          icon={WalletCards}
-          title="Crediário"
-          description="Quem está devendo e receber parcelas."
-        />
-        <QuickAction to="/caixa" icon={Wallet} title="Caixa" description="Acompanhar o movimento do dia." />
-        <QuickAction
-          to="/estoque"
-          icon={AlertTriangle}
-          title="Estoque"
-          description="O que tem e o que precisa repor."
-        />
+      <section className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+        <QuickAction primary to="/vendas" icon={ShoppingBag} title="Nova venda" description="Abrir o PDV." />
+        <QuickAction to="/crediario" icon={WalletCards} title="Crediário" description="Receber e lançar fiado." />
+        <QuickAction to="/clientes" icon={UserPlus} title="Clientes" description="Consultar e cadastrar." />
+        <QuickAction to="/estoque" icon={Warehouse} title="Estoque" description="O que tem e o que repor." />
       </section>
       {lowItems.length ? (
         <Alert
           variant={criticalCount > 0 ? "danger" : "warning"}
-          title={
-            criticalCount > 0
-              ? `${criticalCount} produto(s) sem estoque`
-              : `${lowItems.length} produto(s) com estoque baixo`
-          }
+          title={criticalCount > 0 ? `${criticalCount} produto(s) sem estoque` : `${lowItems.length} produto(s) com estoque baixo`}
         >
           <TextLink to="/estoque">Ver estoque</TextLink>
         </Alert>
@@ -156,25 +182,30 @@ export function AdminDashboardPage() {
 }
 
 function AdminDashboardBody() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const { has } = useEntitlements();
+  const canCompare = has("advancedReports");
   const [periodId, setPeriodId] = useState("month");
   const range = useMemo(() => rangeForPreset(periodId), [periodId]);
+  const todayRange = useMemo(() => rangeForPreset("today"), []);
 
   const {
     data = EMPTY_DASHBOARD,
     error: dashboardError,
     isLoading: loading,
-    isFetching,
     refetch
   } = useApiQuery(queryKeys.dashboard.admin(token), "/dashboard/admin", { token });
 
+  const reportUrl = (r) => `/reports/sales?from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}`;
   const salesReportQuery = useQuery({
     queryKey: queryKeys.reports.sales(token, range),
     enabled: Boolean(token),
-    queryFn: () =>
-      apiClient(`/reports/sales?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`, {
-        token
-      })
+    queryFn: () => apiClient(reportUrl(range), { token })
+  });
+  const todayQuery = useQuery({
+    queryKey: queryKeys.reports.sales(token, todayRange),
+    enabled: Boolean(token),
+    queryFn: () => apiClient(reportUrl(todayRange), { token })
   });
 
   const openCreditQuery = useQuery({
@@ -183,371 +214,326 @@ function AdminDashboardBody() {
     queryFn: () => apiClient("/crediario?take=5&skip=0&status=OPEN", { token })
   });
 
-  const criticalCount = useMemo(
-    () => (data.lowStockItems || []).filter((item) => Number(item.currentStock) === 0).length,
-    [data.lowStockItems]
-  );
-
-  const cashMonth = Math.max(0, toNum(data.monthlyRevenue) - toNum(data.crediarioReceivedMonth));
-  const receivedMonth = toNum(data.crediarioReceivedMonth);
+  const report = salesReportQuery.data;
+  const today = todayQuery.data;
+  const previous = report?.advanced?.previous;
+  const todayPrevious = today?.advanced?.previous;
 
   const periodSeries = useMemo(() => {
-    const filled = fillDailySeries(range.from, range.to, salesReportQuery.data?.byDay);
-    return filled.map((row) => ({
+    return fillDailySeries(range.from, range.to, report?.byDay).map((row) => ({
       ...row,
-      label: formatDateBR(row.date).slice(0, 5),
-      total: row.amount
+      label: formatDateBR(row.date).slice(0, 5)
     }));
-  }, [range.from, range.to, salesReportQuery.data]);
+  }, [range.from, range.to, report]);
 
-  const periodHasSales = toNum(salesReportQuery.data?.saleCount) > 0 || toNum(salesReportQuery.data?.totalAmount) > 0;
-  const periodDelta = lastDayDelta(periodSeries);
+  const periodHasSales = toNum(report?.saleCount) > 0;
+  const periodLabel = PERIOD_PRESETS.find((p) => p.id === periodId)?.label.toLowerCase();
 
-  const topProducts = useMemo(() => {
-    return [...(data.profitByProduct || [])]
-      .sort((a, b) => toNum(b.revenue) - toNum(a.revenue))
-      .slice(0, 8);
-  }, [data.profitByProduct]);
+  const lowItems = useMemo(
+    () => [...(data.lowStockItems || [])].sort((a, b) => toNum(a.currentStock) - toNum(b.currentStock)).slice(0, 5),
+    [data.lowStockItems]
+  );
+  const criticalCount = (data.lowStockItems || []).filter((item) => Number(item.currentStock) === 0).length;
 
-  const topProfit = useMemo(() => {
-    return [...(data.profitByProduct || [])]
-      .filter((row) => toNum(row.profit) !== 0 || toNum(row.revenue) > 0)
-      .sort((a, b) => toNum(b.profit) - toNum(a.profit))
-      .slice(0, 5);
-  }, [data.profitByProduct]);
-
+  const topProducts = useMemo(
+    () => [...(data.profitByProduct || [])].sort((a, b) => toNum(b.revenue) - toNum(a.revenue)).slice(0, 6),
+    [data.profitByProduct]
+  );
+  const topProfit = useMemo(
+    () =>
+      [...(data.profitByProduct || [])]
+        .filter((row) => toNum(row.profit) !== 0 || toNum(row.revenue) > 0)
+        .sort((a, b) => toNum(b.profit) - toNum(a.profit))
+        .slice(0, 5),
+    [data.profitByProduct]
+  );
   const openAccounts = useMemo(() => {
     const rows = openCreditQuery.data?.items ?? [];
     return [...rows].sort((a, b) => toNum(b.remaining) - toNum(a.remaining)).slice(0, 5);
   }, [openCreditQuery.data]);
+  const byPayment = useMemo(
+    () => (report?.byPayment || []).map((r) => ({ ...r, name: paymentLabel(r.method) })),
+    [report?.byPayment]
+  );
 
   const attendants = data.salesByAttendant || [];
   const lastSales = data.lastSales || [];
   const idleProducts = (data.productsWithoutSales || []).slice(0, 5);
+  const receivedMonth = toNum(data.crediarioReceivedMonth);
+  const firstName = String(user?.name || "").split(" ")[0];
+
+  const deltaLabel = canCompare ? "vs período anterior" : null;
 
   return (
     <div className="ui-page">
       <PageHeader
+        eyebrow={`${greeting()}${firstName ? `, ${firstName}` : ""} · ${new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}`}
         title="Início"
-        description="Centro de comando da loja: quanto vendeu, o que tem a receber e o que precisa de atenção."
-        actions={<NewSaleButton />}
+        description="Como a loja está hoje, o que entrou no período e o que precisa de atenção."
+        actions={
+          <Link to="/vendas" className="ui-btn ui-btn-primary">
+            <ShoppingBag className="h-4 w-4" aria-hidden />
+            Nova venda
+          </Link>
+        }
       />
 
       {dashboardError ? (
-        <Alert variant="danger">
+        <Alert
+          variant="danger"
+          title="Não foi possível carregar os indicadores"
+          actions={
+            <button type="button" className="ui-btn ui-btn-secondary ui-btn-sm" onClick={() => refetch()}>
+              Tentar novamente
+            </button>
+          }
+        >
           {dashboardError.message}
-          <button type="button" className="ml-2 underline" onClick={() => refetch()}>
-            Tentar novamente
-          </button>
         </Alert>
       ) : null}
 
-      <section aria-label="Ações rápidas">
-        <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Ações rápidas</h2>
-        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
-          <QuickAction to="/vendas" icon={ShoppingCart} title="Nova venda" description="Venda à vista no PDV." />
-          <QuickAction
-            to="/catalog/products"
-            icon={PackagePlus}
-            title="Novo produto"
-            description="Cadastrar item e variações."
-          />
-          <QuickAction to="/clientes" icon={UserPlus} title="Novo cliente" description="Cadastro para crediário e vendas." />
-          <QuickAction
-            to="/estoque/movimentos"
-            icon={Warehouse}
-            title="Ajustar estoque"
-            description="Entrada ou saída manual."
-          />
-        </div>
-      </section>
-
-      <section className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      {/* Hoje */}
+      <section aria-label="Indicadores" className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5 [&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1">
+        <StatCard
+          label="Vendido hoje"
+          value={formatCurrencyBRL(today?.totalAmount)}
+          loading={todayQuery.isLoading}
+          icon={Banknote}
+          delta={canCompare && todayPrevious ? { percent: pctChange(toNum(today?.totalAmount), toNum(todayPrevious.totalAmount)), label: "vs ontem" } : null}
+          hint="Vendas à vista pagas."
+        />
+        <StatCard
+          label="Vendas hoje"
+          value={String(toNum(data.daySales))}
+          loading={loading}
+          icon={Receipt}
+          hint="À vista e crediário lançado hoje."
+        />
         <StatCard
           label="Faturamento do mês"
           value={formatCurrencyBRL(data.monthlyRevenue)}
-          hint={
-            toNum(data.monthlyRevenue) || receivedMonth
-              ? `À vista ${formatCurrencyBRL(cashMonth)} · recebimentos de crediário ${formatCurrencyBRL(receivedMonth)}`
-              : "Vendas à vista pagas e recebimentos de crediário neste mês."
-          }
-          icon={<DollarSign className="h-4 w-4 text-violet-600" />}
-          footer={<TextLink to="/relatorios">Ver relatórios</TextLink>}
+          loading={loading}
+          icon={TrendingUp}
+          hint={`À vista ${formatCurrencyBRL(Math.max(0, toNum(data.monthlyRevenue) - receivedMonth))} · crediário recebido ${formatCurrencyBRL(receivedMonth)}`}
+          footer={<TextLink to="/relatorios">Relatórios</TextLink>}
         />
         <StatCard
-          label="Vendas do dia"
-          value={`${data.daySales} ${Number(data.daySales) === 1 ? "venda" : "vendas"}`}
-          hint="À vista pagas e crediário lançado hoje."
-          icon={<ShoppingCart className="h-4 w-4 text-blue-600" />}
-          footer={<TextLink to="/vendas">Ir para vendas</TextLink>}
-        />
-        <StatCard
-          label="Crediário em aberto"
+          label="A receber (crediário)"
           value={formatCurrencyBRL(data.crediarioOpenBalance)}
-          hint={
-            data.crediarioOpenCount
-              ? `${data.crediarioOpenCount} conta(s) · recebido ${formatCurrencyBRL(receivedMonth)} este mês`
-              : `Nada a receber · recebido ${formatCurrencyBRL(receivedMonth)} este mês`
-          }
-          icon={<WalletCards className="h-4 w-4 text-amber-600" />}
+          loading={loading}
+          icon={WalletCards}
           tone={toNum(data.crediarioOpenBalance) > 0 ? "warning" : "default"}
+          hint={`${toNum(data.crediarioOpenCount)} conta(s) em aberto · recebido ${formatCurrencyBRL(receivedMonth)} no mês`}
           footer={<TextLink to="/crediario">Ver crediário</TextLink>}
         />
         <StatCard
-          label="Ticket médio"
-          value={formatCurrencyBRL(data.ticketAverage)}
-          hint="Média das vendas à vista pagas e do crediário já quitado."
-          icon={<Wallet className="h-4 w-4 text-indigo-600" />}
-        />
-        <StatCard
           label="Estoque baixo"
-          value={`${data.lowStockCount} ${Number(data.lowStockCount) === 1 ? "item" : "itens"}`}
-          hint={
-            criticalCount
-              ? `${criticalCount} sem estoque · o mínimo é o cadastrado em Produtos.`
-              : "Produtos com estoque total igual ou abaixo do mínimo."
-          }
-          icon={<AlertTriangle className="h-4 w-4 text-amber-600" />}
+          value={`${toNum(data.lowStockCount)} ${toNum(data.lowStockCount) === 1 ? "produto" : "produtos"}`}
+          loading={loading}
+          icon={AlertTriangle}
           tone={data.lowStockCount > 0 ? (criticalCount ? "danger" : "warning") : "default"}
-          footer={<TextLink to="/estoque">Ver estoque</TextLink>}
+          hint={criticalCount ? `${criticalCount} sem nenhuma unidade.` : "No mínimo cadastrado ou abaixo."}
+          footer={<TextLink to="/estoque">Ver o que repor</TextLink>}
         />
       </section>
 
+      {/* Período */}
       <SectionCard
-        title="Vendas por período"
-        description="Só vendas à vista pagas (Sale PAID). Recebimentos de crediário entram no faturamento do mês, não neste gráfico."
+        title="Desempenho no período"
+        description="Vendas à vista pagas. Recebimentos de crediário entram no faturamento do mês, não neste gráfico."
         actions={
-          <div className="flex w-full gap-1 overflow-x-auto pb-0.5 sm:w-auto">
-            {PERIOD_PRESETS.map((preset) => {
-              const active = preset.id === periodId;
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => setPeriodId(preset.id)}
-                  className={
-                    active
-                      ? "shrink-0 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white"
-                      : "shrink-0 rounded-lg bg-slate-100 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-200"
-                  }
-                >
-                  {preset.label}
-                </button>
-              );
-            })}
-          </div>
+          <SegmentedControl
+            label="Período"
+            value={periodId}
+            onChange={setPeriodId}
+            options={PERIOD_PRESETS.map((p) => ({ value: p.id, label: p.label }))}
+          />
         }
       >
-        {periodHasSales ? (
-          <>
-            <div className="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
-              <p className="text-slate-600">
-                Total no período:{" "}
-                <strong className="text-slate-900">{formatCurrencyBRL(salesReportQuery.data?.totalAmount)}</strong>
-              </p>
-              <p className="text-slate-600">
-                {salesReportQuery.data?.saleCount}{" "}
-                {Number(salesReportQuery.data?.saleCount) === 1 ? "venda" : "vendas"}
-              </p>
-              {periodDelta ? (
-                <p className={periodDelta.percent >= 0 ? "text-emerald-700" : "text-rose-700"}>
-                  Último dia com venda {periodDelta.percent >= 0 ? "+" : ""}
-                  {periodDelta.percent.toFixed(0)}% vs o dia anterior com venda
+        <div className="grid gap-4 border-b border-slate-100 pb-4 sm:grid-cols-3">
+          {[
+            {
+              label: "Faturamento",
+              value: formatCurrencyBRL(report?.totalAmount),
+              delta: previous ? pctChange(toNum(report?.totalAmount), toNum(previous.totalAmount)) : null
+            },
+            {
+              label: "Quantidade de vendas",
+              value: String(toNum(report?.saleCount)),
+              delta: previous ? pctChange(toNum(report?.saleCount), toNum(previous.saleCount)) : null
+            },
+            {
+              label: "Ticket médio",
+              value: formatCurrencyBRL(report?.ticketAverage),
+              delta:
+                previous && previous.saleCount
+                  ? pctChange(toNum(report?.ticketAverage), toNum(previous.totalAmount) / toNum(previous.saleCount))
+                  : null
+            }
+          ].map((kpi) => (
+            <div key={kpi.label}>
+              <p className="text-[13px] text-slate-500">{kpi.label}</p>
+              {salesReportQuery.isLoading ? (
+                <Skeleton className="mt-1 h-8 w-28" />
+              ) : (
+                <p className="num mt-0.5 text-2xl font-semibold tracking-tight text-slate-900">{kpi.value}</p>
+              )}
+              {kpi.delta !== null && Number.isFinite(kpi.delta) ? (
+                <p className={`num mt-0.5 text-xs font-medium ${kpi.delta >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                  {kpi.delta >= 0 ? "▲" : "▼"} {Math.abs(kpi.delta).toFixed(0)}% <span className="font-normal text-slate-500">{deltaLabel}</span>
                 </p>
               ) : null}
             </div>
-            <div className="h-48 min-w-0 overflow-hidden sm:h-64 lg:h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={periodSeries} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-                  <YAxis width={36} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(v) => formatCurrencyBRL(v)} />
-                  <Line type="monotone" dataKey="total" stroke="#1E40AF" strokeWidth={3} dot={periodSeries.length <= 14} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            {lastSales.length ? (
-              <div className="mt-4 border-t border-slate-100 pt-3">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Últimas vendas à vista</p>
-                <ul className="space-y-1.5 text-sm">
-                  {lastSales.slice(0, 5).map((sale) => (
-                    <li key={sale.id} className="flex flex-col gap-0.5 rounded-lg bg-slate-50 px-2.5 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-                      <span className="text-slate-700">
-                        {sale.user?.name || "Atendente"} · {paymentLabel(sale.paymentMethod)}
-                      </span>
-                      <span className="font-medium text-slate-900">{formatCurrencyBRL(sale.totalValue)}</span>
-                      <span className="text-xs text-slate-500 sm:text-right">{formatDateTimeBR(sale.occurredAt)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </>
+          ))}
+        </div>
+        {!canCompare ? (
+          <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-slate-500">
+            <Lock className="h-3.5 w-3.5 text-champagne-600" aria-hidden />
+            Comparação com o período anterior faz parte dos relatórios avançados (plano Enterprise).
+          </p>
+        ) : null}
+
+        {periodHasSales ? (
+          <div className="mt-4 h-56 min-w-0 sm:h-72" role="img" aria-label={`Faturamento por dia — ${periodLabel}`}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={periodSeries} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="luxArea" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={BRAND_STROKE} stopOpacity={0.18} />
+                    <stop offset="100%" stopColor={BRAND_STROKE} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} stroke="rgb(231 228 223)" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: "rgb(120 113 106)" }}
+                  tickLine={false}
+                  axisLine={false}
+                  interval="preserveStartEnd"
+                  minTickGap={16}
+                />
+                <YAxis
+                  width={60}
+                  tick={{ fontSize: 11, fill: "rgb(120 113 106)" }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil` : `R$ ${v}`)}
+                />
+                <Tooltip content={<ChartTooltip />} cursor={{ stroke: "rgb(168 162 154)", strokeDasharray: "3 3" }} />
+                <Area
+                  type="monotone"
+                  dataKey="amount"
+                  stroke={BRAND_STROKE}
+                  strokeWidth={2}
+                  fill="url(#luxArea)"
+                  dot={false}
+                  activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff", fill: BRAND_STROKE }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         ) : salesReportQuery.isFetching ? (
-          <p className="py-8 text-center text-sm text-slate-500">Carregando vendas do período…</p>
+          <Skeleton className="mt-4 h-56 w-full sm:h-72" />
         ) : (
-          <EmptyState
-            compact
-            title="Ainda não há vendas à vista neste período"
-            description="Aqui aparece a evolução do que foi pago no PDV. Crediário não entra neste gráfico."
-            actions={<NewSaleButton className="ui-btn ui-btn-primary text-sm" />}
-          />
+          <div className="mt-4">
+            <EmptyState
+              compact
+              icon={TrendingUp}
+              title="Nenhuma venda à vista neste período"
+              description="Assim que o PDV registrar vendas, a evolução aparece aqui."
+              actions={
+                <Link to="/vendas" className="ui-btn ui-btn-primary ui-btn-sm">
+                  Abrir o PDV
+                </Link>
+              }
+            />
+          </div>
         )}
       </SectionCard>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <SectionCard
-          title="Contas a receber"
-          description="Saldo de fiado em aberto. Não entra no caixa."
-          actions={<TextLink to="/crediario">Ver crediário</TextLink>}
-        >
-          <div className="mb-3 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg bg-amber-50 px-3 py-2">
-              <p className="text-xs font-medium text-amber-800">Saldo em aberto</p>
-              <p className="mt-1 text-lg font-bold text-slate-900">{formatCurrencyBRL(data.crediarioOpenBalance)}</p>
-            </div>
-            <div className="rounded-lg bg-slate-50 px-3 py-2">
-              <p className="text-xs font-medium text-slate-500">Contas em aberto</p>
-              <p className="mt-1 text-lg font-bold text-slate-900">{data.crediarioOpenCount}</p>
-            </div>
-          </div>
+      <section className="grid gap-4 lg:grid-cols-3">
+        <SectionCard title="Formas de pagamento" description={`No período (${periodLabel}).`}>
+          <RankList
+            rows={byPayment}
+            empty={<p className="text-sm text-slate-500">Sem vendas no período.</p>}
+          />
+        </SectionCard>
+
+        <SectionCard title="Quem está devendo" description="Maiores saldos em aberto no crediário." actions={<TextLink to="/crediario">Crediário</TextLink>}>
           {openAccounts.length ? (
-            <ul className="space-y-2">
+            <ul className="divide-y divide-slate-100">
               {openAccounts.map((row) => (
-                <li key={row.id} className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                <li key={row.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0">
                   <div className="min-w-0">
-                    <p className="font-medium text-slate-900">{row.customer?.name || "Cliente"}</p>
-                    <p className="text-xs text-slate-500">{formatDateTimeBR(row.occurredAt)}</p>
+                    <p className="truncate text-sm font-medium text-slate-900">{row.customer?.name || "Cliente"}</p>
+                    <p className="num text-xs text-slate-500">{formatDateBR(row.occurredAt)}</p>
                   </div>
-                  <p className="shrink-0 font-semibold text-amber-800">{formatCurrencyBRL(row.remaining)}</p>
+                  <p className="num shrink-0 text-sm font-semibold text-amber-800">{formatCurrencyBRL(row.remaining)}</p>
                 </li>
               ))}
             </ul>
-          ) : toNum(data.crediarioOpenBalance) > 0 ? (
-            <p className="text-sm text-slate-500">Há saldo em aberto. Abra o crediário para ver as contas.</p>
           ) : (
-            <EmptyState
-              compact
-              title="Nenhuma conta em aberto"
-              description="Quando o cliente levar agora e pagar depois, o saldo aparece aqui."
-              actions={
-                <Link to="/crediario" className="ui-btn ui-btn-secondary text-sm">
-                  Abrir crediário
-                </Link>
-              }
-            />
+            <EmptyState compact icon={Wallet} title="Nenhuma conta em aberto" description="Vendas a prazo aparecem aqui até serem quitadas." />
           )}
         </SectionCard>
 
-        <SectionCard
-          title="Estoque"
-          description="O recorte do dia. A lista do que repor fica em Estoque."
-          actions={<TextLink to="/estoque">Ver o que repor</TextLink>}
-        >
-          {data.lowStockCount > 0 ? (
-            <Alert
-              variant={criticalCount ? "danger" : "warning"}
-              title={
-                criticalCount
-                  ? `${criticalCount} produto(s) sem estoque`
-                  : `${data.lowStockCount} produto(s) abaixo do mínimo`
-              }
-            >
-              <TextLink to="/estoque">Abrir lista de reposição</TextLink>
-            </Alert>
+        <SectionCard title="Repor estoque" description="Produtos no mínimo ou abaixo." actions={<TextLink to="/estoque">Estoque</TextLink>}>
+          {lowItems.length ? (
+            <ul className="divide-y divide-slate-100">
+              {lowItems.map((item) => (
+                <li key={item.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-slate-900">{item.name}</p>
+                    <p className="text-xs text-slate-500">{[item.brand, item.category].filter(Boolean).join(" · ") || `mínimo ${item.minStock}`}</p>
+                  </div>
+                  <Badge variant={Number(item.currentStock) === 0 ? "danger" : "warning"} dot>
+                    <span className="num">
+                      {item.currentStock}/{item.minStock}
+                    </span>
+                  </Badge>
+                </li>
+              ))}
+            </ul>
           ) : (
-            <EmptyState
-              compact
-              title="Nada abaixo do mínimo"
-              description="Quando um produto ficar no mínimo ou zerado, o aviso aparece aqui e a lista em Estoque."
-              actions={
-                <Link to="/estoque/movimentos" className="ui-btn ui-btn-secondary text-sm">
-                  Ajustar estoque
-                </Link>
-              }
-            />
+            <EmptyState compact icon={Warehouse} title="Estoque em dia" description="Nada no mínimo ou abaixo agora." />
           )}
         </SectionCard>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <SectionCard
-          title="Produtos mais vendidos"
-          description="Por valor vendido (à vista paga e crediário quitado)."
-          actions={<TextLink to="/catalog/products">Ver produtos</TextLink>}
-        >
-          {topProducts.length ? (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[280px] text-left text-sm">
-                <thead>
-                  <tr className="text-xs uppercase tracking-wide text-slate-500">
-                    <th className="pb-2 font-semibold">Produto</th>
-                    <th className="pb-2 text-right font-semibold">Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {topProducts.map((row) => (
-                    <tr key={row.productId} className="border-t border-slate-100">
-                      <td className="py-2 pr-3 text-slate-800">{row.name}</td>
-                      <td className="py-2 text-right font-medium text-slate-900">{formatCurrencyBRL(row.revenue)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <EmptyState
-              compact
-              title="Ainda não há produtos vendidos"
-              description="O ranking usa o valor das vendas à vista pagas e do crediário quitado."
-              actions={<NewSaleButton className="ui-btn ui-btn-primary text-sm" />}
-            />
-          )}
+        <SectionCard title="Produtos mais vendidos" description="Por valor vendido (à vista paga e crediário quitado)." actions={<TextLink to="/catalog/products">Produtos</TextLink>}>
+          <RankList
+            rows={topProducts}
+            valueKey="revenue"
+            empty={<EmptyState compact title="Ainda não há produtos vendidos" description="O ranking aparece depois das primeiras vendas." />}
+          />
         </SectionCard>
 
         <SectionCard title="Desempenho da equipe" description="Vendas à vista pagas e crediário lançado, por atendente.">
           {attendants.length ? (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[320px] text-left text-sm">
-                <thead>
-                  <tr className="text-xs uppercase tracking-wide text-slate-500">
-                    <th className="pb-2 font-semibold">Atendente</th>
-                    <th className="pb-2 text-right font-semibold">Vendas</th>
-                    <th className="pb-2 text-right font-semibold">Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {attendants.map((row) => (
-                    <tr key={row.userId || row.name} className="border-t border-slate-100">
-                      <td className="py-2 pr-3 text-slate-800">{row.name}</td>
-                      <td className="py-2 text-right text-slate-700">{row.sales}</td>
-                      <td className="py-2 text-right font-medium text-slate-900">{formatCurrencyBRL(row.amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ul className="divide-y divide-slate-100">
+              {attendants.map((row) => (
+                <li key={row.userId || row.name} className="flex items-center justify-between gap-3 py-2.5 first:pt-0">
+                  <span className="truncate text-sm text-slate-800">{row.name}</span>
+                  <span className="flex shrink-0 items-baseline gap-4">
+                    <span className="num text-xs text-slate-500">{row.sales} vendas</span>
+                    <span className="num text-sm font-semibold text-slate-900">{formatCurrencyBRL(row.amount)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
           ) : (
-            <EmptyState
-              compact
-              title="Sem movimento da equipe"
-              description="O ranking aparece depois da primeira venda à vista paga ou crediário lançado."
-              actions={<NewSaleButton className="ui-btn ui-btn-primary text-sm" />}
-            />
+            <EmptyState compact title="Sem movimento da equipe" description="O ranking aparece depois da primeira venda." />
           )}
         </SectionCard>
       </section>
 
-      <SectionCard
-        title="Lucro por produto"
-        description="Receita menos custo cadastrado. Só vendas à vista pagas e crediário quitado."
-      >
-        {topProfit.length ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[360px] text-left text-sm">
+      <section className="grid gap-4 lg:grid-cols-2">
+        <SectionCard title="Lucro por produto" description="Receita menos o custo cadastrado no produto.">
+          {topProfit.length ? (
+            <table className="w-full text-left text-sm">
               <thead>
-                <tr className="text-xs uppercase tracking-wide text-slate-500">
+                <tr className="text-2xs uppercase tracking-[0.08em] text-slate-500">
                   <th className="pb-2 font-semibold">Produto</th>
                   <th className="pb-2 text-right font-semibold">Receita</th>
                   <th className="pb-2 text-right font-semibold">Lucro</th>
@@ -557,38 +543,57 @@ function AdminDashboardBody() {
                 {topProfit.map((row) => (
                   <tr key={row.productId} className="border-t border-slate-100">
                     <td className="py-2 pr-3 text-slate-800">{row.name}</td>
-                    <td className="py-2 text-right text-slate-700">{formatCurrencyBRL(row.revenue)}</td>
-                    <td className="py-2 text-right font-medium text-slate-900">{formatCurrencyBRL(row.profit)}</td>
+                    <td className="num py-2 text-right text-slate-600">{formatCurrencyBRL(row.revenue)}</td>
+                    <td className="num py-2 text-right font-medium text-slate-900">{formatCurrencyBRL(row.profit)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        ) : (
-          <EmptyState
-            compact
-            title="Sem lucro para mostrar"
-            description="Cadastre o custo no produto e registre vendas à vista pagas ou quite um crediário."
-            actions={<NewSaleButton className="ui-btn ui-btn-primary text-sm" />}
-          />
-        )}
-      </SectionCard>
+          ) : (
+            <EmptyState compact title="Sem lucro para mostrar" description="Cadastre o custo nos produtos e registre vendas." />
+          )}
+        </SectionCard>
+
+        <SectionCard title="Últimas vendas" actions={<TextLink to="/vendas/historico">Histórico</TextLink>}>
+          {lastSales.length ? (
+            <ul className="divide-y divide-slate-100">
+              {lastSales.slice(0, 5).map((sale) => (
+                <li key={sale.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-slate-800">
+                      {sale.user?.name || "Atendente"} · {paymentLabel(sale.paymentMethod)}
+                    </p>
+                    <p className="num text-xs text-slate-500">{formatDateTimeBR(sale.occurredAt)}</p>
+                  </div>
+                  <span className="num shrink-0 text-sm font-semibold text-slate-900">{formatCurrencyBRL(sale.totalValue)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <EmptyState compact title="Nenhuma venda ainda" description="As vendas do PDV aparecem aqui." />
+          )}
+        </SectionCard>
+      </section>
 
       {idleProducts.length ? (
-        <SectionCard title="Produtos sem venda há 30 dias" description="À vista paga ou crediário (não cancelado).">
-          <ul className="space-y-2 text-sm">
+        <SectionCard title="Parados há 30 dias" description="Produtos sem venda recente — bons candidatos a vitrine ou promoção.">
+          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {idleProducts.map((row) => (
-              <li key={row.productId} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                {row.name} — última venda: {row.lastSaleAt ? formatDateBR(row.lastSaleAt) : "Nunca"}
+              <li key={row.productId} className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-sm">
+                <p className="truncate font-medium text-slate-800">{row.name}</p>
+                <p className="text-xs text-slate-500">Última venda: {row.lastSaleAt ? formatDateBR(row.lastSaleAt) : "nunca"}</p>
               </li>
             ))}
           </ul>
         </SectionCard>
       ) : null}
 
-      {loading || isFetching ? (
-        <p className="text-center text-xs text-slate-400">Atualizando indicadores…</p>
-      ) : null}
+      <section aria-label="Ações rápidas" className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+        <QuickAction to="/catalog/products" icon={PackagePlus} title="Novo produto" description="Cadastrar peça e grade." />
+        <QuickAction to="/clientes" icon={UserPlus} title="Novo cliente" description="Para crediário e vendas." />
+        <QuickAction to="/estoque/movimentos" icon={Warehouse} title="Ajustar estoque" description="Entrada ou saída manual." />
+        <QuickAction to="/relatorios" icon={TrendingUp} title="Relatórios" description="Período, pagamentos e equipe." />
+      </section>
     </div>
   );
 }

@@ -92,7 +92,7 @@ export function RegisterPage() {
       headline="Sua loja no ar, com o painel pronto para vender."
       description="Cadastre a loja, defina o administrador e entre para registrar vendas, crediário e estoque."
     >
-      <div className="ui-surface-interactive p-5 sm:p-8">
+      <div className="ui-surface p-6 sm:p-8">
         <div className="mb-5 flex items-center gap-2 text-violet-700">
           <ShieldCheck className="h-5 w-5" aria-hidden />
           <span className="text-xs font-semibold uppercase tracking-wide">Nova loja</span>

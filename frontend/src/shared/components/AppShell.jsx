@@ -1,148 +1,29 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
+import { Lock, LogOut, Menu, MonitorDown, MoreHorizontal, ShoppingBag, X } from "lucide-react";
 import { useAuth } from "../../features/auth/useAuth.jsx";
 import { BrandLogo } from "./BrandLogo.jsx";
-import { Button } from "./ui/Button.jsx";
 import { StoreSwitcher } from "./StoreSwitcher.jsx";
-import { isNavItemActive } from "../navConfig.js";
-import {
-  ArrowLeftRight,
-  BarChart3,
-  BellRing,
-  Boxes,
-  ClipboardList,
-  CreditCard,
-  FileArchive,
-  FileInput,
-  LayoutGrid,
-  LogOut,
-  Menu,
-  MonitorDown,
-  PackageSearch,
-  ReceiptText,
-  Settings,
-  ShoppingCart,
-  UserCog,
-  Users,
-  Wallet,
-  WalletCards,
-  X
-} from "lucide-react";
+import { bottomNavItems, buildNav, isNavItemActive } from "../navConfig.js";
 import { usePwaInstall } from "../pwa/PwaInstallProvider.jsx";
-
-function buildNav(userType, eventOnly = false) {
-  const isAdmin = userType === "ADMIN";
-
-  if (eventOnly) {
-    return {
-      groups: [
-        {
-          label: "Retiro",
-          items: [
-            { to: "/crediario", label: "Crediário", icon: WalletCards },
-            { to: "/clientes", label: "Clientes", icon: Users }
-          ]
-        },
-        ...(isAdmin
-          ? [{
-              label: "Administração",
-              items: [
-                { to: "/catalog/products", label: "Produtos", icon: PackageSearch },
-                { to: "/estoque", label: "Estoque", icon: Boxes },
-                { to: "/relatorios", label: "Relatórios", icon: BarChart3 }
-              ]
-            }]
-          : [])
-      ],
-      accountItems: isAdmin
-        ? [
-            { to: "/configuracoes", label: "Configurações", icon: Settings },
-            { to: "/auditoria", label: "Auditoria", icon: ClipboardList },
-            { to: "/usuarios", label: "Usuários", icon: UserCog },
-            { to: "/assinatura", label: "Assinatura", icon: CreditCard }
-          ]
-        : []
-    };
-  }
-
-  const groups = [
-    {
-      label: "Visão geral",
-      items: [{ to: "/", label: "Início", end: true, icon: LayoutGrid }]
-    },
-    {
-      label: "Vendas",
-      items: [
-        { to: "/vendas", label: "Vendas", icon: ShoppingCart },
-        { to: "/clientes", label: "Clientes", icon: Users }
-      ]
-    },
-    {
-      label: "Catálogo",
-      items: [
-        {
-          to: "/catalog/products",
-          label: "Produtos",
-          icon: PackageSearch,
-          children: [
-            { to: "/catalog/categories", label: "Categorias" },
-            { to: "/catalog/brands", label: "Marcas" }
-          ]
-        }
-      ]
-    },
-    {
-      label: "Estoque",
-      items: [
-        { to: "/estoque", label: "Estoque", end: true, icon: Boxes },
-        { to: "/estoque/movimentos", label: "Movimentações", icon: ArrowLeftRight },
-        ...(isAdmin
-          ? [
-              { to: "/estoque/importar-nfe", label: "Entradas", icon: FileInput },
-              { to: "/estoque/alertas", label: "Alertas", icon: BellRing }
-            ]
-          : [])
-      ]
-    },
-    {
-      label: "Financeiro",
-      items: [
-        { to: "/caixa", label: "Caixa", icon: Wallet },
-        { to: "/crediario", label: "Crediário", icon: WalletCards }
-      ]
-    },
-    {
-      label: "Fiscal",
-      items: [
-        { to: "/vendas?aba=notas", label: "Notas fiscais", icon: ReceiptText },
-        ...(isAdmin ? [{ to: "/fechamento-fiscal", label: "Fechamento fiscal", icon: FileArchive }] : [])
-      ]
-    },
-    {
-      label: "Relatórios",
-      items: [{ to: "/relatorios", label: "Relatórios", icon: BarChart3 }]
-    }
-  ];
-
-  const accountItems = isAdmin
-    ? [
-        { to: "/configuracoes", label: "Configurações", icon: Settings },
-        { to: "/auditoria", label: "Auditoria", icon: ClipboardList },
-        { to: "/usuarios", label: "Usuários", icon: UserCog },
-        { to: "/assinatura", label: "Assinatura", icon: CreditCard }
-      ]
-    : [];
-
-  return { groups, accountItems };
-}
+import { useEntitlements } from "../plans/useEntitlements.js";
+import { PlanBadge } from "../plans/PlanGate.jsx";
+import { cn } from "./ui/helpers.js";
 
 const roleLabel = {
   ADMIN: "Administrador",
   ATTENDANT: "Atendente"
 };
 
-function NavItem({ item, onNavigate }) {
+function initials(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
+}
+
+function NavItem({ item, onNavigate, locked }) {
   const location = useLocation();
+  const childActive = item.children?.some((c) => location.pathname === c.to);
   return (
     <div>
       <NavLink
@@ -152,23 +33,22 @@ function NavItem({ item, onNavigate }) {
         className={({ isActive }) => {
           const custom = isNavItemActive(item, location);
           const active = custom === null ? isActive : custom;
-          return active ? "ui-nav-item ui-nav-active" : "ui-nav-item";
+          return cn("ui-nav-item", active && "ui-nav-active");
         }}
       >
-        {item.icon ? <item.icon className="h-4 w-4 shrink-0 opacity-90" aria-hidden /> : null}
-        {item.label}
+        {item.icon ? <item.icon className="h-[18px] w-[18px] shrink-0 text-slate-500" aria-hidden /> : null}
+        <span className="flex-1 truncate">{item.label}</span>
+        {locked ? <Lock className="h-3.5 w-3.5 text-champagne-600" aria-label="Recurso de outro plano" /> : null}
       </NavLink>
-      {item.children?.length ? (
-        <div className="mb-0.5 ml-4 mt-0.5 space-y-0.5 border-l border-slate-200 pl-2">
+      {item.children?.length && (location.pathname.startsWith("/catalog") || childActive) ? (
+        <div className="mt-0.5 space-y-0.5">
           {item.children.map((child) => (
             <NavLink
               key={child.to}
               to={child.to}
               end={child.end}
               onClick={onNavigate}
-              className={({ isActive }) =>
-                isActive ? "ui-nav-item ui-nav-sub ui-nav-active" : "ui-nav-item ui-nav-sub"
-              }
+              className={({ isActive }) => cn("ui-nav-item ui-nav-sub", isActive && "ui-nav-active")}
             >
               {child.label}
             </NavLink>
@@ -179,159 +59,250 @@ function NavItem({ item, onNavigate }) {
   );
 }
 
+function SidebarContent({ groups, accountItems, onNavigate, has, onInstall, installed, onLogout, user, tenant, plan }) {
+  return (
+    <>
+      <nav className="flex-1 overflow-y-auto overscroll-contain px-3 pb-3" aria-label="Navegação principal">
+        {groups.map((group, gi) => (
+          <div key={group.label || `g${gi}`} className="mb-4 last:mb-0">
+            {group.label ? <p className="ui-eyebrow mb-1.5 px-3 pt-1">{group.label}</p> : null}
+            <div className="space-y-0.5">
+              {group.items.map((item) => (
+                <NavItem key={item.to} item={item} onNavigate={onNavigate} locked={item.feature ? !has(item.feature) : false} />
+              ))}
+            </div>
+          </div>
+        ))}
+        {accountItems.length ? (
+          <div className="mt-4">
+            <p className="ui-eyebrow mb-1.5 px-3 pt-1">Conta</p>
+            <div className="space-y-0.5">
+              {accountItems.map((item) => (
+                <NavItem key={item.to} item={item} onNavigate={onNavigate} />
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </nav>
+
+      <div className="space-y-1 border-t border-slate-200/70 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        {!installed ? (
+          <button type="button" className="ui-nav-item w-full text-left" onClick={onInstall}>
+            <MonitorDown className="h-[18px] w-[18px] shrink-0 text-slate-500" aria-hidden />
+            Instalar aplicativo
+          </button>
+        ) : null}
+        <div className="flex items-center gap-3 rounded-lg px-2 py-2">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-800">
+            {initials(user?.name)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-slate-900">{user?.name ?? "—"}</p>
+            <p className="truncate text-xs text-slate-500">{roleLabel[user?.type] ?? user?.type ?? "—"}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-900/[0.05] hover:text-slate-900"
+            aria-label="Sair"
+            title="Sair"
+          >
+            <LogOut className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function BottomNav({ items, onMore }) {
+  const location = useLocation();
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
+      aria-label="Atalhos"
+    >
+      <div className="mx-auto flex max-w-lg items-stretch justify-around px-1">
+        {items.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) => {
+              const custom = isNavItemActive(item, location);
+              const active = custom === null ? isActive : custom;
+              return cn(
+                "flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-2xs font-medium",
+                active ? "text-brand-800" : "text-slate-500"
+              );
+            }}
+          >
+            {({ isActive }) => (
+              <>
+                <span
+                  className={cn(
+                    "flex h-7 w-12 items-center justify-center rounded-full transition-colors",
+                    isActive ? "bg-brand-100" : ""
+                  )}
+                >
+                  <item.icon className="h-5 w-5" aria-hidden />
+                </span>
+                {item.label}
+              </>
+            )}
+          </NavLink>
+        ))}
+        <button
+          type="button"
+          onClick={onMore}
+          className="flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-2xs font-medium text-slate-500"
+        >
+          <span className="flex h-7 w-12 items-center justify-center">
+            <MoreHorizontal className="h-5 w-5" aria-hidden />
+          </span>
+          Mais
+        </button>
+      </div>
+    </nav>
+  );
+}
+
 export function AppShell({ children }) {
   const { tenant, user, logout } = useAuth();
+  const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
-  const { groups, accountItems } = useMemo(
-    () => buildNav(user?.type, tenant?.creditEventOnly === true),
-    [user?.type, tenant?.creditEventOnly]
-  );
+  const eventOnly = tenant?.creditEventOnly === true;
+  const { groups, accountItems } = useMemo(() => buildNav(user?.type, eventOnly), [user?.type, eventOnly]);
+  const bottomItems = useMemo(() => bottomNavItems(eventOnly), [eventOnly]);
   const { installed, openInstall } = usePwaInstall();
+  const { has, plan } = useEntitlements();
+  /** PDV em modo foco no celular/tablet: sem barra inferior (o carrinho ocupa o rodapé). */
+  const focusMode = location.pathname === "/vendas";
 
   useEffect(() => {
     if (!menuOpen) return undefined;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    const onKey = (e) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
     };
   }, [menuOpen]);
 
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+
   const content = children ?? <Outlet />;
   const closeMenu = () => setMenuOpen(false);
+  const sidebarProps = {
+    groups,
+    accountItems,
+    has,
+    installed,
+    user,
+    tenant,
+    plan,
+    onNavigate: closeMenu,
+    onInstall: () => {
+      closeMenu();
+      openInstall();
+    },
+    onLogout: () => {
+      closeMenu();
+      logout();
+    }
+  };
 
   return (
-    <div className="flex min-h-dvh flex-col overflow-x-hidden text-slate-900">
-      <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/95 shadow-sm backdrop-blur-md pt-[max(0.5rem,env(safe-area-inset-top))]">
-        <div className="flex w-full items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3 lg:px-6 xl:px-8">
-          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <button
-              type="button"
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 lg:hidden"
-              onClick={() => setMenuOpen(true)}
-              aria-label="Abrir menu"
-              aria-expanded={menuOpen}
-            >
-              <Menu className="h-5 w-5" />
-            </button>
-            <BrandLogo compact tenant={tenant} />
-            <StoreSwitcher />
-            <div className="min-w-0 border-l border-slate-200 pl-2 sm:pl-3">
-              <p className="truncate text-sm font-semibold leading-tight text-slate-900">{tenant?.name ?? "—"}</p>
-              <p className="hidden truncate text-xs text-slate-500 sm:block">{user?.name ?? "—"}</p>
-            </div>
+    <div className="min-h-dvh overflow-x-hidden text-slate-900 lg:pl-[var(--sidebar-w)]">
+      {/* Sidebar desktop */}
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[var(--sidebar-w)] flex-col border-r border-slate-200/70 bg-[rgb(var(--neutral-100))] lg:flex">
+        <div className="flex items-center gap-3 px-5 pb-4 pt-5">
+          <BrandLogo compact tenant={tenant} />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold leading-tight text-slate-900">{tenant?.name ?? "—"}</p>
+            <div className="mt-1">{tenant ? <PlanBadge plan={plan} /> : null}</div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <span className="hidden rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-800 md:inline-flex">
-              {roleLabel[user?.type] ?? user?.type ?? "—"}
-            </span>
-            <Button
-              variant="secondary"
-              className="hidden gap-1.5 px-3 py-1.5 text-xs lg:inline-flex"
-              onClick={logout}
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              Sair
-            </Button>
-            <Button variant="ghost" className="h-10 w-10 px-0 lg:hidden" onClick={logout} aria-label="Sair">
-              <LogOut className="h-4 w-4" />
-            </Button>
-          </div>
+        </div>
+        <div className="px-4 pb-3">
+          <StoreSwitcher className="w-full" />
+        </div>
+        <SidebarContent {...sidebarProps} />
+      </aside>
+
+      {/* Topo mobile/tablet */}
+      <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-canvas/90 pt-[env(safe-area-inset-top)] backdrop-blur-md lg:hidden">
+        <div className="flex h-14 items-center gap-2 px-2 sm:px-4">
+          <button
+            type="button"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-900/[0.05]"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Abrir menu"
+            aria-expanded={menuOpen}
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <BrandLogo compact tenant={tenant} />
+          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{tenant?.name ?? "—"}</p>
+          {!eventOnly && !focusMode ? (
+            <NavLink to="/vendas" className="ui-btn ui-btn-primary ui-btn-sm" aria-label="Nova venda">
+              <ShoppingBag className="h-4 w-4" aria-hidden />
+              <span className="hidden min-[380px]:inline">Vender</span>
+            </NavLink>
+          ) : null}
         </div>
       </header>
 
-      <div className="flex min-w-0 flex-1 lg:gap-4 xl:gap-6">
-        {menuOpen ? (
+      {/* Drawer mobile */}
+      {menuOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
-            className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-[1px] lg:hidden"
+            className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] animate-fade-in"
             aria-label="Fechar menu"
             onClick={closeMenu}
           />
-        ) : null}
-
-        <aside
-          className={`fixed inset-y-0 left-0 z-50 flex w-[min(300px,88vw)] flex-col border-r border-slate-200 bg-white shadow-xl transition-transform duration-200 ease-out lg:static lg:z-0 lg:w-56 lg:shrink-0 lg:translate-x-0 lg:border-0 lg:bg-transparent lg:py-5 lg:pl-3 lg:pr-1 lg:shadow-none xl:w-60 xl:pl-4 ${
-            menuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-          }`}
-        >
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] lg:hidden">
-            <span className="text-sm font-semibold text-slate-900">Menu</span>
-            <button
-              type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg p-2 text-slate-600 hover:bg-slate-100"
-              onClick={closeMenu}
-              aria-label="Fechar menu"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
-          <nav className="flex-1 overflow-y-auto overscroll-contain p-3 lg:p-0 lg:pt-1" aria-label="Navegação principal">
-            {groups.map((group) => (
-              <div key={group.label} className="mb-4 last:mb-0">
-                <p className="mb-1.5 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  {group.label}
-                </p>
-                <div className="space-y-0.5">
-                  {group.items.map((item) => (
-                    <NavItem key={item.to} item={item} onNavigate={closeMenu} />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </nav>
-
-          <div className="border-t border-slate-100 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] lg:border-slate-200/80 lg:px-0 lg:pb-0 lg:pt-3">
-            {accountItems.length ? (
-              <div className="mb-2">
-                <p className="mb-1.5 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  Conta
-                </p>
-                <div className="space-y-0.5">
-                  {accountItems.map((item) => (
-                    <NavItem key={item.to} item={item} onNavigate={closeMenu} />
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            {!installed ? (
+          <aside className="absolute inset-y-0 left-0 flex w-[min(320px,88vw)] flex-col bg-[rgb(var(--neutral-100))] shadow-pop animate-fade-in">
+            <div className="flex items-center gap-3 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))]">
+              <BrandLogo compact tenant={tenant} />
+              <p className="min-w-0 flex-1 truncate text-sm font-semibold">{tenant?.name ?? "—"}</p>
               <button
                 type="button"
-                className="ui-nav-item w-full text-left"
-                onClick={() => {
-                  closeMenu();
-                  openInstall();
-                }}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-900/[0.05]"
+                onClick={closeMenu}
+                aria-label="Fechar menu"
               >
-                <MonitorDown className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
-                Instalar aplicativo
+                <X className="h-5 w-5" />
               </button>
-            ) : null}
-            <button
-              type="button"
-              className="ui-nav-item w-full text-left"
-              onClick={() => {
-                closeMenu();
-                logout();
-              }}
-            >
-              <LogOut className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
-              Sair
-            </button>
-          </div>
-        </aside>
-
-        <main className="ui-page min-w-0 w-full flex-1 px-3 py-4 sm:px-4 sm:py-5 lg:px-6 lg:py-5 xl:px-8">
-          {content}
-        </main>
-      </div>
-
-      {import.meta.env.VITE_GIT_SHA ? (
-        <footer className="px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-center text-[10px] text-slate-400 sm:px-4 lg:px-6 xl:px-8">
-          Versão {String(import.meta.env.VITE_GIT_SHA).slice(0, 7)}
-        </footer>
+            </div>
+            <div className="px-4 pb-3">
+              <StoreSwitcher className="w-full" />
+            </div>
+            <SidebarContent {...sidebarProps} />
+          </aside>
+        </div>
       ) : null}
+
+      <main
+        className={cn(
+          "min-w-0 px-4 pt-4 sm:px-6 sm:pt-6 lg:px-8 lg:pb-10 lg:pt-8",
+          focusMode ? "pb-28 lg:pb-10" : "pb-[calc(5.5rem+env(safe-area-inset-bottom))]"
+        )}
+      >
+        {content}
+        {import.meta.env.VITE_GIT_SHA ? (
+          <footer className="mt-10 text-center text-[10px] text-slate-400">
+            Versão {String(import.meta.env.VITE_GIT_SHA).slice(0, 7)}
+          </footer>
+        ) : null}
+      </main>
+
+      {!focusMode ? <BottomNav items={bottomItems} onMore={() => setMenuOpen(true)} /> : null}
     </div>
   );
 }

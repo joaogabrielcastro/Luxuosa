@@ -1,3 +1,7 @@
+import { ShieldCheck, UserPlus, UserRound } from "lucide-react";
+import { Alert } from "../../shared/components/ui/Alert.jsx";
+import { useEntitlements } from "../../shared/plans/useEntitlements.js";
+import { planLabel } from "../../shared/plans/plans.js";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Users } from "lucide-react";
@@ -43,6 +47,7 @@ function matchesUserQuery(row, rawQuery) {
 }
 
 export function UsersPage() {
+  const { maxUsers, plan } = useEntitlements();
   const { token, user } = useAuth();
   const isAdmin = user?.type === "ADMIN";
   const { showToast } = useToast();
@@ -177,20 +182,35 @@ export function UsersPage() {
       <PageHeader
         title="Usuários"
         description="Cadastre quem usa o sistema. Administrador configura a loja; Atendente registra vendas e atende o caixa."
+        actions={
+          <Button type="button" icon={UserPlus} onClick={openCreate}>
+            Novo usuário
+          </Button>
+        }
       />
-      <section className="grid gap-3 sm:grid-cols-2">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3 [&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1">
         <StatCard
           label="Usuários cadastrados"
-          value={items.length}
-          icon={<Users className="h-4 w-4 text-violet-600" />}
+          value={maxUsers == null ? items.length : `${items.length} de ${maxUsers}`}
+          hint={maxUsers == null ? "Sem limite no seu plano." : `Limite do plano ${planLabel(plan)}.`}
+          icon={Users}
         />
+        <StatCard label="Administradores" value={items.filter((u) => u.type === "ADMIN").length} icon={ShieldCheck} />
+        <StatCard label="Atendentes" value={items.filter((u) => u.type === "ATTENDANT").length} icon={UserRound} />
       </section>
-
-      <div className="flex justify-end">
-        <Button type="button" onClick={openCreate}>
-          Novo usuário
-        </Button>
-      </div>
+      {maxUsers != null && items.length >= maxUsers ? (
+        <Alert
+          variant="warning"
+          title="Limite de usuários do plano atingido"
+          actions={
+            <Link to="/assinatura" className="ui-btn ui-btn-secondary ui-btn-sm">
+              Ver planos
+            </Link>
+          }
+        >
+          Para cadastrar mais pessoas, faça upgrade do plano ou remova um usuário que não usa mais o sistema.
+        </Alert>
+      ) : null}
 
       <DataTable
         title="Lista de usuários"

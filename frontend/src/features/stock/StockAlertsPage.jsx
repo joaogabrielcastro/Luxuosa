@@ -15,10 +15,13 @@ import { Button } from "../../shared/components/ui/Button.jsx";
 import { EmptyState } from "../../shared/components/ui/EmptyState.jsx";
 import { ModuleNav } from "../../shared/components/ModuleNav.jsx";
 import { stockModuleItems } from "../../shared/navConfig.js";
+import { useEntitlements } from "../../shared/plans/useEntitlements.js";
+import { UpgradeNotice } from "../../shared/plans/PlanGate.jsx";
 
 export function StockAlertsPage() {
   const { token, user } = useAuth();
   const isAdmin = user?.type === "ADMIN";
+  const allowed = useEntitlements().has("stockAlerts");
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
@@ -33,7 +36,7 @@ export function StockAlertsPage() {
 
   const settingsQuery = useQuery({
     queryKey: queryKeys.stockAlerts.settings(token),
-    enabled: Boolean(token) && isAdmin,
+    enabled: Boolean(token) && isAdmin && allowed,
     queryFn: async () => {
       const data = await apiClient("/stock-alerts/settings", { token });
       setForm({
@@ -50,7 +53,7 @@ export function StockAlertsPage() {
 
   const logsQuery = useQuery({
     queryKey: queryKeys.stockAlerts.logs(token),
-    enabled: Boolean(token),
+    enabled: Boolean(token) && allowed,
     queryFn: () => apiClient("/stock-alerts/logs?take=40&skip=0", { token })
   });
 
@@ -113,6 +116,13 @@ export function StockAlertsPage() {
         }
       />
       <ModuleNav items={stockModuleItems(isAdmin)} label="Estoque" />
+      {!allowed ? (
+        <UpgradeNotice
+          feature="stockAlerts"
+          description="Receba e-mail ou WhatsApp automaticamente quando um produto chegar ao mínimo. A lista do que repor continua disponível em Estoque."
+        />
+      ) : (
+      <>
 
       {isAdmin ? (
         <SectionCard title="Configurações">
@@ -230,6 +240,8 @@ export function StockAlertsPage() {
           )}
         </SectionCard>
       </div>
+      </>
+      )}
     </div>
   );
 }

@@ -124,6 +124,7 @@ export async function mockApi(path, { method = "GET", body } = {}) {
 
   if (verb !== "GET") {
     if (pathname === "/categories") return { id: "cat-new", name: body?.name || "Nova" };
+    if (pathname === "/sales") return { id: "sale-new", totalValue: 0, occurredAt: "2026-09-03T12:00:00.000Z", items: [] };
     if (pathname === "/users") return { id: "u-new", name: body?.name || "Novo", type: body?.type || "ATTENDANT" };
     if (pathname === "/nfe-imports/preview") return NFE_PREVIEW;
     if (pathname === "/nfe-imports/confirm") {
@@ -247,6 +248,22 @@ export async function mockApi(path, { method = "GET", body } = {}) {
   if (pathname.startsWith("/crediario/")) return CREDIT_SALE;
   if (pathname.startsWith("/products")) return PRODUCTS;
   if (pathname.startsWith("/product-variations")) return VARIATIONS;
+  if (pathname.startsWith("/sales/") && !pathname.startsWith("/sales/summary")) {
+    return {
+      id: pathname.split("/")[2],
+      occurredAt: "2026-09-01T12:00:00.000Z",
+      totalValue: 89.9,
+      discountValue: 0,
+      discountPercent: 0,
+      paymentMethod: "CASH",
+      installments: 1,
+      status: "PAID",
+      customer: null,
+      user: { name: "Admin" },
+      invoice: null,
+      items: [{ id: "si1", productVariationId: "var1", quantity: 1, unitPrice: 89.9, productVariation: VARIATIONS.items[0] }]
+    };
+  }
   if (pathname.startsWith("/sales/summary") || pathname === "/sales") {
     return {
       items: [
