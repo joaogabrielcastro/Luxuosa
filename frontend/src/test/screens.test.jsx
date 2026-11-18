@@ -13,7 +13,8 @@ import { FiscalInvoicesPage } from "../features/fiscal/FiscalInvoicesPage.jsx";
 import { NfeImportPage } from "../features/stock/NfeImportPage.jsx";
 import { ProductsPage } from "../features/catalog/ProductsPage.jsx";
 import { ReportsPage } from "../features/reports/ReportsPage.jsx";
-import { SalesPage } from "../features/sales/NfceSalesPage.jsx";
+import { PosPage } from "../features/sales/pos/PosPage.jsx";
+import { SalesHistoryPage } from "../features/sales/SalesHistoryPage.jsx";
 import { SettingsPage } from "../features/settings/SettingsPage.jsx";
 import { StockAlertsPage } from "../features/stock/StockAlertsPage.jsx";
 import { StockMovementsPage } from "../features/stock/StockMovementsPage.jsx";
@@ -72,7 +73,8 @@ describe("Telas React", () => {
     ["Categorias", CategoriesPage],
     ["Marcas", BrandsPage],
     ["Produtos", ProductsPage],
-    ["Vendas", SalesPage],
+    ["Vender", PosPage],
+    ["Vendas", SalesHistoryPage],
     ["Crediário", CrediarioPage],
     ["Clientes", CustomersPage],
     ["Usuários", UsersPage],
@@ -93,10 +95,6 @@ describe("Telas React", () => {
     expect(await screen.findByRole("heading", { level: 1, name: title })).toBeInTheDocument();
   });
 
-  it("abre notas fiscais como aba de vendas", async () => {
-    renderPage(<SalesPage />, { route: "/vendas?aba=notas" });
-    expect(await screen.findByRole("heading", { level: 1, name: "Notas fiscais" })).toBeInTheDocument();
-  });
 
   it("cadastra categoria pelo formulario", async () => {
     const user = userEvent.setup();

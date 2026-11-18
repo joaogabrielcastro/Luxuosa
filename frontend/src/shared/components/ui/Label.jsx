@@ -4,7 +4,7 @@ export function Label({ children, htmlFor, required, className = "" }) {
   return (
     <label htmlFor={htmlFor} className={cn("ui-label", className)}>
       {children}
-      {required ? <span className="ml-0.5 text-red-500">*</span> : null}
+      {required ? <span className="ml-0.5 text-red-500" aria-hidden>*</span> : null}
     </label>
   );
 }

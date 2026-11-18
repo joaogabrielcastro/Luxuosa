@@ -3,7 +3,7 @@ import { apiClient } from "../apiClient.js";
 import { useAuth } from "../../features/auth/useAuth.jsx";
 
 /** Troca de loja no mesmo e-mail (plano Enterprise). */
-export function StoreSwitcher() {
+export function StoreSwitcher({ className = "" }) {
   const { token, tenant, acceptSession } = useAuth();
   const [payload, setPayload] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -11,7 +11,7 @@ export function StoreSwitcher() {
   useEffect(() => {
     if (!token) return undefined;
     let cancelled = false;
-    apiClient("/auth/stores", { token })
+    Promise.resolve(apiClient("/auth/stores", { token }))
       .then((data) => {
         if (!cancelled) setPayload(data);
       })
@@ -44,11 +44,11 @@ export function StoreSwitcher() {
   }
 
   return (
-    <label className="hidden min-w-0 sm:block">
-      <span className="sr-only">Trocar loja</span>
+    <label className={`block min-w-0 ${className}`}>
+      <span className="ui-eyebrow mb-1 block">Loja</span>
       <select
         aria-label="Trocar loja"
-        className="max-w-[10rem] truncate rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-800"
+        className="ui-input min-h-9 truncate py-1.5 text-[13px]"
         value={tenant?.id || ""}
         disabled={busy}
         onChange={onChange}

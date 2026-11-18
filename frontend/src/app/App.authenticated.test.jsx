@@ -37,10 +37,12 @@ describe("App autenticado", () => {
 
   it.each([
     ["/", "Início"],
-    ["/vendas", "Vendas"],
+    ["/vendas", "Vender"],
+    ["/vendas/historico", "Vendas"],
     ["/catalog/products", "Produtos"],
     ["/catalog/variations", "Produtos"],
-    ["/sales", "Vendas"],
+    ["/sales", "Vender"],
+    ["/fiscal/notas", "Notas fiscais"],
     ["/stock", "Movimentações"],
     ["/reports", "Relatórios"],
     ["/fiscal", "Notas fiscais"],

@@ -31,7 +31,8 @@ describe("AppShell", () => {
         </PwaInstallProvider>
       </MemoryRouter>
     );
-    expect(screen.getByText("Loja Teste")).toBeInTheDocument();
+    expect(screen.getAllByText("Loja Teste").length).toBeGreaterThan(0);
+    expect(screen.getByRole("navigation", { name: "Atalhos" })).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: /navegação principal/i })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Abrir menu" }));
     await user.click(screen.getAllByRole("button", { name: "Fechar menu" })[0]);

@@ -85,6 +85,7 @@ export const FEATURE_MIN_PLAN = {
   nfceEmission: "PRO",
   stockAlerts: "PRO",
   billingPortal: "BASIC",
+  fiscalClosing: "PRO",
   advancedReports: "ENTERPRISE",
   storeNetwork: "ENTERPRISE"
 };
@@ -129,4 +130,22 @@ export function normalizeStripePlan(value) {
   const plan = String(value || "").toUpperCase();
   if (plan === "PRO" || plan === "ENTERPRISE" || plan === "BASIC") return /** @type {PlanId} */ (plan);
   return null;
+}
+
+/**
+ * Permissoes efetivas por recurso (somente leitura, para a UI).
+ * Considera planGateExempt; nao altera nenhuma regra de bloqueio da API.
+ * @param {{ plan?: string|null, planGateExempt?: boolean|null, enableNfceEmission?: boolean|null }|null|undefined} tenant
+ */
+export function tenantEntitlements(tenant) {
+  const features = {};
+  for (const [feature, minPlan] of Object.entries(FEATURE_MIN_PLAN)) {
+    features[feature] = tenantMeetsPlan(tenant, minPlan);
+  }
+  return {
+    planGateExempt: Boolean(tenant?.planGateExempt),
+    maxUsers: planMaxUsers(tenant),
+    featureMinPlan: { ...FEATURE_MIN_PLAN },
+    features
+  };
 }

@@ -2,27 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Luxuosa — tokens de design.
+ * Canais RGB separados por espaço para permitir opacidade no Tailwind (bg-brand-700/10).
+ */
 :root {
   color-scheme: light;
-  --bg: #f4f6fb;
-  --bg-accent: #eef2ff;
-  --surface: #ffffff;
-  --surface-muted: #f8fafc;
-  --border: #e2e8f0;
-  --border-strong: #cbd5e1;
-  --text: #0f172a;
-  --text-muted: #64748b;
-  --primary: #7c3aed;
-  --primary-strong: #1e40af;
-  --primary-muted: #ede9fe;
-  --success: #059669;
-  --danger: #dc2626;
-  --warning: #d97706;
-  --ring: rgba(124, 58, 237, 0.28);
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  --shadow-card: 0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.06);
-  --gradient-brand: linear-gradient(135deg, var(--primary) 0%, var(--primary-strong) 100%);
+
+  /* Neutro quente (pedra) */
+  --neutral-50: 250 249 247;
+  --neutral-100: 244 242 239;
+  --neutral-200: 231 228 223;
+  --neutral-300: 214 210 203;
+  --neutral-400: 168 162 154;
+  --neutral-500: 120 113 106;
+  --neutral-600: 87 82 77;
+  --neutral-700: 68 64 60;
+  --neutral-800: 41 37 36;
+  --neutral-900: 28 25 23;
+  --neutral-950: 12 10 9;
+
+  /* Marca — ameixa */
+  --brand-50: 249 245 250;
+  --brand-100: 242 233 244;
+  --brand-200: 228 211 232;
+  --brand-300: 207 179 214;
+  --brand-400: 176 135 188;
+  --brand-500: 142 94 156;
+  --brand-600: 115 68 128;
+  --brand-700: 94 51 106;
+  --brand-800: 75 41 85;
+  --brand-900: 56 31 63;
+  --brand-950: 34 17 39;
+
+  /* Acento — champanhe */
+  --champagne-50: 251 247 239;
+  --champagne-100: 245 236 219;
+  --champagne-200: 235 216 183;
+  --champagne-300: 222 192 143;
+  --champagne-400: 205 166 106;
+  --champagne-500: 184 142 82;
+  --champagne-600: 156 117 64;
+  --champagne-700: 125 92 51;
+  --champagne-800: 96 71 41;
+  --champagne-900: 71 53 32;
+  --champagne-950: 40 30 18;
+
+  --canvas: 247 245 242;
+  --surface: 255 255 255;
+  --ink: 28 25 23;
+
+  --ring: rgb(var(--brand-600) / 0.28);
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+  --sidebar-w: 15.5rem;
 }
 
 @layer base {
@@ -31,16 +64,13 @@
   }
 
   html {
-    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
-    @apply font-sans text-slate-900 antialiased;
-    background-color: var(--bg);
-    background-image:
-      radial-gradient(ellipse 80% 50% at 50% -20%, rgb(124 58 237 / 0.08), transparent),
-      radial-gradient(ellipse 60% 40% at 100% 0%, rgb(30 64 175 / 0.05), transparent);
-    font-feature-settings: "cv01", "cv03", "cv04", "cv11";
+    @apply bg-canvas font-sans text-[15px] text-slate-900 antialiased sm:text-sm;
+    font-feature-settings: "cv11", "ss01", "ss03";
+    text-rendering: optimizeLegibility;
   }
 
   h1 {
@@ -49,38 +79,74 @@
   }
 
   h2 {
-    @apply text-lg font-semibold tracking-tight text-slate-900;
+    @apply text-base font-semibold tracking-tight text-slate-900;
   }
 
   h3 {
-    @apply text-base font-semibold text-slate-900;
+    @apply text-sm font-semibold text-slate-900;
   }
 
   :focus-visible {
-    outline: 2px solid var(--primary);
+    outline: 2px solid rgb(var(--brand-600));
     outline-offset: 2px;
+  }
+
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    opacity: 0.4;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
 @layer components {
+  /* ---------- Layout ---------- */
   .ui-page {
-    @apply space-y-4 sm:space-y-6;
+    @apply mx-auto w-full max-w-[1440px] space-y-5 sm:space-y-6;
+  }
+
+  .ui-page-title {
+    @apply font-display text-[1.75rem] font-normal leading-tight tracking-[-0.01em] text-slate-900 sm:text-[2.125rem];
+  }
+
+  .ui-eyebrow {
+    @apply text-2xs font-semibold uppercase tracking-[0.14em] text-slate-500;
   }
 
   .ui-surface {
-    @apply rounded-xl border bg-white;
-    border-color: var(--border);
-    box-shadow: var(--shadow-card);
+    @apply rounded-[var(--radius-xl)] border border-slate-200/80 bg-white shadow-card;
   }
 
   .ui-surface-interactive {
     @apply ui-surface transition-shadow duration-200 hover:shadow-card-hover;
   }
 
+  .ui-divider {
+    @apply border-t border-slate-100;
+  }
+
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Formulários ---------- */
   .ui-input {
-    @apply w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 transition-colors placeholder:text-slate-400 focus:border-violet-300 focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500;
-    border-color: var(--border);
+    @apply min-h-11 w-full rounded-[var(--radius-lg)] border border-slate-200 bg-white px-3 py-2 text-[15px] text-slate-900 transition-[border-color,box-shadow] duration-150 placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-400 focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 sm:min-h-10 sm:text-sm;
     --tw-ring-color: var(--ring);
+  }
+
+  select.ui-input {
+    @apply cursor-pointer appearance-none bg-no-repeat pr-9;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2378716a'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/%3E%3C/svg%3E");
+    background-position: right 0.6rem center;
+    background-size: 1.1rem;
   }
 
   .ui-input-error {
@@ -88,72 +154,101 @@
   }
 
   .ui-label {
-    @apply mb-1.5 block text-xs font-semibold text-slate-600;
+    @apply mb-1.5 block text-[13px] font-medium text-slate-700;
   }
 
   .ui-hint {
     @apply mt-1 text-xs text-slate-500;
   }
 
+  /* ---------- Botões ---------- */
   .ui-btn {
-    @apply inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all duration-150 focus:outline-none focus:ring-4 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex min-h-11 select-none items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius-lg)] px-4 py-2 text-sm font-medium transition-[background-color,border-color,color,box-shadow,transform] duration-150 focus:outline-none focus-visible:ring-4 disabled:pointer-events-none disabled:opacity-50 sm:min-h-10;
     touch-action: manipulation;
   }
 
-  .ui-btn-primary {
-    @apply text-white shadow-sm focus:ring-violet-200 active:scale-[0.98];
-    background: var(--gradient-brand);
+  .ui-btn:active:not(:disabled) {
+    transform: translateY(0.5px) scale(0.99);
   }
 
-  .ui-btn-primary:hover:not(:disabled) {
-    filter: brightness(1.05);
-    box-shadow: 0 4px 14px -3px rgb(124 58 237 / 0.45);
+  .ui-btn-sm {
+    @apply min-h-9 gap-1.5 px-3 py-1.5 text-[13px] sm:min-h-8;
+  }
+
+  .ui-btn-lg {
+    @apply min-h-12 px-5 text-[15px];
+  }
+
+  .ui-btn-primary {
+    @apply bg-brand-700 text-white shadow-sm hover:bg-brand-800 focus-visible:ring-brand-200;
   }
 
   .ui-btn-secondary {
-    @apply border bg-white text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 focus:ring-slate-100 active:scale-[0.98];
-    border-color: var(--border);
+    @apply border border-slate-200 bg-white text-slate-800 shadow-sm hover:border-slate-300 hover:bg-slate-50 focus-visible:ring-slate-200;
+  }
+
+  .ui-btn-ghost {
+    @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:ring-slate-200;
   }
 
   .ui-btn-danger {
-    @apply bg-red-600 text-white shadow-sm hover:bg-red-700 focus:ring-red-100 active:scale-[0.98];
+    @apply bg-red-600 text-white shadow-sm hover:bg-red-700 focus-visible:ring-red-100;
+  }
+
+  .ui-btn-danger-soft {
+    @apply border border-red-200 bg-white text-red-700 hover:bg-red-50 focus-visible:ring-red-100;
+  }
+
+  .ui-btn-ink {
+    @apply bg-slate-900 text-white shadow-sm hover:bg-slate-800 focus-visible:ring-slate-300;
   }
 
   .ui-brand-text {
-    @apply font-bold tracking-tight;
-    background: var(--gradient-brand);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    @apply font-display text-brand-800;
   }
 
+  /* ---------- Navegação ---------- */
   .ui-nav-item {
-    @apply flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900;
+    @apply relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-900/[0.04] hover:text-slate-900 lg:min-h-9;
   }
 
   .ui-nav-item.ui-nav-sub {
-    @apply gap-2 py-1.5 pl-3 text-[13px] font-normal;
+    @apply min-h-9 gap-2 py-1.5 pl-10 text-[13px] font-normal lg:min-h-8;
   }
 
-  /* Item ativo: fundo claro + texto escuro (evita gradiente forte ilegivel) */
   .ui-nav-item.ui-nav-active {
-    @apply bg-violet-100 font-semibold text-violet-900 shadow-none ring-1 ring-violet-200;
+    @apply bg-white font-semibold text-slate-900 shadow-card;
   }
 
-  .ui-nav-item.ui-nav-active:hover {
-    @apply bg-violet-100 text-violet-900;
+  .ui-nav-item.ui-nav-active::before {
+    content: "";
+    @apply absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r bg-brand-600;
   }
 
+  .ui-nav-item.ui-nav-active svg {
+    @apply text-brand-700;
+  }
+
+  .ui-tab {
+    @apply inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-md px-3 text-[13px] font-medium text-slate-600 transition-colors hover:text-slate-900;
+  }
+
+  .ui-tab-active {
+    @apply bg-white text-slate-900 shadow-card;
+  }
+
+  /* ---------- Tabelas ---------- */
   .ui-table-head {
-    @apply border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wide text-slate-500;
+    @apply border-b border-slate-200 bg-slate-50/70 text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500;
   }
 
   .ui-table-row {
-    @apply border-b border-slate-100 transition-colors hover:bg-violet-50/30;
+    @apply border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/70;
   }
 
+  /* ---------- Diversos ---------- */
   .ui-stat-icon {
-    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600;
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700;
   }
 
   .ui-step {
@@ -161,17 +256,50 @@
   }
 
   .ui-step-num {
-    @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-700;
+    @apply flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-800;
   }
 
+  .ui-kbd {
+    @apply inline-flex h-5 min-w-5 items-center justify-center rounded border border-slate-200 bg-white px-1 font-sans text-2xs font-medium text-slate-500 shadow-[0_1px_0_0_rgb(var(--neutral-200))];
+  }
+
+  .ui-chip {
+    @apply inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .ui-chip-active {
+    @apply border-brand-600 bg-brand-50 text-brand-900 ring-1 ring-brand-600 hover:border-brand-600 hover:bg-brand-50;
+  }
+
+  .ui-skeleton {
+    @apply animate-shimmer rounded-md;
+    background-image: linear-gradient(90deg, rgb(var(--neutral-100)) 0%, rgb(var(--neutral-200) / 0.7) 50%, rgb(var(--neutral-100)) 100%);
+    background-size: 800px 100%;
+  }
+
+  .ui-scrollbar-none {
+    scrollbar-width: none;
+  }
+
+  .ui-scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ---------- Modais e painéis ---------- */
   .ui-modal-backdrop {
-    @apply fixed inset-0 z-[70] flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-[2px] sm:items-center sm:p-4;
+    @apply fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/40 p-0 backdrop-blur-[2px] sm:items-center sm:p-4;
     animation: ui-fade-in 0.15s ease-out;
   }
 
   .ui-modal-panel {
-    @apply ui-surface max-h-[min(92dvh,720px)] w-full max-w-xl overflow-auto rounded-b-none p-4 shadow-xl sm:rounded-xl sm:p-5;
-    animation: ui-scale-in 0.2s ease-out;
+    @apply max-h-[min(92dvh,760px)] w-full overflow-auto rounded-t-2xl border border-slate-200/80 bg-white p-5 shadow-pop sm:rounded-2xl sm:p-6;
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+    animation: ui-rise-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .ui-sheet-panel {
+    @apply fixed inset-y-0 right-0 z-[71] flex w-full max-w-xl flex-col border-l border-slate-200 bg-white shadow-pop;
+    animation: ui-slide-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 }
 
@@ -184,21 +312,21 @@
   }
 }
 
-@keyframes ui-scale-in {
+@keyframes ui-rise-in {
   from {
     opacity: 0;
-    transform: scale(0.97) translateY(4px);
+    transform: translateY(8px) scale(0.985);
   }
   to {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
 @keyframes ui-slide-in {
   from {
     opacity: 0;
-    transform: translateX(100%);
+    transform: translateX(24px);
   }
   to {
     opacity: 1;
@@ -206,19 +334,47 @@
   }
 }
 
-.animate-toast-in {
-  animation: ui-slide-in 0.25s ease-out;
+@keyframes ui-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
+.animate-toast-in {
+  animation: ui-toast-in 0.22s ease-out;
+}
+
+.animate-fade-in {
+  animation: ui-fade-in 0.2s ease-out;
+}
+
+/* Impressão: extrato de crediário e comprovante de venda */
 @media print {
-  body * { visibility: hidden !important; }
-  .credit-statement, .credit-statement * { visibility: visible !important; }
-  .credit-statement {
+  body * {
+    visibility: hidden !important;
+  }
+  .credit-statement,
+  .credit-statement *,
+  .print-receipt,
+  .print-receipt * {
+    visibility: visible !important;
+  }
+  .credit-statement,
+  .print-receipt {
     position: absolute;
     inset: 0;
     width: 100%;
     padding: 16px;
-    color: #0f172a;
+    color: #1c1917;
     background: #fff;
+  }
+  .print-receipt {
+    max-width: 80mm;
+    font-size: 12px;
   }
 }

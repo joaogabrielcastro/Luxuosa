@@ -23,8 +23,14 @@ const BrandsPage = lazy(() =>
 const ProductsPage = lazy(() =>
   import("../features/catalog/ProductsPage.jsx").then((m) => ({ default: m.ProductsPage }))
 );
-const SalesPage = lazy(() =>
-  import("../features/sales/NfceSalesPage.jsx").then((m) => ({ default: m.SalesPage }))
+const PosPage = lazy(() =>
+  import("../features/sales/pos/PosPage.jsx").then((m) => ({ default: m.PosPage }))
+);
+const SalesHistoryPage = lazy(() =>
+  import("../features/sales/SalesHistoryPage.jsx").then((m) => ({ default: m.SalesHistoryPage }))
+);
+const FiscalInvoicesPage = lazy(() =>
+  import("../features/fiscal/FiscalInvoicesPage.jsx").then((m) => ({ default: m.FiscalInvoicesPage }))
 );
 const StockOverviewPage = lazy(() =>
   import("../features/stock/StockOverviewPage.jsx").then((m) => ({ default: m.StockOverviewPage }))
@@ -111,7 +117,8 @@ function AppRoutes() {
       <Route path="/sales" element={<Navigate to="/vendas" replace />} />
       <Route path="/stock" element={<Navigate to="/estoque/movimentos" replace />} />
       <Route path="/reports" element={<Navigate to="/relatorios" replace />} />
-      <Route path="/vendas" element={<ProfiledShell path="/vendas"><SalesPage /></ProfiledShell>} />
+      <Route path="/vendas" element={<ProfiledShell path="/vendas"><PosPage /></ProfiledShell>} />
+      <Route path="/vendas/historico" element={<ProfiledShell path="/vendas/historico"><SalesHistoryPage /></ProfiledShell>} />
       <Route path="/crediario" element={<ProfiledShell path="/crediario"><CrediarioPage /></ProfiledShell>} />
       <Route path="/clientes" element={<ProfiledShell path="/clientes"><CustomersPage /></ProfiledShell>} />
       <Route path="/estoque" element={<ProfiledShell path="/estoque"><StockOverviewPage /></ProfiledShell>} />
@@ -120,8 +127,8 @@ function AppRoutes() {
       <Route path="/estoque/alertas" element={<ProfiledShell path="/estoque/alertas"><StockAlertsPage /></ProfiledShell>} />
       <Route path="/caixa" element={<ProfiledShell path="/caixa"><CashPage /></ProfiledShell>} />
       <Route path="/relatorios" element={<ProfiledShell path="/relatorios"><ReportsPage /></ProfiledShell>} />
-      <Route path="/fiscal" element={<Navigate to="/vendas?aba=notas" replace />} />
-      <Route path="/fiscal/notas" element={<Navigate to="/vendas?aba=notas" replace />} />
+      <Route path="/fiscal" element={<Navigate to="/fiscal/notas" replace />} />
+      <Route path="/fiscal/notas" element={<ProfiledShell path="/fiscal/notas"><FiscalInvoicesPage /></ProfiledShell>} />
       <Route path="/fechamento-fiscal" element={<ProfiledShell path="/fechamento-fiscal"><FiscalClosingPage /></ProfiledShell>} />
       <Route path="/configuracoes" element={<ProfiledShell path="/configuracoes"><SettingsPage /></ProfiledShell>} />
       <Route path="/auditoria" element={<ProfiledShell path="/auditoria"><AuditLogsPage /></ProfiledShell>} />

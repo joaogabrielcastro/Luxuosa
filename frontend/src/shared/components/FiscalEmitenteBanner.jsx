@@ -15,15 +15,15 @@ export function FiscalEmitenteBanner({ compact = false }) {
 
   return (
     <div
-      className={`flex gap-2 rounded-lg border px-3 py-2 text-xs leading-snug ${
+      className={`flex gap-2.5 rounded-xl border px-3.5 py-2.5 text-xs leading-snug ${
         active
-          ? "border-violet-200 bg-violet-50/90 text-violet-950"
+          ? "border-emerald-200 bg-emerald-50/70 text-emerald-950"
           : "border-slate-200 bg-slate-50 text-slate-700"
       } ${compact ? "" : "mb-1"}`}
       title={fiscal?.message || "Contexto fiscal desta loja"}
     >
       {active ? (
-        <FileCheck2 className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" aria-hidden />
+        <FileCheck2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
       ) : (
         <FileX2 className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" aria-hidden />
       )}

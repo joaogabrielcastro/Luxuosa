@@ -77,3 +77,20 @@ describe("normalizeStripePlan", () => {
     assert.equal(normalizeStripePlan(undefined), null);
   });
 });
+
+describe("tenantEntitlements", () => {
+  it("reflete o plano e respeita lojas isentas", async () => {
+    const { tenantEntitlements } = await import("./planCatalog.js");
+    const basic = tenantEntitlements({ plan: "BASIC" });
+    assert.equal(basic.features.nfeImport, false);
+    assert.equal(basic.features.fiscalClosing, false);
+    assert.equal(basic.maxUsers, 3);
+    const pro = tenantEntitlements({ plan: "PRO" });
+    assert.equal(pro.features.stockAlerts, true);
+    assert.equal(pro.features.advancedReports, false);
+    const exempt = tenantEntitlements({ plan: "BASIC", planGateExempt: true });
+    assert.equal(exempt.planGateExempt, true);
+    assert.equal(exempt.features.advancedReports, true);
+    assert.equal(exempt.maxUsers, null);
+  });
+});

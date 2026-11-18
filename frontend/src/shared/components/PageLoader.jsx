@@ -1,13 +1,20 @@
+import { Skeleton } from "./ui/Skeleton.jsx";
+
+/** Carregamento de página (lazy): esqueleto que lembra o layout final, sem pular a tela. */
 export function PageLoader() {
   return (
-    <div className="flex min-h-[40vh] items-center justify-center p-8">
-      <div className="flex flex-col items-center gap-3 text-slate-500">
-        <div
-          className="h-9 w-9 animate-spin rounded-full border-2 border-slate-200 border-t-brand-600"
-          aria-hidden
-        />
-        <p className="text-sm">Carregando…</p>
+    <div className="ui-page" role="status" aria-label="Carregando">
+      <div className="space-y-2">
+        <Skeleton className="h-9 w-56" />
+        <Skeleton className="h-4 w-80 max-w-full" />
       </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-28 w-full rounded-xl" />
+        ))}
+      </div>
+      <Skeleton className="h-72 w-full rounded-xl" />
+      <span className="sr-only">Carregando…</span>
     </div>
   );
 }

@@ -138,9 +138,9 @@ describe("fluxos profundos", () => {
     const user = userEvent.setup();
     renderPage(<FiscalInvoicesPage />);
     await screen.findByRole("heading", { level: 1, name: "Notas fiscais" });
-    await user.click(await screen.findByRole("button", { name: "Baixar PDF" }));
+    await user.click(await screen.findByRole("button", { name: "PDF" }));
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
-    await user.click(screen.getByRole("button", { name: /emitir \/ tentar de novo/i }));
+    await user.click(screen.getByRole("button", { name: /tentar de novo/i }));
     await waitFor(() =>
       expect(apiClient).toHaveBeenCalledWith("/invoices/issue/sale-err", expect.objectContaining({ method: "POST" }))
     );
