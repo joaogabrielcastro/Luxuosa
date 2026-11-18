@@ -444,7 +444,7 @@ export function CustomersPage() {
           ) : null
         }
       />
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3 [&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1">
         <StatCard label="Clientes cadastrados" value={total} loading={customersQuery.isLoading && !q} icon={Users} />
         <StatCard
           label="Com saldo em aberto"

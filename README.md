@@ -68,6 +68,16 @@ Luxuosa/
   ARCHITECTURE.md
 ```
 
+## Design system (frontend)
+
+- Tokens em `frontend/src/styles.css` (neutro quente, ameixa `brand`, acento `champagne`) expostos no
+  Tailwind (`tailwind.config.js`). Tipografia: Inter (interface) e Instrument Serif (títulos).
+- Componentes em `frontend/src/shared/components/ui` (Button, Badge, Alert, Modal/Sheet, Skeleton,
+  SegmentedControl, StatCard…) e `DataTable` com paginação no servidor e cartões no celular.
+- Permissões de plano na UI: `tenant.entitlements` (de `/auth/me`) via `useEntitlements` e
+  `FeatureGate`/`UpgradeNotice`. A API continua sendo a fonte da verdade.
+- Evolução planejada do backend: [docs/PLANO-BACKEND-EVOLUCAO.md](./docs/PLANO-BACKEND-EVOLUCAO.md).
+
 ## Variáveis de ambiente (backend)
 
 Copie `backend/.env.example` para `backend/.env`. Principais chaves:
@@ -149,7 +159,9 @@ Prefixo global: **`/api/v1`**.
 | `/catalog/brands` | Marcas |
 | `/catalog/products` | Produtos |
 | `/catalog/variations` | Variações |
-| `/vendas` | Vendas + NFC-e (lista com atualização automática enquanto pendente, filtros, PDF, reemissão) |
+| `/vendas` | PDV (busca no servidor, grade tamanho × cor, carrinho, desconto R$/%, troco, comprovante) |
+| `/vendas/historico` | Histórico de vendas (detalhe, edição no PDV, cancelamento) |
+| `/fiscal/notas` | Notas fiscais NFC-e (status, rejeições, PDF, reemissão); `/vendas?aba=notas` redireciona |
 | `/crediario` | Crediário (contas a receber) |
 | `/clientes` | Clientes |
 | `/sales` | Redireciona para `/vendas` |
@@ -158,7 +170,7 @@ Prefixo global: **`/api/v1`**.
 | `/relatorios` | Relatórios mínimos (vendas por período, estoque baixo) |
 | `/fechamento-fiscal` | Fechamento mensal + export ZIP para contador (admin) |
 | `/usuarios` | Gestão de usuários da loja (admin) |
-| `/assinatura` | Plano Stripe (admin) |
+| `/assinatura` | Plano Stripe (admin): plano atual, uso de usuários, recursos liberados e upgrade |
 
 ## NFC-e e Notaas
 

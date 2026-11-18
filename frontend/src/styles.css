@@ -287,7 +287,7 @@
 
   /* ---------- Modais e painéis ---------- */
   .ui-modal-backdrop {
-    @apply fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/40 p-0 backdrop-blur-[2px] sm:items-center sm:p-4;
+    @apply fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/40 p-0 backdrop-blur-[2px] sm:items-center sm:p-4;
     animation: ui-fade-in 0.15s ease-out;
   }
 

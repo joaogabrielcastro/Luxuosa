@@ -18,7 +18,7 @@ test.describe("fluxos criticos", () => {
     const context = await browser.newContext({ storageState: DEMO_AUTH_FILE });
     const page = await context.newPage();
     await page.goto("/vendas");
-    await expect(page.getByRole("heading", { name: "Vendas", exact: true })).toBeVisible({
+    await expect(page.getByRole("heading", { name: "Vender", exact: true })).toBeVisible({
       timeout: 15_000
     });
     await context.close();
@@ -44,7 +44,7 @@ test.describe("fluxos criticos", () => {
     const page = await context.newPage();
     await page.goto("/vendas");
     await expect(page).toHaveURL(/\/vendas/);
-    const barcode = page.locator("#sale-barcode-input");
+    const barcode = page.locator("#pos-search");
     await expect(barcode).toBeVisible({ timeout: 15_000 });
     await context.close();
   });

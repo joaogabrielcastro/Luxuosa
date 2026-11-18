@@ -54,37 +54,30 @@ test.describe("fluxos profundos", () => {
 
   test("venda completa via API setup + UI finalizar", async ({ page, request }) => {
     await page.goto("/vendas");
-    await expect(page.getByRole("heading", { name: "Vendas", exact: true })).toBeVisible({
+    await expect(page.getByRole("heading", { name: "Vender", exact: true })).toBeVisible({
       timeout: 15_000
     });
     const token = await sessionToken(page);
     const catalog = await ensureCatalog(request, token, { stock: 15, price: 39.9, forceNew: true });
 
     await page.goto("/vendas");
-    await expect(page.getByRole("heading", { name: "Vendas", exact: true })).toBeVisible({
-      timeout: 15_000
-    });
-
-    await expect(
-      page.locator("label").filter({ hasText: "Categoria" }).locator("option").nth(1)
-    ).toBeAttached({ timeout: 20_000 });
-
-    const barcode = page.locator("#sale-barcode-input");
+    const barcode = page.locator("#pos-search");
     await expect(barcode).toBeVisible({ timeout: 15_000 });
     await barcode.fill(catalog.sku);
     await barcode.press("Enter");
 
-    await expect(page.getByRole("button", { name: /Remover/i }).first()).toBeVisible({
+    const cart = page.getByRole("complementary", { name: "Carrinho" });
+    await expect(cart.getByRole("button", { name: /^Remover /i }).first()).toBeVisible({
       timeout: 15_000
     });
 
-    const nfce = page.getByLabel(/Emitir nota fiscal/i);
+    const nfce = cart.getByLabel(/Emitir NFC-e/i);
     if (await nfce.count()) {
       await nfce.uncheck();
     }
 
-    await page.getByRole("button", { name: /Finalizar venda/i }).click();
-    await expect(page.getByText(/Venda criada/i).first()).toBeVisible({ timeout: 20_000 });
+    await cart.getByRole("button", { name: /Finalizar venda/i }).click();
+    await expect(page.getByText(/Venda concluída/i).first()).toBeVisible({ timeout: 20_000 });
   });
 
   test("caixa abrir e fechar", async ({ page }) => {
@@ -126,14 +119,12 @@ test.describe("fluxos profundos", () => {
       page.getByRole("heading", { name: "Movimentações", exact: true })
     ).toBeVisible({ timeout: 15_000 });
 
-    const variationSelect = page.locator("form select").first();
-    await expect(variationSelect.locator("option").nth(1)).toBeAttached({ timeout: 15_000 });
-    const value = await variationSelect.locator("option").nth(1).getAttribute("value");
-    await variationSelect.selectOption(value);
+    await page.getByRole("combobox", { name: "Produto / variação" }).click();
+    await page.getByRole("listbox").getByRole("button").first().click({ timeout: 15_000 });
 
-    await page.locator("form select").nth(1).selectOption("ENTRY");
+    await page.getByRole("radio", { name: "Entrada" }).click();
     await page.locator('form input[type="number"]').fill("1");
-    await page.getByRole("button", { name: /^Registrar$/i }).click();
+    await page.getByRole("button", { name: /^Registrar entrada$/i }).click();
 
     await expect(page.getByText(/Entrada registrada/i).first()).toBeVisible({ timeout: 15_000 });
   });
@@ -216,6 +207,7 @@ test.describe("fluxos profundos", () => {
       timeout: 15_000
     });
     const name = `Cliente E2E ${Date.now()}`;
+    await page.getByRole("button", { name: "Novo cliente" }).click();
     await page.getByPlaceholder("Nome do cliente").fill(name);
     await page.getByRole("button", { name: /^Salvar$/i }).click();
     await expect(page.getByText(name).first()).toBeVisible({ timeout: 15_000 });
@@ -260,16 +252,17 @@ test.describe("fluxos profundos", () => {
       timeout: 15_000
     });
     const productName = `Produto UI ${stamp}`;
-    const form = page.locator("form").filter({ has: page.getByRole("button", { name: /Salvar produto/i }) });
+    await page.getByRole("button", { name: "Novo produto" }).click();
+    const form = page.locator("#product-form");
     await form.getByPlaceholder("Nome", { exact: true }).fill(productName);
-    await form.getByRole("button", { name: /custo, descrição e código/i }).click();
+    await form.getByRole("button", { name: /código de barras e descrição/i }).click();
     await form.getByPlaceholder("SKU (opcional)").fill(`SKU${stamp}`);
     await form.getByPlaceholder("Preco").fill("99,90");
     await form.getByPlaceholder("Custo").fill("40,00");
     await form.getByPlaceholder(/Quantidade atual/i).fill("3");
     await form.locator("select").nth(0).selectOption(cat.data.id);
     await form.locator("select").nth(1).selectOption(brand.data.id);
-    await form.getByRole("button", { name: /Salvar produto/i }).click();
+    await page.getByRole("button", { name: /Salvar produto/i }).click();
     await expect(page.getByText(productName).first()).toBeVisible({ timeout: 15_000 });
   });
 
@@ -278,8 +271,8 @@ test.describe("fluxos profundos", () => {
     await expect(page.getByRole("heading", { name: "Início", exact: true })).toBeVisible({
       timeout: 15_000
     });
-    await expect(page.getByText("Ações rápidas").first()).toBeVisible();
-    await expect(page.getByText("Faturamento do mês")).toBeVisible();
+    await expect(page.getByText("Desempenho no período").first()).toBeVisible();
+    await expect(page.getByText("Faturamento do mês", { exact: true })).toBeVisible();
   });
 
   test("billing plans Enterprise R$ 250", async ({ page }) => {

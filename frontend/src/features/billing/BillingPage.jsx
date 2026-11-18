@@ -28,7 +28,7 @@ const statusLabel = {
 };
 
 export function BillingPage() {
-  const { token, user, tenant } = useAuth();
+  const { token, user, tenant, refreshSession } = useAuth();
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [status, setStatus] = useState(null);
@@ -64,6 +64,8 @@ export function BillingPage() {
         try {
           const data = await apiClient("/billing/sync", { method: "POST", token });
           setStatus(data);
+          // Atualiza permissões do plano na sessão (menu e telas liberadas).
+          await refreshSession?.().catch(() => {});
         } catch {
           await load();
         }

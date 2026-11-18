@@ -509,7 +509,7 @@ export function CrediarioPage() {
         actions={canCreateCreditSale ? <Button type="button" onClick={() => setCreateOpen(true)}>Nova venda a prazo</Button> : null}
       />
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3" aria-label="Resumo do crediário">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3 [&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1" aria-label="Resumo do crediário">
         <StatCard
           label="Saldo a receber"
           value={formatCurrencyBRL(accountsQuery.data?.openBalance || 0)}

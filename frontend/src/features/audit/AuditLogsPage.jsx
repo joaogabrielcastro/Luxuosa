@@ -67,12 +67,15 @@ export function AuditLogsPage() {
 
   if (!isAdmin) {
     return (
-      <Alert variant="warning">Apenas administradores podem ver o historico de acoes.</Alert>
+      <div className="ui-page">
+        <PageHeader title="Auditoria" description="Histórico de ações da loja." />
+        <Alert variant="warning">Apenas administradores podem ver o histórico de ações.</Alert>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="ui-page">
       <PageHeader
         title="Auditoria"
         description="Historico de acoes da loja: estoque, NF-e, precos, vendas, caixa e usuarios."

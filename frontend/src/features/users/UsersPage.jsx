@@ -188,7 +188,7 @@ export function UsersPage() {
           </Button>
         }
       />
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3 [&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1">
         <StatCard
           label="Usuários cadastrados"
           value={maxUsers == null ? items.length : `${items.length} de ${maxUsers}`}
