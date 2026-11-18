@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { Button } from "./Button.jsx";
 import { cn } from "./helpers.js";
@@ -51,7 +52,7 @@ export function Modal({
 
   const maxWidth = size === "xl" ? "sm:max-w-4xl" : size === "lg" ? "sm:max-w-2xl" : size === "sm" ? "sm:max-w-md" : "sm:max-w-xl";
 
-  return (
+  return createPortal(
     <div
       className="ui-modal-backdrop"
       role="presentation"
@@ -99,7 +100,8 @@ export function Modal({
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -111,7 +113,7 @@ export function Sheet({ open, title, description, children, onClose, footer = nu
   const titleId = useId();
   useDialogBehavior(open, onClose, panelRef);
   if (!open) return null;
-  return (
+  return createPortal(
     <>
       <div className="fixed inset-0 z-[70] bg-slate-950/30 backdrop-blur-[1px] animate-fade-in" onMouseDown={onClose} aria-hidden />
       <aside
@@ -146,6 +148,7 @@ export function Sheet({ open, title, description, children, onClose, footer = nu
           </div>
         ) : null}
       </aside>
-    </>
+    </>,
+    document.body
   );
 }

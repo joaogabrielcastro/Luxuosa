@@ -74,9 +74,9 @@ describe("fluxos profundos", () => {
     const user = userEvent.setup();
     renderPage(<AdminDashboardPage />);
     expect(await screen.findAllByText("Camisa")).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Hoje" }));
-    await user.click(screen.getByRole("button", { name: "Esta semana" }));
-    await user.click(screen.getByRole("button", { name: "Últimos 30 dias" }));
+    await user.click(screen.getByRole("radio", { name: "Hoje" }));
+    await user.click(screen.getByRole("radio", { name: "Esta semana" }));
+    await user.click(screen.getByRole("radio", { name: "Últimos 30 dias" }));
     expect(screen.getByText("Desempenho da equipe")).toBeInTheDocument();
   });
 
@@ -200,6 +200,7 @@ describe("fluxos profundos", () => {
     await user.click(screen.getByRole("button", { name: "Aplicar" }));
     await user.click(screen.getByRole("button", { name: "Atualizar produto" }));
     await waitFor(() => expect(apiClient).toHaveBeenCalledWith("/products/p1", expect.objectContaining({ method: "PUT" })));
+    await user.click(screen.getByRole("button", { name: "Fechar" }));
     await user.click(screen.getByRole("button", { name: "Excluir" }));
     await user.click(screen.getAllByRole("button", { name: "Excluir" }).at(-1));
     await waitFor(() => expect(apiClient).toHaveBeenCalledWith("/products/p1", expect.objectContaining({ method: "DELETE" })));

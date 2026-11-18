@@ -31,6 +31,7 @@ describe("ProductsPage — cadastro com tamanho e cor", () => {
     const user = userEvent.setup();
     renderPage(<ProductsPage />);
     await screen.findByRole("heading", { level: 1, name: "Produtos" });
+    await user.click(screen.getByRole("button", { name: "Novo produto" }));
     expect(screen.queryByPlaceholderText("P, M, 38...")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("radio", { name: /tamanhos e cores/i }));
@@ -44,6 +45,7 @@ describe("ProductsPage — cadastro com tamanho e cor", () => {
     const user = userEvent.setup();
     renderPage(<ProductsPage />);
     await screen.findByRole("heading", { level: 1, name: "Produtos" });
+    await user.click(screen.getByRole("button", { name: "Novo produto" }));
     await user.type(screen.getByPlaceholderText("Nome"), "Calca");
     await user.selectOptions(screen.getByDisplayValue("Selecione categoria"), "cat1");
     await user.selectOptions(screen.getByDisplayValue("Selecione marca"), "br1");

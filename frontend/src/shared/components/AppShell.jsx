@@ -98,10 +98,7 @@ function SidebarContent({ groups, accountItems, onNavigate, has, onInstall, inst
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-slate-900">{user?.name ?? "—"}</p>
-            <div className="mt-0.5 flex items-center gap-1.5">
-              <span className="truncate text-xs text-slate-500">{roleLabel[user?.type] ?? user?.type ?? "—"}</span>
-              {tenant ? <PlanBadge plan={plan} /> : null}
-            </div>
+            <p className="truncate text-xs text-slate-500">{roleLabel[user?.type] ?? user?.type ?? "—"}</p>
           </div>
           <button
             type="button"
@@ -229,7 +226,7 @@ export function AppShell({ children }) {
           <BrandLogo compact tenant={tenant} />
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold leading-tight text-slate-900">{tenant?.name ?? "—"}</p>
-            <p className="font-display text-[15px] leading-tight text-slate-500">Luxuosa</p>
+            <div className="mt-1">{tenant ? <PlanBadge plan={plan} /> : null}</div>
           </div>
         </div>
         <div className="px-4 pb-3">

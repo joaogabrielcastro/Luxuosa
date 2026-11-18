@@ -141,9 +141,9 @@ export function DataTable({
       )}
 
       {showToolbar ? (
-        <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:px-5">
+        <div className="grid grid-cols-2 gap-2 border-b border-slate-100 px-4 py-3 sm:flex sm:flex-row sm:flex-wrap sm:items-center sm:px-5 [&>*]:min-w-0">
           {search ? (
-            <div className="relative min-w-0 flex-1 sm:min-w-[16rem]">
+            <div className="relative col-span-2 min-w-0 flex-1 sm:min-w-[16rem]">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
               <Input
                 type="search"
@@ -168,7 +168,7 @@ export function DataTable({
           {filters.map((filter) => (
             <Select
               key={filter.id}
-              className="sm:w-auto sm:min-w-[11rem]"
+              className={cn("sm:w-auto sm:min-w-[11rem]", filters.length === 1 && "col-span-2")}
               aria-label={filter.label || filter.options?.[0]?.label}
               value={filter.value}
               onChange={(event) => filter.onChange(event.target.value)}
@@ -180,7 +180,7 @@ export function DataTable({
               ))}
             </Select>
           ))}
-          {toolbar}
+          {toolbar ? <div className="col-span-2 sm:col-span-1">{toolbar}</div> : null}
         </div>
       ) : null}
 

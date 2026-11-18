@@ -80,6 +80,7 @@ describe("acoes das telas", () => {
     const user = userEvent.setup();
     renderPage(<ProductsPage />);
     await screen.findByRole("heading", { level: 1, name: "Produtos" });
+    await user.click(screen.getByRole("button", { name: "Novo produto" }));
     await user.type(screen.getByPlaceholderText("Nome"), "Calca");
     await user.selectOptions(screen.getByDisplayValue("Selecione categoria"), "cat1");
     await user.selectOptions(screen.getByDisplayValue("Selecione marca"), "br1");
@@ -106,9 +107,9 @@ describe("acoes das telas", () => {
     const user = userEvent.setup();
     renderPage(<StockMovementsPage />);
     await screen.findByRole("heading", { level: 1, name: "Movimentações" });
-    await screen.findByText(/Camisa/i);
-    await user.selectOptions(screen.getAllByRole("combobox")[0], "var1");
-    await user.click(screen.getByRole("button", { name: /registrar/i }));
+    await user.click(screen.getByRole("combobox", { name: "Produto / variação" }));
+    await user.click(await screen.findByRole("button", { name: /Camisa/ }));
+    await user.click(screen.getByRole("button", { name: /registrar entrada/i }));
     await waitFor(() => expect(apiClient).toHaveBeenCalledWith("/stock-movements", expect.objectContaining({ method: "POST" })));
   });
 

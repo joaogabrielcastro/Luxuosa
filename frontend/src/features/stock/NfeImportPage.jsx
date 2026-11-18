@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FileUp, CheckCircle2, AlertTriangle, Link2, Plus, Ban, ArrowLeft, SplitSquareVertical } from "lucide-react";
+import { fetchAllPages } from "../../shared/apiList.js";
 import { apiClient, ApiError } from "../../shared/apiClient.js";
 import { useAuth } from "../auth/useAuth.jsx";
 import { useToast } from "../../shared/components/ToastProvider.jsx";
@@ -179,7 +180,8 @@ export function NfeImportPage() {
   const productsQuery = useQuery({
     queryKey: queryKeys.products.list(token, { take: 500, skip: 0, forNfe: true }),
     enabled: Boolean(token) && step === STEPS.REVIEW,
-    queryFn: () => apiClient("/products?take=500&skip=0", { token })
+    // O servidor limita 200 por página: buscar todas para o vínculo com os itens da nota.
+    queryFn: () => fetchAllPages(({ take, skip }) => apiClient(`/products?take=${take}&skip=${skip}`, { token }))
   });
   const products = useMemo(() => productsQuery.data?.items || [], [productsQuery.data]);
 

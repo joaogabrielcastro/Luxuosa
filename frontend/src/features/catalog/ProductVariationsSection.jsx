@@ -4,13 +4,15 @@ import { useToast } from "../../shared/components/ToastProvider.jsx";
 import { useConfirm } from "../../shared/components/ConfirmProvider.jsx";
 import { SectionCard } from "../../shared/components/ui/SectionCard.jsx";
 import { Input } from "../../shared/components/ui/Input.jsx";
-import { Button } from "../../shared/components/ui/Button.jsx";
+import { Button, IconButton } from "../../shared/components/ui/Button.jsx";
+import { Badge } from "../../shared/components/ui/Badge.jsx";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { FormErrorSummary } from "../../shared/components/FormErrorSummary.jsx";
 import { isDefaultVariation } from "./catalogConstants.js";
 
 const EMPTY_FORM = { size: "", color: "", stock: "", sku: "" };
 
-export function ProductVariationsSection({ token, productId, productName, onChanged }) {
+export function ProductVariationsSection({ token, productId, productName, onChanged, embedded = false }) {
   const { showToast } = useToast();
   const { confirm } = useConfirm();
   const [variations, setVariations] = useState([]);
@@ -122,46 +124,131 @@ export function ProductVariationsSection({ token, productId, productName, onChan
     );
   }
 
-  return (
-    <SectionCard
-      title="Tamanhos e cores"
-      description={
-        productName
-          ? `${productName}: uma linha para cada combinação de tamanho e cor.`
-          : "Uma linha para cada combinação de tamanho e cor."
-      }
-    >
-      <form className="mt-3 grid gap-2 md:grid-cols-4" onSubmit={submitVariation}>
-        <Input
-          placeholder="Tamanho"
-          value={form.size}
-          onChange={(e) => setForm((p) => ({ ...p, size: e.target.value }))}
-        />
-        <Input
-          placeholder="Cor"
-          value={form.color}
-          onChange={(e) => setForm((p) => ({ ...p, color: e.target.value }))}
-        />
-        <Input
-          placeholder="Estoque"
-          type="number"
-          min="0"
-          value={form.stock}
-          onChange={(e) => setForm((p) => ({ ...p, stock: e.target.value }))}
-        />
-        <Input
-          placeholder="Codigo etiqueta (opcional)"
-          value={form.sku}
-          onChange={(e) => setForm((p) => ({ ...p, sku: e.target.value }))}
-        />
-        <div className="flex flex-wrap gap-2 md:col-span-4">
-          <Button type="submit" disabled={loading}>
+  const wrap = (children) => embedded
+    ? (
+        <section>
+          <h3 className="text-[15px] font-semibold text-slate-900">Tamanhos e cores</h3>
+          <p className="mb-3 mt-0.5 text-[13px] text-slate-500">
+            {productName ? `${productName}: ` : ""}cada combinação tem seu estoque e código de etiqueta.
+          </p>
+          {children}
+        </section>
+      )
+    : (
+        <SectionCard title="Tamanhos e cores" description="Uma linha para cada combinação de tamanho e cor.">
+          {children}
+        </SectionCard>
+      );
+
+  const totalStock = variations.reduce((acc, v) => acc + Number(v.stock || 0), 0);
+
+  return wrap(
+    <>
+      <div className="overflow-hidden rounded-xl border border-slate-200">
+        <table className="w-full text-left text-sm">
+          <thead className="ui-table-head">
+            <tr>
+              <th className="px-3 py-2">Tamanho</th>
+              <th className="px-3 py-2">Cor</th>
+              <th className="hidden px-3 py-2 sm:table-cell">Etiqueta</th>
+              <th className="px-3 py-2 text-right">Estoque</th>
+              <th className="w-20 px-2 py-2">
+                <span className="sr-only">Ações</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {listLoading ? (
+              <tr>
+                <td colSpan={5} className="px-3 py-4 text-slate-500">
+                  Carregando…
+                </td>
+              </tr>
+            ) : variations.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-3 py-4 text-slate-500">
+                  Nenhuma combinação ainda. Adicione abaixo.
+                </td>
+              </tr>
+            ) : (
+              variations.map((row) => {
+                const isDefault = isDefaultVariation(row);
+                const editing = editingId === row.id;
+                return (
+                  <tr key={row.id} className={`border-t border-slate-100 ${editing ? "bg-brand-50/50" : ""}`}>
+                    <td className="px-3 py-2 font-medium text-slate-900">{isDefault ? <Badge>Estoque geral</Badge> : row.size}</td>
+                    <td className="px-3 py-2 text-slate-700">{isDefault ? "—" : row.color}</td>
+                    <td className="hidden px-3 py-2 font-mono text-xs text-slate-500 sm:table-cell">{row.sku || "—"}</td>
+                    <td className="num px-3 py-2 text-right">
+                      {Number(row.stock) === 0 ? <Badge variant="danger">0</Badge> : row.stock}
+                    </td>
+                    <td className="px-2 py-1.5">
+                      {isDefault ? (
+                        <span className="block text-right text-2xs text-slate-400" title="Ajuste em Estoque → Movimentações">
+                          Movimentações
+                        </span>
+                      ) : (
+                        <div className="flex justify-end gap-0.5">
+                          <IconButton icon={Pencil} size="sm" label={`Editar ${row.size} ${row.color}`} onClick={() => startEdit(row)} />
+                          <IconButton
+                            icon={Trash2}
+                            size="sm"
+                            label={`Excluir ${row.size} ${row.color}`}
+                            className="hover:bg-red-50 hover:text-red-600"
+                            onClick={() => removeVariation(row.id)}
+                          />
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+          {variations.length ? (
+            <tfoot>
+              <tr className="border-t border-slate-200 bg-slate-50/70 text-xs text-slate-600">
+                <td className="px-3 py-2" colSpan={3}>
+                  {variations.length} combinação(ões)
+                </td>
+                <td className="num px-3 py-2 text-right font-semibold text-slate-900">{totalStock}</td>
+                <td />
+              </tr>
+            </tfoot>
+          ) : null}
+        </table>
+      </div>
+
+      <form className="mt-3 rounded-xl border border-dashed border-slate-300 p-3" onSubmit={submitVariation}>
+        <p className="mb-2 text-xs font-medium text-slate-600">{editingId ? "Editando combinação" : "Nova combinação"}</p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Input placeholder="Tamanho" aria-label="Tamanho" value={form.size} onChange={(e) => setForm((p) => ({ ...p, size: e.target.value }))} />
+          <Input placeholder="Cor" aria-label="Cor" value={form.color} onChange={(e) => setForm((p) => ({ ...p, color: e.target.value }))} />
+          <Input
+            placeholder="Estoque"
+            aria-label="Estoque"
+            type="number"
+            min="0"
+            inputMode="numeric"
+            value={form.stock}
+            onChange={(e) => setForm((p) => ({ ...p, stock: e.target.value }))}
+          />
+          <Input
+            placeholder="Codigo etiqueta (opcional)"
+            aria-label="Código da etiqueta"
+            value={form.sku}
+            onChange={(e) => setForm((p) => ({ ...p, sku: e.target.value }))}
+          />
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button type="submit" size="sm" variant={editingId ? "primary" : "secondary"} loading={loading} icon={editingId ? null : Plus}>
             {editingId ? "Atualizar variacao" : "Adicionar variacao"}
           </Button>
           {editingId ? (
             <Button
               type="button"
-              variant="secondary"
+              size="sm"
+              variant="ghost"
               onClick={() => {
                 setEditingId("");
                 setForm(EMPTY_FORM);
@@ -173,73 +260,6 @@ export function ProductVariationsSection({ token, productId, productName, onChan
         </div>
       </form>
       <FormErrorSummary error={error} className="mt-2" />
-
-      <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
-        <table className="w-full min-w-[560px] text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs font-medium text-slate-600">
-            <tr>
-              <th className="px-3 py-2">Tipo</th>
-              <th className="px-3 py-2">Tamanho</th>
-              <th className="px-3 py-2">Cor</th>
-              <th className="px-3 py-2">Codigo</th>
-              <th className="px-3 py-2">Estoque</th>
-              <th className="px-3 py-2">Acoes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {listLoading ? (
-              <tr>
-                <td colSpan={6} className="px-3 py-4 text-slate-500">
-                  Carregando...
-                </td>
-              </tr>
-            ) : variations.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-3 py-4 text-slate-500">
-                  Nenhuma combinação ainda. Informe tamanho, cor e quantidade acima.
-                </td>
-              </tr>
-            ) : (
-              variations.map((row) => {
-                const isDefault = isDefaultVariation(row);
-                return (
-                <tr key={row.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-3 py-2 text-slate-600">
-                    {isDefault ? (
-                      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
-                        Estoque geral
-                      </span>
-                    ) : (
-                      <span className="text-xs text-slate-500">Tamanho/cor</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">{isDefault ? "—" : row.size}</td>
-                  <td className="px-3 py-2">{isDefault ? "—" : row.color}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{row.sku || "—"}</td>
-                  <td className="px-3 py-2">{row.stock}</td>
-                  <td className="px-3 py-2">
-                    {isDefault ? (
-                      <span className="text-xs text-slate-400">
-                        Ajuste em Estoque → Movimentações.
-                      </span>
-                    ) : (
-                      <>
-                        <Button type="button" variant="secondary" className="mr-2 px-2 py-0.5 text-xs" onClick={() => startEdit(row)}>
-                          Editar
-                        </Button>
-                        <Button type="button" variant="danger" className="px-2 py-0.5 text-xs" onClick={() => removeVariation(row.id)}>
-                          Excluir
-                        </Button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    </SectionCard>
+    </>
   );
 }
